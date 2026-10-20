@@ -257,6 +257,23 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 @media (min-width:900px){.fab{display:none}}
 .desk-only{display:none}
 @media (min-width:900px){.desk-only{display:inline-flex}}
+.locked .app,.locked .bottom,.locked .fab{display:none!important}
+.login{position:fixed;inset:0;z-index:65;display:grid;place-items:center;padding:24px 18px;background:var(--paper);overflow:auto}
+.login[hidden]{display:none}
+.login-card{width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
+.login-mark{width:56px;height:56px}
+.login-card h1{margin:4px 0 0;font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.login-card > p{margin:0}
+.login-btn{width:100%;padding:12px;font-size:15.5px;margin-top:2px}
+.login-msg{min-height:0;color:var(--over);font-size:14px;font-weight:600}
+.login-msg:empty{display:none}
+.login-help{font-size:13px;text-align:center}
+.pwd{position:relative}
+.pwd .input{padding-right:58px}
+.pwd-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:var(--sunk);border-radius:7px;padding:5px 9px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink2)}
+.sideuser{margin-top:auto;padding:14px 10px 4px;border-top:1px solid var(--line);font-size:13.5px}
+.sideuser b{display:block}
+.sideuser button{border:0;background:none;padding:4px 0;color:var(--teal);cursor:pointer;font-weight:600}
 .demo-banner{font-size:13px;background:var(--sun-soft);color:var(--ink);padding:7px 12px;border-radius:9px;margin-top:10px}
 @media (max-width:560px){
   .figs.three .fig{padding:9px 8px}
@@ -269,6 +286,18 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 </head>
 <body>
 <div class="loading" id="loading"><div><div class="spin"></div>Cargando datos…</div></div>
+<div class="login" id="login" hidden>
+  <form class="login-card" id="frmLogin" autocomplete="on">
+    <svg class="login-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="var(--ink)"/><text x="32" y="33" text-anchor="middle" font-family="var(--font)" font-weight="800" font-size="22" fill="var(--paper)">C$</text><rect x="12" y="43" width="40" height="6" rx="3" fill="var(--bar-left)" opacity=".45"/><rect x="12" y="43" width="26" height="6" rx="3" fill="var(--bar-left)"/></svg>
+    <h1>Efectivo</h1>
+    <p class="muted" id="loginSub">Entra con tu usuario para ver las cuentas del hogar.</p>
+    <div class="field"><label for="lu">Usuario</label><input class="input" id="lu" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></div>
+    <div class="field"><label for="lp">Contraseña</label><div class="pwd"><input class="input" id="lp" name="password" type="password" autocomplete="current-password" required><button type="button" class="pwd-eye" data-act="eye" aria-label="Mostrar contraseña">Ver</button></div></div>
+    <div class="login-msg" id="loginMsg" role="alert"></div>
+    <button class="btn primary login-btn" type="submit">Entrar</button>
+    <p class="muted login-help">¿Olvidaste tu contraseña? Pídele al administrador que la restablezca.</p>
+  </form>
+</div>
 <div class="app">
   <nav class="side" id="side" aria-label="Secciones"></nav>
   <div class="main"><div class="wrap">
@@ -295,7 +324,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
    ====================================================================== */
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
-const apiUrl = () => lsGet('api_url') || CONFIG.API_URL || '';
+const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
 
 /* ---------- Utilidades ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -408,22 +437,32 @@ const mesAnterior = mes => { const ps = periodos(); const i = ps.findIndex(p => 
 const canEdit = mod => { const p = DB.idx().periodo[S.mes]; return !!p && truthy(p[mod]); };
 
 /* ---------- Conexión (Apps Script / HTTP / demo) ---------- */
+const Auth = {
+  get s() { return lsGet('session') || ''; },
+  get user() { try { return JSON.parse(lsGet('user') || 'null'); } catch (e) { return null; } },
+  set(session, user) { lsSet('session', session); if (user) lsSet('user', JSON.stringify(user)); },
+  clear() { lsSet('session', null); lsSet('user', null); }
+};
 const Backend = {
   mode: 'demo',
+  get online() { return this.mode === 'gas' || this.mode === 'http'; },
   detect() {
     if (typeof google !== 'undefined' && google.script && google.script.run) this.mode = 'gas';
-    else if (apiUrl() && lsGet('api_token')) this.mode = 'http';
+    else if (apiUrl()) this.mode = 'http';
     else this.mode = EMBED ? 'demo' : 'setup';
   },
   call(action, payload = {}) {
-    if (this.mode === 'gas') return new Promise((res, rej) =>
-      google.script.run.withSuccessHandler(r => r && r.error ? rej(new Error(r.error)) : res(r)).withFailureHandler(rej).api(action, payload));
-    if (this.mode === 'http') return fetch(apiUrl(), {method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify({action, payload, token: lsGet('api_token') || ''})})
-      .then(r => r.json()).then(r => { if (r && r.error) throw new Error(r.error); return r; });
-    return Promise.resolve(Demo[action] ? Demo[action](payload) : {error: 'Acción no disponible'});
+    let pr;
+    const p = this.online ? Object.assign({}, payload, {_s: Auth.s}) : payload;
+    if (this.mode === 'gas') pr = new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).api(action, p));
+    else if (this.mode === 'http') pr = fetch(apiUrl(), {method: 'POST', redirect: 'follow', headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: JSON.stringify({action, payload: p})})
+      .then(r => r.json(), () => { throw new Error('No hay conexión con el servidor. Revisa tu internet.'); });
+    else pr = Promise.resolve(Demo[action] ? Demo[action](payload) : {error: 'Acción no disponible en la demostración'});
+    return pr.then(r => { if (r && r.error) { const e = new Error(r.error); e.code = r.code; throw e; } return r; })
+      .catch(e => { if (e.code === 'AUTH' && action !== 'login') { Auth.clear(); showLogin('Tu sesión terminó. Vuelve a entrar.'); } throw e; });
   }
 };
+const isAdmin = () => !Backend.online || (Auth.user || {}).rol === 'admin';
 
 /* Motor local: replica las acciones del servidor sobre los datos en memoria (modo demostración) */
 const Demo = {
@@ -505,7 +544,7 @@ const VIEWS = {
   cortes:      {t: 'Cortes de resumen', icon: 'snap', d: 'Fotografías del mes guardadas en Resumen'},
   catalogos:   {t: 'Catálogos', icon: 'list', d: 'Cuentas, artículos, unidades y conceptos'},
   periodos:    {t: 'Períodos', icon: 'cal', d: 'Abrir o cerrar meses por módulo'},
-  conexion:    {t: 'Conexión', icon: 'plug', d: 'Google Sheets y datos del hogar'},
+  conexion:    {t: 'Mi cuenta', icon: 'plug', d: 'Contraseña, usuarios y apariencia'},
   mas:         {t: 'Más', icon: 'more'}
 };
 const MORE = ['ingresos', 'historico', 'cuenta', 'combustible', 'tarjetas', 'cortes', 'catalogos', 'periodos', 'conexion'];
@@ -516,7 +555,8 @@ function renderNav() {
   const emp = (DB.t.Empresa && DB.t.Empresa[0]) ? DB.t.Empresa[0].Empresa : '';
   $('#side').innerHTML = `<div class="brand"><b>Efectivo</b><span>${esc(cap(emp.split(' ')[0]) + ' ' + cap(emp.split(' ')[1] || ''))}</span></div>` +
     side.map(v => v === '|' ? '<div class="navsep"></div>' :
-      `<button class="navbtn" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('');
+      `<button class="navbtn" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('') +
+    (Backend.online && Auth.user ? `<div class="sideuser"><b>${esc(Auth.user.nombre)}</b><span class="muted">${Auth.user.rol === 'admin' ? 'Administrador' : 'Usuario'}</span><br><button data-act="logout">Cerrar sesión</button></div>` : '');
   const inMore = MORE.includes(S.view) || S.view === 'mas';
   $('#bottom').innerHTML = ['inicio', 'gastos', 'retiros', 'presupuesto', 'mas'].map(v =>
     `<button data-go="${v}" ${(S.view === v || (v === 'mas' && inMore)) ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('');
@@ -535,7 +575,7 @@ function render() {
   const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Ingresos_Detalle', combustible: 'Consumo_Combustible', tarjetas: 'Referencias_Tarjetas'}[S.view];
   const fabOk = fabFor && (!REL[fabFor] || canEdit(REL[fabFor].mod));
   fab.hidden = !fabOk; fab.dataset.new = fabFor || '';
-  $('#banner').innerHTML = Backend.mode === 'demo' ? `<div class="demo-banner">Modo demostración con los datos exportados de Access. Los cambios se guardan solo en esta pestaña hasta que conectes Google Sheets en <a href="#conexion" data-go="conexion">Conexión</a>.</div>` : '';
+  $('#banner').innerHTML = Backend.mode === 'demo' ? `<div class="demo-banner">Modo demostración con los datos exportados de Access. Los cambios se guardan solo en esta pestaña.</div>` : '';
 }
 
 /* ---------- Gráficos SVG ---------- */
@@ -833,24 +873,34 @@ V.periodos = () => {
   if (!S.anio || !years.map(String).includes(String(S.anio))) S.anio = String(years[0]);
   const flags = [['Abierta', 'Abierto'], ['Ingresos', 'Ingresos'], ['Presupuesto', 'Presupuesto'], ['Gastos', 'Gastos'], ['Retiros', 'Retiros'], ['Guardar_Resumen', 'Corte']];
   return `<p class="muted">Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
-  <div class="toolbar"><div class="tabs" style="margin:0">${years.map(y => `<button class="tab" data-anio="${y}" aria-pressed="${String(y) === String(S.anio)}">${y}</button>`).join('')}</div><span class="spacer"></span><button class="btn" data-act="add-year">Crear año ${Math.max(...years) + 1}</button></div>
+  <div class="toolbar"><div class="tabs" style="margin:0">${years.map(y => `<button class="tab" data-anio="${y}" aria-pressed="${String(y) === String(S.anio)}">${y}</button>`).join('')}</div><span class="spacer"></span>${isAdmin() ? `<button class="btn" data-act="add-year">Crear año ${Math.max(...years) + 1}</button>` : ''}</div>
   <div class="tablewrap"><table class="t"><thead><tr><th>Mes</th>${flags.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead>
   <tbody>${ps.filter(p => String(p.Anio) === String(S.anio)).map(p => `<tr style="cursor:default"><td>${cap(p.Mes)}</td>${flags.map(([f, l]) => `<td><label class="toggle" aria-label="${l} ${cap(p.Mes)}"><input type="checkbox" data-flag="${f}" data-pid="${p.ID}" ${truthy(p[f]) ? 'checked' : ''}><span></span></label></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 };
 
-function connectForm() {
-  return `<section class="section"><h3>Conectar con Google Sheets <small>cuando la app se aloja fuera de Apps Script</small></h3><div class="panel">
-    <div class="fgrid"><div class="field"><label for="apiu">URL de la aplicación web de Apps Script</label><input class="input" id="apiu" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(apiUrl())}"><span class="hint">Se obtiene en Implementar, Nueva implementación, Aplicación web.</span></div>
-    <div class="field"><label for="apit">Token de acceso</label><input class="input" id="apit" type="password" value="${esc(lsGet('api_token') || '')}"><span class="hint">El mismo valor de API_TOKEN en Propiedades del script.</span></div></div>
-    <div class="row" style="margin-top:14px"><button class="btn primary" data-act="connect">Probar y conectar</button>${lsGet('api_token') ? '<button class="btn danger" data-act="disconnect">Cerrar sesión en este equipo</button>' : ''}</div></div></section>`;
+function accountSection() {
+  if (!Backend.online) return '';
+  const u = Auth.user || {};
+  let html = `<section class="section"><h3>Mi cuenta</h3><div class="panel">
+    <b style="font-size:16px">${esc(u.nombre)}</b> <span class="pill ${u.rol === 'admin' ? 'open' : ''}">${u.rol === 'admin' ? 'Administrador' : 'Usuario'}</span>
+    <p class="muted" style="margin:4px 0 12px">Entras como ${esc(u.usuario)}. La sesión dura 30 días en este equipo.</p>
+    <div class="row"><button class="btn" data-act="pwd">Cambiar contraseña</button><button class="btn danger" data-act="logout">Cerrar sesión</button></div></div></section>`;
+  if (u.rol !== 'admin') return html;
+  if (!S.users) { Backend.call('listUsers').then(r => { S.users = r.users; if (S.view === 'conexion') render(); }).catch(e => toast(e.message, true)); }
+  const us = S.users || [];
+  html += `<section class="section"><h3>Usuarios <small>quiénes pueden entrar a la app</small></h3>
+    <div class="toolbar" style="margin-top:0"><span class="muted">${S.users ? us.length + ' usuarios' : 'Cargando…'}</span><span class="spacer"></span><button class="btn primary" data-act="user-new">Agregar usuario</button></div>
+    ${us.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Último acceso</th></tr></thead><tbody>
+    ${us.map(x => `<tr data-user="${esc(x.usuario)}"><td>${esc(x.usuario)}</td><td>${esc(x.nombre)}</td><td>${x.rol === 'admin' ? 'Administrador' : 'Usuario'}</td><td>${x.activo ? '<span class="pill open">Activo</span>' : '<span class="pill">Desactivado</span>'}</td><td>${x.ultimo ? fdate(x.ultimo) + ' ' + String(x.ultimo).slice(11, 16) : 'Nunca'}</td></tr>`).join('')}</tbody></table></div>` : ''}</section>`;
+  return html;
 }
 V.conexion = () => {
   const e = DB.t.Empresa && DB.t.Empresa[0] || {};
-  const modeTxt = {gas: 'Conectado a Google Sheets a través de Apps Script.', http: 'Conectado a Google Sheets mediante la URL del servicio.', demo: 'Modo demostración: datos exportados de Access cargados en esta página.', setup: 'Sin conexión configurada.'}[Backend.mode];
+  const modeTxt = {gas: 'Conectado a Google Sheets.', http: 'Conectado a Google Sheets.', demo: 'Modo demostración: datos exportados de Access cargados en esta página.', setup: 'Sin conexión configurada.'}[Backend.mode];
   return `<section class="section"><h3>Estado</h3><div class="panel"><p style="margin:0 0 6px"><span class="pill ${Backend.mode === 'gas' || Backend.mode === 'http' ? 'open' : 'warn'}">${Backend.mode === 'gas' || Backend.mode === 'http' ? 'En línea' : 'Local'}</span> ${modeTxt}</p>
     <p class="muted" style="margin:0">Tablas cargadas: ${Object.keys(DB.t).length}. Movimientos de gasto: ${NF.format(DB.t.Gastos_Detalle.length).replace('.00', '')}.</p>
     <div class="row" style="margin-top:12px"><button class="btn" data-act="reload">Recargar datos</button></div></div></section>
-  ${Backend.mode !== 'gas' ? connectForm() : ''}
+  ${accountSection()}
   <section class="section"><h3>Hogar</h3><div class="panel"><b>${esc(e.Empresa)}</b><p class="muted" style="margin:4px 0 0">${esc(e.Direccion)}<br>Teléfono ${esc(e.Telefono)}, celular ${esc(e.Celular)}</p></div></section>
   <section class="section"><h3>Apariencia</h3><div class="tabs">${[['', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, l]) => `<button class="tab" data-theme-set="${v}" aria-pressed="${(lsGet('theme') || '') === v}">${l}</button>`).join('')}</div></section>`;
 };
@@ -1020,16 +1070,51 @@ function openResumen() {
     <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-close="1">Cerrar</button>${can ? '<button type="submit" class="btn primary">Guardar corte</button>' : ''}</div></form></div>`;
 }
 
+function sheetModal(id, title, body, submitLabel) {
+  $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="${id}" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <h4>${esc(title)}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>${body}
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-close="1">Cancelar</button><button type="submit" class="btn primary">${esc(submitLabel)}</button></div></form></div>`;
+  const f = $('#' + id + ' input:not([disabled])'); if (f) setTimeout(() => f.focus(), 30);
+}
+function openPwdForm() {
+  sheetModal('frmPwd', 'Cambiar contraseña', `<div class="fgrid">
+    <div class="field"><label for="pa">Contraseña actual</label><input class="input" id="pa" type="password" autocomplete="current-password"></div>
+    <div class="field"><label for="pn">Contraseña nueva</label><input class="input" id="pn" type="password" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres.</span></div>
+    <div class="field"><label for="pc">Repite la contraseña nueva</label><input class="input" id="pc" type="password" autocomplete="new-password"></div></div>
+    <p class="muted" style="font-size:13px">Se cerrará la sesión en tus otros equipos.</p>`, 'Cambiar contraseña');
+}
+function openUserForm(usuario) {
+  const u = usuario ? (S.users || []).find(x => x.usuario === usuario) : null;
+  S.editUser = u ? u.usuario : null;
+  sheetModal('frmUser', u ? 'Editar usuario' : 'Nuevo usuario', `<div class="fgrid">
+    <div class="field half"><label for="uu">Usuario</label><input class="input" id="uu" autocapitalize="none" value="${esc(u ? u.usuario : '')}" ${u ? 'disabled' : ''}><span class="hint">Minúsculas, sin espacios.</span></div>
+    <div class="field half"><label for="un">Nombre</label><input class="input" id="un" value="${esc(u ? u.nombre : '')}"></div>
+    <div class="field half"><label for="ur">Rol</label><select class="input" id="ur"><option value="usuario" ${u && u.rol !== 'admin' ? 'selected' : ''}>Usuario</option><option value="admin" ${u && u.rol === 'admin' ? 'selected' : ''}>Administrador</option></select><span class="hint">El administrador gestiona usuarios y crea años.</span></div>
+    <div class="field half check" style="align-self:center"><label for="ua">Activo</label><label class="toggle"><input type="checkbox" id="ua" ${!u || u.activo ? 'checked' : ''}><span></span></label></div>
+    <div class="field"><label for="uc">${u ? 'Nueva contraseña' : 'Contraseña'}</label><input class="input" id="uc" type="password" autocomplete="new-password"><span class="hint">${u ? 'Déjala vacía para no cambiarla.' : 'Mínimo 8 caracteres. Compártela en persona.'}</span></div></div>`, u ? 'Guardar cambios' : 'Crear usuario');
+}
+
+/* ---------- Inicio de sesión ---------- */
+function showLogin(msg) {
+  document.body.classList.add('locked'); closeModal();
+  $('#login').hidden = false; $('#loading').style.display = 'none';
+  $('#loginMsg').textContent = msg || '';
+  const lu = $('#lu'); if (!lu.value) lu.value = lsGet('last_user') || '';
+  setTimeout(() => (lu.value ? $('#lp') : lu).focus(), 50);
+}
+function hideLogin() { document.body.classList.remove('locked'); $('#login').hidden = true; $('#lp').value = ''; }
+
 /* ---------- Mensajes ---------- */
 let toastT;
 function toast(msg, err) { clearTimeout(toastT); let el = $('.toast'); if (!el) { el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); } el.className = 'toast' + (err ? ' err' : ''); el.textContent = msg; toastT = setTimeout(() => el.remove(), 3200); }
 
 /* ---------- Eventos ---------- */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
+  const t = e.target.closest('[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
   if (!t) return;
   const d = t.dataset;
   if (d.close !== undefined) { if (e.target === t) closeModal(); return; }
+  if (d.user) { openUserForm(d.user); return; }
   if (d.go) { e.preventDefault(); go(d.go); return; }
   if (d.new) { const F = FORMS[d.new]; if (F && F.mod && !canEdit(F.mod)) { toast('El período está cerrado para ' + F.mod.toLowerCase(), true); return; } openForm(d.new); return; }
   if (d.edit) { openForm(d.edit, d.id); return; }
@@ -1059,21 +1144,44 @@ document.addEventListener('click', async e => {
     try { const ch = await Backend.call('addYear', {anio: y}); DB.apply(ch); S.anio = String(y); render(); toast('Períodos de ' + y + ' creados'); } catch (err) { toast(err.message, true); }
     return;
   }
-  if (a === 'reload') { await boot(); toast('Datos actualizados'); return; }
-  if (a === 'connect') {
-    const u = $('#apiu').value.trim(), tk = $('#apit').value.trim();
-    if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(u)) { toast('La URL debe empezar con https://script.google.com/', true); return; }
-    if (!tk) { toast('Escribe el token de acceso', true); return; }
-    lsSet('api_url', u); lsSet('api_token', tk); Backend.mode = 'http';
-    try { await Backend.call('ping'); await boot(); toast('Conectado a Google Sheets'); }
-    catch (err) { lsSet('api_token', null); Backend.detect(); toast('No se pudo conectar: ' + err.message, true); }
-    return;
+  if (a === 'reload') { await boot(); if (DB.t.Cuentas) toast('Datos actualizados'); return; }
+  if (a === 'logout') {
+    try { await Backend.call('logout'); } catch (err) {}
+    Auth.clear(); S.users = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
-  if (a === 'disconnect') { lsSet('api_url', null); lsSet('api_token', null); Backend.detect(); await boot(); return; }
+  if (a === 'pwd') return openPwdForm();
+  if (a === 'user-new') return openUserForm();
+  if (a === 'eye') { const i = $('#lp'); const show = i.type === 'password'; i.type = show ? 'text' : 'password'; t.textContent = show ? 'Ocultar' : 'Ver'; t.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña'); return; }
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
   if (e.target.id === 'frm') submitForm();
+  if (e.target.id === 'frmLogin') (async () => {
+    const b = e.target.querySelector('button[type=submit]'), u = $('#lu').value.trim().toLowerCase(), c = $('#lp').value;
+    if (!u || !c) { $('#loginMsg').textContent = 'Escribe tu usuario y contraseña.'; return; }
+    b.disabled = true; b.textContent = 'Entrando…'; $('#loginMsg').textContent = '';
+    try { const r = await Backend.call('login', {usuario: u, clave: c}); Auth.set(r.session, r.user); lsSet('last_user', u); hideLogin(); await boot(); }
+    catch (err) { $('#loginMsg').textContent = err.message; $('#lp').select(); }
+    b.disabled = false; b.textContent = 'Entrar';
+  })();
+  if (e.target.id === 'frmPwd') (async () => {
+    const a = $('#pa').value, n = $('#pn').value, c = $('#pc').value;
+    if (n.length < 8) return toast('La contraseña nueva debe tener al menos 8 caracteres', true);
+    if (n !== c) return toast('Las contraseñas nuevas no coinciden', true);
+    const b = e.target.querySelector('button[type=submit]'); b.disabled = true;
+    try { const r = await Backend.call('changePassword', {actual: a, nueva: n}); Auth.set(r.session); closeModal(); toast('Contraseña cambiada'); }
+    catch (err) { b.disabled = false; toast(err.message, true); }
+  })();
+  if (e.target.id === 'frmUser') (async () => {
+    const usuario = S.editUser || $('#uu').value.trim().toLowerCase(), clave = $('#uc').value;
+    if (!/^[a-z0-9._-]{3,30}$/.test(usuario)) return toast('El usuario debe tener de 3 a 30 letras minúsculas o números, sin espacios', true);
+    if (!S.editUser && clave.length < 8) return toast('La contraseña debe tener al menos 8 caracteres', true);
+    if (clave && clave.length < 8) return toast('La contraseña debe tener al menos 8 caracteres', true);
+    const b = e.target.querySelector('button[type=submit]'); b.disabled = true;
+    try { const r = await Backend.call('saveUser', {usuario, nombre: $('#un').value.trim(), rol: $('#ur').value, activo: $('#ua').checked, clave: clave || undefined});
+      S.users = r.users; closeModal(); render(); toast(S.editUser ? 'Usuario actualizado' : 'Usuario creado'); }
+    catch (err) { b.disabled = false; toast(err.message, true); }
+  })();
   if (e.target.id === 'frmRes') (async () => {
     const b = e.target.querySelector('button[type=submit]'); b.disabled = true;
     try { const ch = await Backend.call('saveResumen', {mes: S.mes, Disp_Jerson: $('#dj').value, Disp_Mariela: $('#dm').value}); DB.apply(ch); closeModal(); render(); toast('Corte guardado'); }
@@ -1110,16 +1218,22 @@ function applyTheme() { const t = lsGet('theme'); if (t) document.documentElemen
 async function boot() {
   $('#loading').style.display = 'grid';
   try {
-    if (Backend.mode === 'setup') { DB.load({tables: {}}); throw new Error('setup'); }
+    if (Backend.mode === 'setup') throw new Error('setup');
+    if (Backend.online && !Auth.s) { showLogin(); return; }
     const data = await Backend.call('getAll');
-    DB.load(data);
+    DB.load(data); hideLogin();
     const open = periodos().filter(p => truthy(p.Abierta)).pop();
     const ms = mesesConDatos();
     if (!S.mes || !ms.includes(S.mes)) S.mes = open ? open.Mes_Anio : ms[ms.length - 1];
     const h = (location.hash || '').slice(1); if (h && VIEWS[h] && S.view === 'inicio') S.view = h;
     render();
   } catch (e) {
-    $('#view').innerHTML = `<div class="panel empty" style="margin-top:30px">${e.message === 'setup' ? '<b>Conecta tu base de datos</b>Escribe la URL del servicio y el token de acceso para abrir tus datos de Google Sheets en este equipo.' : '<b>No se pudieron cargar los datos</b>' + esc(e.message) + '. Revisa la URL y el token.'}</div>` + connectForm(); $('#mp').style.display = 'none';
+    if (e.code !== 'AUTH') {
+      $('#mp').style.display = 'none';
+      $('#view').innerHTML = `<div class="panel empty" style="margin-top:30px">${e.message === 'setup'
+        ? '<b>Falta la dirección del servicio</b>El administrador debe configurar la variable APPS_SCRIPT_URL en Netlify y volver a desplegar el sitio.'
+        : '<b>No se pudieron cargar los datos</b>' + esc(e.message)}<div class="row" style="justify-content:center;margin-top:14px"><button class="btn" data-act="reload">Reintentar</button>${Backend.online ? '<button class="btn" data-act="logout">Cerrar sesión</button>' : ''}</div></div>`;
+    }
   }
   $('#loading').style.display = 'none';
 }
