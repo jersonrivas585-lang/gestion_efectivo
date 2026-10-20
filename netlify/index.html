@@ -261,6 +261,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .login{position:fixed;inset:0;z-index:65;display:grid;place-items:center;padding:24px 18px;background:var(--paper);overflow:auto}
 .login[hidden]{display:none}
 .login-card{width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
+.login-card[hidden]{display:none}
 .login-mark{width:56px;height:56px}
 .login-card h1{margin:4px 0 0;font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1}
 .login-card > p{margin:0}
@@ -271,6 +272,14 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .pwd{position:relative}
 .pwd .input{padding-right:58px}
 .pwd-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:var(--sunk);border-radius:7px;padding:5px 9px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink2)}
+.perms{display:grid;grid-template-columns:1fr;gap:2px;border:1px solid var(--line);border-radius:10px;padding:6px}
+.perm{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:14px}
+.field label.perm{font-weight:400;color:var(--ink)}
+.perm:hover{background:var(--sunk)}
+.perm input{width:17px;height:17px;accent-color:var(--teal)}
+.perm code{font-size:11px;color:var(--muted)}
+.perm.custom{background:var(--sun-soft)}
+@media (max-width:560px){.perm code{display:none}}
 .sideuser{margin-top:auto;padding:14px 10px 4px;border-top:1px solid var(--line);font-size:13.5px}
 .sideuser b{display:block}
 .sideuser button{border:0;background:none;padding:4px 0;color:var(--teal);cursor:pointer;font-weight:600}
@@ -296,6 +305,15 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
     <div class="login-msg" id="loginMsg" role="alert"></div>
     <button class="btn primary login-btn" type="submit">Entrar</button>
     <p class="muted login-help">¿Olvidaste tu contraseña? Pídele al administrador que la restablezca.</p>
+  </form>
+  <form class="login-card" id="frmNewPwd" hidden>
+    <h1>Crea tu contraseña</h1>
+    <p class="muted" id="npSub">Entraste con una contraseña temporal. Elige una nueva que solo tú conozcas.</p>
+    <div class="field"><label for="np1">Contraseña nueva</label><input class="input" id="np1" type="password" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres.</span></div>
+    <div class="field"><label for="np2">Repite la contraseña</label><input class="input" id="np2" type="password" autocomplete="new-password"></div>
+    <div class="login-msg" id="npMsg" role="alert"></div>
+    <button class="btn primary login-btn" type="submit">Guardar y entrar</button>
+    <button class="btn login-btn" type="button" data-act="logout">Salir</button>
   </form>
 </div>
 <div class="app">
@@ -434,7 +452,10 @@ const mesesConDatos = () => {
   return periodos().filter(p => s.has(p.Mes_Anio) || truthy(p.Abierta)).map(p => p.Mes_Anio);
 };
 const mesAnterior = mes => { const ps = periodos(); const i = ps.findIndex(p => p.Mes_Anio === mes); return i > 0 ? ps[i-1].Mes_Anio : null; };
-const canEdit = mod => { const p = DB.idx().periodo[S.mes]; return !!p && truthy(p[mod]); };
+const MOD_PERM = {Ingresos: 'ingresos.editar', Presupuesto: 'presupuesto.editar', Gastos: 'gastos.editar', Retiros: 'retiros.editar'};
+const can = perm => !Backend.online || !!((Auth.user || {}).permisos || {})[perm];
+const periodOpen = mod => { const p = DB.idx().periodo[S.mes]; return !!p && truthy(p[mod]); };
+const canEdit = mod => periodOpen(mod) && can(MOD_PERM[mod]);
 
 /* ---------- Conexión (Apps Script / HTTP / demo) ---------- */
 const Auth = {
@@ -459,10 +480,10 @@ const Backend = {
       .then(r => r.json(), () => { throw new Error('No hay conexión con el servidor. Revisa tu internet.'); });
     else pr = Promise.resolve(Demo[action] ? Demo[action](payload) : {error: 'Acción no disponible en la demostración'});
     return pr.then(r => { if (r && r.error) { const e = new Error(r.error); e.code = r.code; throw e; } return r; })
-      .catch(e => { if (e.code === 'AUTH' && action !== 'login') { Auth.clear(); showLogin('Tu sesión terminó. Vuelve a entrar.'); } throw e; });
+      .catch(e => { if ((e.code === 'AUTH' || e.code === 'PWD') && action !== 'login' && action !== 'changePassword') { Auth.clear(); showLogin(e.code === 'PWD' ? 'Entra de nuevo para crear tu contraseña.' : 'Tu sesión terminó. Vuelve a entrar.'); e.code = 'AUTH'; } throw e; });
   }
 };
-const isAdmin = () => !Backend.online || (Auth.user || {}).rol === 'admin';
+
 
 /* Motor local: replica las acciones del servidor sobre los datos en memoria (modo demostración) */
 const Demo = {
@@ -556,7 +577,7 @@ function renderNav() {
   $('#side').innerHTML = `<div class="brand"><b>Efectivo</b><span>${esc(cap(emp.split(' ')[0]) + ' ' + cap(emp.split(' ')[1] || ''))}</span></div>` +
     side.map(v => v === '|' ? '<div class="navsep"></div>' :
       `<button class="navbtn" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('') +
-    (Backend.online && Auth.user ? `<div class="sideuser"><b>${esc(Auth.user.nombre)}</b><span class="muted">${Auth.user.rol === 'admin' ? 'Administrador' : 'Usuario'}</span><br><button data-act="logout">Cerrar sesión</button></div>` : '');
+    (Backend.online && Auth.user ? `<div class="sideuser"><b>${esc(Auth.user.nombre)}</b><span class="muted">${esc(Auth.user.rolNombre || Auth.user.rol)}</span><br><button data-act="logout">Cerrar sesión</button></div>` : '');
   const inMore = MORE.includes(S.view) || S.view === 'mas';
   $('#bottom').innerHTML = ['inicio', 'gastos', 'retiros', 'presupuesto', 'mas'].map(v =>
     `<button data-go="${v}" ${(S.view === v || (v === 'mas' && inMore)) ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('');
@@ -573,7 +594,7 @@ function render() {
   const fn = V[S.view] || V.inicio;
   $('#view').innerHTML = fn();
   const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Ingresos_Detalle', combustible: 'Consumo_Combustible', tarjetas: 'Referencias_Tarjetas'}[S.view];
-  const fabOk = fabFor && (!REL[fabFor] || canEdit(REL[fabFor].mod));
+  const fabOk = fabFor && (REL[fabFor] ? canEdit(REL[fabFor].mod) : can(FORMS[fabFor].perm));
   fab.hidden = !fabOk; fab.dataset.new = fabFor || '';
   $('#banner').innerHTML = Backend.mode === 'demo' ? `<div class="demo-banner">Modo demostración con los datos exportados de Access. Los cambios se guardan solo en esta pestaña.</div>` : '';
 }
@@ -614,7 +635,7 @@ function track(p, g) {
   const cls = p === 0 || g > p ? 'over' : (g > p * .85 ? 'hot' : '');
   return `<div class="track"><div class="fill ${cls}" style="width:${w}%"></div>${p > 0 ? `<div class="cap" style="left:calc(${capAt}% - 1px)"></div>` : ''}</div>`;
 }
-const lockNote = mod => canEdit(mod) ? '' : `<div class="notice"><span>Este período está cerrado para ${mod.toLowerCase()}. Ábrelo para registrar o corregir movimientos.</span><button class="btn small" data-go="periodos">Abrir en Períodos</button></div>`;
+const lockNote = mod => canEdit(mod) ? '' : !can(MOD_PERM[mod]) ? `<div class="notice info"><span>Tu usuario puede consultar ${mod.toLowerCase()}, pero no registrar ni corregir.</span></div>` : `<div class="notice"><span>Este período está cerrado para ${mod.toLowerCase()}. Ábrelo para registrar o corregir movimientos.</span>${can('periodos.gestionar') ? '<button class="btn small" data-go="periodos">Abrir en Períodos</button>' : ''}</div>`;
 
 /* ---------- Vistas ---------- */
 const V = {};
@@ -826,7 +847,7 @@ V.combustible = () => {
     <div class="fig"><small>Odómetro actual</small><b class="num">${lastR ? NF.format(lastR.Horometro_Km).replace('.00', '') : '—'} km</b></div>
   </div>
   <section class="section"><h3>Rendimiento <small>últimos 30 llenados, km por litro</small></h3><div class="panel">${lineChart(last30.map(r => fdate(r.Fecha, {day: 'numeric', month: 'short'})), kml, {name: 'km/L'})}</div></section>
-  <div class="toolbar"><span class="spacer"></span><button class="btn primary desk-only" data-new="Consumo_Combustible">Registrar llenado</button></div>
+  <div class="toolbar"><span class="spacer"></span>${can('combustible.editar') ? '<button class="btn primary desk-only" data-new="Consumo_Combustible">Registrar llenado</button>' : ''}</div>
   <div class="tablewrap"><table class="t"><thead><tr><th>Fecha</th><th class="n">Odómetro</th><th class="n">Recorrido</th><th class="n">Cantidad</th><th class="n">Litros</th><th class="n">km/L</th><th>Tanque lleno</th></tr></thead>
   <tbody>${rows.slice().reverse().map(r => `<tr data-edit="Consumo_Combustible" data-id="${r.ID}"><td>${fdate(r.Fecha)}</td><td class="n">${NF.format(r.Horometro_Km)}</td><td class="n">${r.Km_Recorrido} km</td><td class="n">${r.Cantidad} ${esc(r.UM)}</td><td class="n">${NF.format(r.Litro)}</td><td class="n">${r.km_litros ? Number(r.km_litros).toFixed(2) : '—'}</td><td>${truthy(r.Full) ? 'Sí' : 'No'}</td></tr>`).join('')}</tbody></table></div>`;
 };
@@ -840,7 +861,7 @@ V.tarjetas = () => {
     <div class="fig"><small>Consumos registrados</small><b class="num">${DB.t.Referencias_Tarjetas.length}</b></div>
     <div class="fig"><small>Pendiente de pago</small><b class="num ${pend.length ? 'neg' : ''}">${money(sum(pend, 'Pagar'))}</b></div>
   </div>
-  <div class="toolbar"><div class="tabs" style="margin:0"><button class="tab" data-pend="0" aria-pressed="${!S.pend}">Todos</button><button class="tab" data-pend="1" aria-pressed="${S.pend}">Pendientes (${pend.length})</button></div><span class="spacer"></span><button class="btn primary desk-only" data-new="Referencias_Tarjetas">Registrar consumo</button></div>
+  <div class="toolbar"><div class="tabs" style="margin:0"><button class="tab" data-pend="0" aria-pressed="${!S.pend}">Todos</button><button class="tab" data-pend="1" aria-pressed="${S.pend}">Pendientes (${pend.length})</button></div><span class="spacer"></span>${can('tarjetas.editar') ? '<button class="btn primary desk-only" data-new="Referencias_Tarjetas">Registrar consumo</button>' : ''}</div>
   ${rows.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Concepto</th><th class="n">Valor</th><th class="n">Descuento</th><th class="n">A pagar</th><th>Estado</th><th>Referencia de pago</th></tr></thead>
   <tbody>${rows.map(r => `<tr data-edit="Referencias_Tarjetas" data-id="${r.ID}"><td>${fdate(r.Fecha)}</td><td>${esc(r.Tarjeta_Credito)}</td><td>${esc(r.Observacion_Gastos)}</td><td class="n">${money(r.Valor)}</td><td class="n">${money(r.Descuento)}</td><td class="n">${money(r.Pagar)}</td><td>${truthy(r.Pagado) ? '<span class="pill open">Pagado</span>' : '<span class="pill bad">Pendiente</span>'}</td><td>${esc(r.Referencias_Pago)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>No hay consumos pendientes</b></div>'}`;
 };
@@ -864,7 +885,7 @@ V.catalogos = () => {
   const c = CATS[S.tab], rows = DB.t[S.tab], k = DB.key(S.tab);
   const cell = (r, [f, , ty]) => ty === 'b' ? (truthy(r[f]) ? 'Sí' : 'No') : ty === 'c' ? esc(cuentaNombre(r[f])) : ty === 'u' ? esc(DB.idx().umById[r[f]] || r[f]) : esc(r[f]);
   return `<div class="tabs">${Object.entries(CATS).map(([n, v]) => `<button class="tab" data-tab="${n}" aria-pressed="${n === S.tab}">${v.t}</button>`).join('')}</div>
-  <div class="toolbar"><span class="muted">${rows.length} registros</span><span class="spacer"></span><button class="btn primary" data-new="${S.tab}">Agregar</button></div>
+  <div class="toolbar"><span class="muted">${rows.length} registros</span><span class="spacer"></span>${can('catalogos.editar') ? `<button class="btn primary" data-new="${S.tab}">Agregar</button>` : ''}</div>
   <div class="tablewrap"><table class="t"><thead><tr>${c.cols.map(x => `<th>${x[1]}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr data-edit="${S.tab}" data-id="${esc(r[k])}">${c.cols.map(x => `<td>${cell(r, x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 };
 
@@ -873,27 +894,31 @@ V.periodos = () => {
   if (!S.anio || !years.map(String).includes(String(S.anio))) S.anio = String(years[0]);
   const flags = [['Abierta', 'Abierto'], ['Ingresos', 'Ingresos'], ['Presupuesto', 'Presupuesto'], ['Gastos', 'Gastos'], ['Retiros', 'Retiros'], ['Guardar_Resumen', 'Corte']];
   return `<p class="muted">Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
-  <div class="toolbar"><div class="tabs" style="margin:0">${years.map(y => `<button class="tab" data-anio="${y}" aria-pressed="${String(y) === String(S.anio)}">${y}</button>`).join('')}</div><span class="spacer"></span>${isAdmin() ? `<button class="btn" data-act="add-year">Crear año ${Math.max(...years) + 1}</button>` : ''}</div>
+  <div class="toolbar"><div class="tabs" style="margin:0">${years.map(y => `<button class="tab" data-anio="${y}" aria-pressed="${String(y) === String(S.anio)}">${y}</button>`).join('')}</div><span class="spacer"></span>${can('periodos.gestionar') ? `<button class="btn" data-act="add-year">Crear año ${Math.max(...years) + 1}</button>` : ''}</div>
   <div class="tablewrap"><table class="t"><thead><tr><th>Mes</th>${flags.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead>
-  <tbody>${ps.filter(p => String(p.Anio) === String(S.anio)).map(p => `<tr style="cursor:default"><td>${cap(p.Mes)}</td>${flags.map(([f, l]) => `<td><label class="toggle" aria-label="${l} ${cap(p.Mes)}"><input type="checkbox" data-flag="${f}" data-pid="${p.ID}" ${truthy(p[f]) ? 'checked' : ''}><span></span></label></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  <tbody>${ps.filter(p => String(p.Anio) === String(S.anio)).map(p => `<tr style="cursor:default"><td>${cap(p.Mes)}</td>${flags.map(([f, l]) => `<td><label class="toggle" aria-label="${l} ${cap(p.Mes)}"><input type="checkbox" data-flag="${f}" data-pid="${p.ID}" ${truthy(p[f]) ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></label></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 };
 
+const loadUsers = () => Backend.call('listUsers').then(r => { S.users = r.users; S.roles = r.roles; S.permisos = r.permisos; if (S.view === 'conexion') render(); }).catch(e => toast(e.message, true));
 function accountSection() {
   if (!Backend.online) return '';
   const u = Auth.user || {};
   let html = `<section class="section"><h3>Mi cuenta</h3><div class="panel">
-    <b style="font-size:16px">${esc(u.nombre)}</b> <span class="pill ${u.rol === 'admin' ? 'open' : ''}">${u.rol === 'admin' ? 'Administrador' : 'Usuario'}</span>
+    <b style="font-size:16px">${esc(u.nombre)}</b> <span class="pill open">${esc(u.rolNombre || u.rol)}</span>
     <p class="muted" style="margin:4px 0 12px">Entras como ${esc(u.usuario)}. La sesión dura 30 días en este equipo.</p>
     <div class="row"><button class="btn" data-act="pwd">Cambiar contraseña</button><button class="btn danger" data-act="logout">Cerrar sesión</button></div></div></section>`;
-  if (u.rol !== 'admin') return html;
-  if (!S.users) { Backend.call('listUsers').then(r => { S.users = r.users; if (S.view === 'conexion') render(); }).catch(e => toast(e.message, true)); }
+  if (!can('usuarios.gestionar')) return html;
+  if (!S.users) loadUsers();
   const us = S.users || [];
-  html += `<section class="section"><h3>Usuarios <small>quiénes pueden entrar a la app</small></h3>
-    <div class="toolbar" style="margin-top:0"><span class="muted">${S.users ? us.length + ' usuarios' : 'Cargando…'}</span><span class="spacer"></span><button class="btn primary" data-act="user-new">Agregar usuario</button></div>
-    ${us.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Último acceso</th></tr></thead><tbody>
-    ${us.map(x => `<tr data-user="${esc(x.usuario)}"><td>${esc(x.usuario)}</td><td>${esc(x.nombre)}</td><td>${x.rol === 'admin' ? 'Administrador' : 'Usuario'}</td><td>${x.activo ? '<span class="pill open">Activo</span>' : '<span class="pill">Desactivado</span>'}</td><td>${x.ultimo ? fdate(x.ultimo) + ' ' + String(x.ultimo).slice(11, 16) : 'Nunca'}</td></tr>`).join('')}</tbody></table></div>` : ''}</section>`;
+  html += `<section class="section"><h3>Usuarios <small>quiénes pueden entrar y qué pueden hacer</small></h3>
+    <div class="toolbar" style="margin-top:0"><span class="muted">${S.users ? us.length + ' usuarios' : 'Cargando…'}</span><span class="spacer"></span><button class="btn primary" data-act="user-new" ${S.roles ? '' : 'disabled'}>Agregar usuario</button></div>
+    ${us.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Alta</th></tr></thead><tbody>
+    ${us.map(x => `<tr data-user="${esc(x.usuario)}"><td>${esc(x.usuario)}</td><td>${esc(x.nombre)}</td><td>${esc(x.rolNombre)}${Object.keys(x.personalizados || {}).some(k => (S.permisos || []).some(p => p.id === k)) ? ' <span class="pill">ajustado</span>' : ''}</td>
+      <td>${!x.activo ? '<span class="pill">Desactivado</span>' : x.debeCambiar ? '<span class="pill warn">Clave temporal</span>' : '<span class="pill open">Activo</span>'}</td>
+      <td>${x.ultimo ? fdate(isoLocal(x.ultimo)) + ' ' + isoLocal(x.ultimo).slice(11, 16) : 'Nunca'}</td><td>${x.alta ? fdate(isoLocal(x.alta)) : ''}${x.altaPor ? ', por ' + esc(x.altaPor) : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}</section>`;
   return html;
 }
+const isoLocal = v => { const d = new Date(v); if (isNaN(d)) return String(v || ''); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
 V.conexion = () => {
   const e = DB.t.Empresa && DB.t.Empresa[0] || {};
   const modeTxt = {gas: 'Conectado a Google Sheets.', http: 'Conectado a Google Sheets.', demo: 'Modo demostración: datos exportados de Access cargados en esta página.', setup: 'Sin conexión configurada.'}[Backend.mode];
@@ -938,7 +963,7 @@ const FORMS = {
     {k: 'Fecha_Retiro', l: 'Fecha del retiro', ty: 'date', req: 1, def: todayISO},
     {k: 'Movimiento', l: 'Movimiento', ty: 'text', req: 1, list: () => [...DB.t.Obs_Retiros.filter(o => truthy(o.Mostrar)).map(o => o.Observaciones_Retiro), ...histDesc('Retiros_Detalle', 'Movimiento')], def: 'Retiro de Cajero Automatico'},
     {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01'}]},
-  Referencias_Tarjetas: {t: 'consumo con tarjeta', fields: [
+  Referencias_Tarjetas: {t: 'consumo con tarjeta', perm: 'tarjetas.editar', fields: [
     {k: 'Fecha', l: 'Fecha', ty: 'date', req: 1, def: todayISO, half: 1},
     {k: 'Moneda', l: 'Moneda', ty: 'select', opts: () => [['Córdoba', 'Córdoba'], ['Dólar', 'Dólar']], def: 'Córdoba', half: 1},
     {k: 'Tarjeta_Credito', l: 'Tarjeta', ty: 'text', req: 1, list: () => histDesc('Referencias_Tarjetas', 'Tarjeta_Credito'), half: 1},
@@ -952,7 +977,7 @@ const FORMS = {
     {k: 'Monto_Pagado', l: 'Monto pagado', ty: 'number', step: '0.01', half: 1, def: 0}],
     before: o => { o.Descuento = r2(o.Valor * (o.Porcentaje_Desc || 0) * 10000) / 10000; o.Pagar = r2(o.Valor - o.Descuento); o.Diferencia = r2(o.Pagar - (o.Monto_Pagado || 0));
       const d = toDate(o.Fecha); if (d) { o.Mes = d.getMonth() + 1; o.Anio = d.getFullYear(); o.Mes_Letra = (DB.t.Meses.find(m => m.ID === o.Mes) || {}).Mes || ''; } }},
-  Consumo_Combustible: {t: 'llenado de combustible', fields: [
+  Consumo_Combustible: {t: 'llenado de combustible', perm: 'combustible.editar', fields: [
     {k: 'Fecha', l: 'Fecha', ty: 'date', req: 1, def: todayISO},
     {k: 'Horometro_Km', l: 'Odómetro (km)', ty: 'number', req: 1, step: 'any'},
     {k: 'Cantidad', l: 'Cantidad cargada', ty: 'number', req: 1, step: 'any', half: 1},
@@ -966,23 +991,23 @@ const FORMS = {
       o.Km_Recorrido = prev ? Math.round(o.Horometro_Km - prev.Horometro_Km) : 0; o.Millas_Recorrido = o.Km_Recorrido;
       o.km_galon = o.Galon && o.Km_Recorrido ? o.Km_Recorrido / o.Galon : ''; o.km_litros = o.Litro && o.Km_Recorrido ? o.Km_Recorrido / o.Litro : '';
       if (!o.No) o.No = (prev ? Number(prev.No) || 0 : 0) + 1; }},
-  Cuentas: {t: 'cuenta', g: 'a', fields: [
+  Cuentas: {t: 'cuenta', g: 'a', perm: 'catalogos.editar', fields: [
     {k: 'Codigo', l: 'Código', ty: 'text', req: 1, keyEdit: 1, hint: 'Ejemplo: C033'},
     {k: 'Cuentas', l: 'Nombre', ty: 'text', req: 1},
     {k: 'Cuenta_de_Gastos', l: 'Cuenta de gastos', ty: 'bool', def: true},
     {k: 'Cuenta_de_Ingresos', l: 'Cuenta de ingresos', ty: 'bool', def: false},
     {k: 'Activa', l: 'Activa', ty: 'bool', def: true}],
     before: o => { o.Cuentas_Gastos = o.Codigo + '-' + o.Cuentas; }},
-  Items: {t: 'artículo', fields: [
+  Items: {t: 'artículo', perm: 'catalogos.editar', fields: [
     {k: 'Descripcion', l: 'Descripción', ty: 'text', req: 1},
     {k: 'Cuenta', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(true), req: 1},
     {k: 'UM', l: 'Unidad', ty: 'select', opts: () => DB.t.UM.map(u => [u.ID_UM, u.UM]), def: 7, half: 1, num: 1},
     {k: 'Precio_Unitario', l: 'Precio de referencia', ty: 'number', step: '0.01', def: 0, half: 1}]},
-  Items_Ingresos: {t: 'concepto de ingreso', fields: [
+  Items_Ingresos: {t: 'concepto de ingreso', perm: 'catalogos.editar', fields: [
     {k: 'Descripcion', l: 'Descripción', ty: 'text', req: 1},
     {k: 'Cuenta', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(false), def: 'C001'}]},
-  UM: {t: 'unidad', g: 'a', fields: [{k: 'UM', l: 'Unidad de medida', ty: 'text', req: 1}]},
-  Obs_Retiros: {t: 'movimiento de retiro', fields: [
+  UM: {t: 'unidad', g: 'a', perm: 'catalogos.editar', fields: [{k: 'UM', l: 'Unidad de medida', ty: 'text', req: 1}]},
+  Obs_Retiros: {t: 'movimiento de retiro', perm: 'catalogos.editar', fields: [
     {k: 'Observaciones_Retiro', l: 'Movimiento', ty: 'text', req: 1},
     {k: 'Mostrar', l: 'Mostrar en la lista de sugerencias', ty: 'bool', def: true}]}
 };
@@ -992,7 +1017,7 @@ function openForm(table, id) {
   const F = FORMS[table]; if (!F) return;
   const k = DB.key(table);
   const rec = id !== undefined && id !== null ? DB.t[table].find(r => String(r[k]) === String(id)) : null;
-  const ro = F.mod && !canEdit(F.mod);
+  const ro = (F.mod && !canEdit(F.mod)) || (F.perm && !can(F.perm));
   const o = rec ? Object.assign({}, rec) : {};
   if (!rec) F.fields.forEach(f => { if (f.def !== undefined) o[f.k] = typeof f.def === 'function' ? f.def() : f.def; });
   FORM = {table, rec, o, F};
@@ -1058,16 +1083,16 @@ function closeModal() { $('#modal').innerHTML = ''; FORM = null; }
 
 function openResumen() {
   const t = totals(S.mes), p = DB.idx().periodo[S.mes] || {};
-  const can = truthy(p.Guardar_Resumen);
+  const canSave = truthy(p.Guardar_Resumen) && can('cortes.guardar');
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="frmRes" role="dialog" aria-modal="true" aria-label="Guardar corte">
     <h4>Corte de ${esc(mesLabel(S.mes))}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
     <div class="tablewrap" style="margin-bottom:14px"><table class="t"><tbody>
       ${[['Ingresos', t.I], ['Presupuesto', t.P], ['Gastos', t.G], ['Retiros de efectivo', t.R], ['Disponible en mano', t.mano], ['Ingresos − presupuesto', t.IP], ['Ingresos − gastos', t.IG], ['Ingresos − retiros', t.IR]].map(([l, v]) => `<tr style="cursor:default"><td>${l}</td><td class="n ${v < 0 ? 'neg' : ''}">${money(v)}</td></tr>`).join('')}
     </tbody></table></div>
-    ${can ? `<div class="fgrid"><div class="field half"><label for="dj">Efectivo con Jerson</label><input class="input" id="dj" type="number" step="0.01" inputmode="decimal" value="0"></div>
+    ${canSave ? `<div class="fgrid"><div class="field half"><label for="dj">Efectivo con Jerson</label><input class="input" id="dj" type="number" step="0.01" inputmode="decimal" value="0"></div>
     <div class="field half"><label for="dm">Efectivo con Mariela</label><input class="input" id="dm" type="number" step="0.01" inputmode="decimal" value="${r2(t.mano)}"></div></div>
-    <p class="muted" style="font-size:13px">Al guardar se agrega una fila en Resumen y se actualiza Consolidado para este mes.</p>` : '<div class="notice">Este período no permite guardar cortes. Actívalo en Períodos, columna Corte.</div>'}
-    <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-close="1">Cerrar</button>${can ? '<button type="submit" class="btn primary">Guardar corte</button>' : ''}</div></form></div>`;
+    <p class="muted" style="font-size:13px">Al guardar se agrega una fila en Resumen y se actualiza Consolidado para este mes.</p>` : (can('cortes.guardar') ? '<div class="notice">Este período no permite guardar cortes. Actívalo en Períodos, columna Corte.</div>' : '<div class="notice info">Tu usuario no tiene permiso para guardar cortes.</div>')}
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-close="1">Cerrar</button>${canSave ? '<button type="submit" class="btn primary">Guardar corte</button>' : ''}</div></form></div>`;
 }
 
 function sheetModal(id, title, body, submitLabel) {
@@ -1086,23 +1111,37 @@ function openPwdForm() {
 function openUserForm(usuario) {
   const u = usuario ? (S.users || []).find(x => x.usuario === usuario) : null;
   S.editUser = u ? u.usuario : null;
+  const roles = (S.roles || []).slice();
+  if (u && !roles.some(r => r.id === u.rol)) roles.push({id: u.rol, nombre: u.rol + ' (de otra app)', permisos: []});
+  const rol = u ? u.rol : 'registrador';
   sheetModal('frmUser', u ? 'Editar usuario' : 'Nuevo usuario', `<div class="fgrid">
-    <div class="field half"><label for="uu">Usuario</label><input class="input" id="uu" autocapitalize="none" value="${esc(u ? u.usuario : '')}" ${u ? 'disabled' : ''}><span class="hint">Minúsculas, sin espacios.</span></div>
+    <div class="field half"><label for="uu">Usuario</label><input class="input" id="uu" autocapitalize="none" value="${esc(u ? u.usuario : '')}" ${u ? 'disabled' : ''} placeholder="nombre.apellido"><span class="hint">Minúsculas, sin espacios.</span></div>
     <div class="field half"><label for="un">Nombre</label><input class="input" id="un" value="${esc(u ? u.nombre : '')}"></div>
-    <div class="field half"><label for="ur">Rol</label><select class="input" id="ur"><option value="usuario" ${u && u.rol !== 'admin' ? 'selected' : ''}>Usuario</option><option value="admin" ${u && u.rol === 'admin' ? 'selected' : ''}>Administrador</option></select><span class="hint">El administrador gestiona usuarios y crea años.</span></div>
+    <div class="field half"><label for="ur">Rol</label><select class="input" id="ur">${roles.map(r => `<option value="${esc(r.id)}" ${r.id === rol ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}</select></div>
     <div class="field half check" style="align-self:center"><label for="ua">Activo</label><label class="toggle"><input type="checkbox" id="ua" ${!u || u.activo ? 'checked' : ''}><span></span></label></div>
-    <div class="field"><label for="uc">${u ? 'Nueva contraseña' : 'Contraseña'}</label><input class="input" id="uc" type="password" autocomplete="new-password"><span class="hint">${u ? 'Déjala vacía para no cambiarla.' : 'Mínimo 8 caracteres. Compártela en persona.'}</span></div></div>`, u ? 'Guardar cambios' : 'Crear usuario');
+    <div class="field"><label for="uc">${u ? 'Nueva contraseña' : 'Contraseña inicial'}</label><input class="input" id="uc" type="password" autocomplete="new-password"><span class="hint">${u ? 'Déjala vacía para no cambiarla.' : 'Mínimo 8 caracteres. Compártela en persona.'}</span></div>
+    <div class="field check"><label for="ud">Pedir que cree su propia contraseña al entrar</label><label class="toggle"><input type="checkbox" id="ud" ${!u || u.debeCambiar ? 'checked' : ''}><span></span></label></div>
+    <div class="field"><label>Permisos</label><div class="perms" id="uperms"></div><span class="hint">Vienen del rol. Si marcas o desmarcas alguno, se guarda en PermisosPersonalizados solo para este usuario.</span></div>
+    ${u ? `<p class="muted field" style="font-size:12.5px;margin:0">Alta ${u.alta ? fdate(isoLocal(u.alta)) : '—'}${u.altaPor ? ' por ' + esc(u.altaPor) : ''}. Último acceso: ${u.ultimo ? isoLocal(u.ultimo) : 'nunca'}.</p>` : ''}</div>`, u ? 'Guardar cambios' : 'Crear usuario');
+  renderPerms(rol, u ? u.personalizados : {});
+}
+function roleDefaults(rol) { const r = (S.roles || []).find(x => x.id === rol); const out = {}; (S.permisos || []).forEach(p => out[p.id] = !!r && r.permisos.includes(p.id)); return out; }
+function renderPerms(rol, custom) {
+  const def = roleDefaults(rol);
+  $('#uperms').innerHTML = (S.permisos || []).map(p => { const v = custom && p.id in custom ? custom[p.id] === true : def[p.id];
+    return `<label class="perm ${v !== def[p.id] ? 'custom' : ''}"><input type="checkbox" data-perm="${esc(p.id)}" ${v ? 'checked' : ''}><span>${esc(p.nombre)}</span><code>${esc(p.id)}</code></label>`; }).join('');
 }
 
 /* ---------- Inicio de sesión ---------- */
 function showLogin(msg) {
   document.body.classList.add('locked'); closeModal();
-  $('#login').hidden = false; $('#loading').style.display = 'none';
+  $('#login').hidden = false; $('#frmLogin').hidden = false; $('#frmNewPwd').hidden = true; $('#loading').style.display = 'none';
   $('#loginMsg').textContent = msg || '';
   const lu = $('#lu'); if (!lu.value) lu.value = lsGet('last_user') || '';
   setTimeout(() => (lu.value ? $('#lp') : lu).focus(), 50);
 }
-function hideLogin() { document.body.classList.remove('locked'); $('#login').hidden = true; $('#lp').value = ''; }
+function hideLogin() { document.body.classList.remove('locked'); $('#login').hidden = true; $('#lp').value = ''; $('#frmNewPwd').hidden = true; $('#frmLogin').hidden = false; }
+function showNewPwd(u) { $('#frmLogin').hidden = true; $('#frmNewPwd').hidden = false; $('#npSub').textContent = `Hola, ${u.nombre}. Entraste con una contraseña temporal. Elige una nueva que solo tú conozcas.`; $('#np1').value = $('#np2').value = ''; setTimeout(() => $('#np1').focus(), 50); }
 
 /* ---------- Mensajes ---------- */
 let toastT;
@@ -1116,7 +1155,7 @@ document.addEventListener('click', async e => {
   if (d.close !== undefined) { if (e.target === t) closeModal(); return; }
   if (d.user) { openUserForm(d.user); return; }
   if (d.go) { e.preventDefault(); go(d.go); return; }
-  if (d.new) { const F = FORMS[d.new]; if (F && F.mod && !canEdit(F.mod)) { toast('El período está cerrado para ' + F.mod.toLowerCase(), true); return; } openForm(d.new); return; }
+  if (d.new) { const F = FORMS[d.new]; if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
   if (d.edit) { openForm(d.edit, d.id); return; }
   if (d.cuenta) { S.cuenta = d.cuenta; S.q = ''; S.all = false; go('gastos'); return; }
   if (d.anio) { S.anio = d.anio; render(); return; }
@@ -1147,7 +1186,7 @@ document.addEventListener('click', async e => {
   if (a === 'reload') { await boot(); if (DB.t.Cuentas) toast('Datos actualizados'); return; }
   if (a === 'logout') {
     try { await Backend.call('logout'); } catch (err) {}
-    Auth.clear(); S.users = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
+    Auth.clear(); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
   if (a === 'user-new') return openUserForm();
@@ -1160,26 +1199,37 @@ document.addEventListener('submit', e => {
     const b = e.target.querySelector('button[type=submit]'), u = $('#lu').value.trim().toLowerCase(), c = $('#lp').value;
     if (!u || !c) { $('#loginMsg').textContent = 'Escribe tu usuario y contraseña.'; return; }
     b.disabled = true; b.textContent = 'Entrando…'; $('#loginMsg').textContent = '';
-    try { const r = await Backend.call('login', {usuario: u, clave: c}); Auth.set(r.session, r.user); lsSet('last_user', u); hideLogin(); await boot(); }
+    try { const r = await Backend.call('login', {usuario: u, clave: c}); Auth.set(r.session, r.user); lsSet('last_user', u);
+      if (r.user.debeCambiar) { S.tmpPwd = c; showNewPwd(r.user); } else { hideLogin(); await boot(); } }
     catch (err) { $('#loginMsg').textContent = err.message; $('#lp').select(); }
     b.disabled = false; b.textContent = 'Entrar';
+  })();
+  if (e.target.id === 'frmNewPwd') (async () => {
+    const n = $('#np1').value, c = $('#np2').value;
+    if (n.length < 8) { $('#npMsg').textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
+    if (n !== c) { $('#npMsg').textContent = 'Las contraseñas no coinciden.'; return; }
+    const b = e.target.querySelector('button[type=submit]'); b.disabled = true; $('#npMsg').textContent = '';
+    try { const r = await Backend.call('changePassword', {actual: S.tmpPwd, nueva: n}); S.tmpPwd = null; Auth.set(r.session, r.user); hideLogin(); await boot(); toast('Contraseña creada'); }
+    catch (err) { $('#npMsg').textContent = err.message; }
+    b.disabled = false;
   })();
   if (e.target.id === 'frmPwd') (async () => {
     const a = $('#pa').value, n = $('#pn').value, c = $('#pc').value;
     if (n.length < 8) return toast('La contraseña nueva debe tener al menos 8 caracteres', true);
     if (n !== c) return toast('Las contraseñas nuevas no coinciden', true);
     const b = e.target.querySelector('button[type=submit]'); b.disabled = true;
-    try { const r = await Backend.call('changePassword', {actual: a, nueva: n}); Auth.set(r.session); closeModal(); toast('Contraseña cambiada'); }
+    try { const r = await Backend.call('changePassword', {actual: a, nueva: n}); Auth.set(r.session, r.user); closeModal(); toast('Contraseña cambiada'); }
     catch (err) { b.disabled = false; toast(err.message, true); }
   })();
   if (e.target.id === 'frmUser') (async () => {
     const usuario = S.editUser || $('#uu').value.trim().toLowerCase(), clave = $('#uc').value;
     if (!/^[a-z0-9._-]{3,30}$/.test(usuario)) return toast('El usuario debe tener de 3 a 30 letras minúsculas o números, sin espacios', true);
-    if (!S.editUser && clave.length < 8) return toast('La contraseña debe tener al menos 8 caracteres', true);
-    if (clave && clave.length < 8) return toast('La contraseña debe tener al menos 8 caracteres', true);
+    if ((!S.editUser || clave) && clave.length < 8) return toast('La contraseña debe tener al menos 8 caracteres', true);
+    const rol = $('#ur').value, def = roleDefaults(rol), personalizados = {};
+    document.querySelectorAll('#uperms [data-perm]').forEach(c => { if (c.checked !== def[c.dataset.perm]) personalizados[c.dataset.perm] = c.checked; });
     const b = e.target.querySelector('button[type=submit]'); b.disabled = true;
-    try { const r = await Backend.call('saveUser', {usuario, nombre: $('#un').value.trim(), rol: $('#ur').value, activo: $('#ua').checked, clave: clave || undefined});
-      S.users = r.users; closeModal(); render(); toast(S.editUser ? 'Usuario actualizado' : 'Usuario creado'); }
+    try { const r = await Backend.call('saveUser', {usuario, nombre: $('#un').value.trim(), rol, activo: $('#ua').checked, clave: clave || undefined, debeCambiar: $('#ud').checked, personalizados});
+      S.users = r.users; S.roles = r.roles; S.permisos = r.permisos; closeModal(); render(); toast(S.editUser ? 'Usuario actualizado' : 'Usuario creado'); }
     catch (err) { b.disabled = false; toast(err.message, true); }
   })();
   if (e.target.id === 'frmRes') (async () => {
@@ -1199,6 +1249,8 @@ document.addEventListener('change', async e => {
   if (el.id === 'mesSel') { S.mes = el.value; render(); return; }
   if (b === 'cuenta' || b === 'cuentaSel') { S[b] = el.value; render(); return; }
   if (b === 'all') { S.all = el.checked; render(); return; }
+  if (el.id === 'ur' && $('#uperms')) { renderPerms(el.value, {}); return; }
+  if (el.dataset.perm) { const def = roleDefaults($('#ur').value); el.closest('.perm').classList.toggle('custom', el.checked !== def[el.dataset.perm]); return; }
   if (FORM) { if (FORM.F.fields.some(f => f.dep === el.name)) fillLists(); if (el.name === 'Descripcion_Gasto') autofillFromHistory(el); return; }
   if (el.dataset.flag) {
     const p = DB.t.Mes_Anio.find(x => String(x.ID) === el.dataset.pid); const row = {ID: p.ID}; row[el.dataset.flag] = el.checked;
