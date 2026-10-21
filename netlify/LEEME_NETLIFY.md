@@ -145,6 +145,12 @@ Cada período empieza el día de pago y termina el día anterior del mes siguien
 
 Google Sheets convertía textos como `SEPTIEMBRE-2026` en fechas al guardarlos, por eso el selector mostraba "2026 09" y el mes salía en cero. Ahora todo texto se guarda tal cual. La primera vez que alguien entra, el servicio repara solo los períodos ya convertidos y une los encabezados mensuales duplicados. También puedes hacerlo a mano en la hoja (*Efectivo → Revisar hojas y reparar períodos*) o en la app (*Períodos → Revisar y reparar períodos*).
 
+**Si un mes aparecía repetido** (por ejemplo dos "Agosto 2026" y faltaba Octubre): algunos períodos convertidos en fecha se leían corridos un mes por la zona horaria (1/9 como 31/8). Ahora:
+- En la hoja Mes_Anio, el período se toma siempre de las columnas **Mes** y **Anio**, que Sheets no convierte.
+- La reparación automática corrige Mes_Anio en todas las hojas. Si hay encabezados mensuales repetidos, elimina los vacíos y, en gastos, retiros e ingresos, devuelve su nombre al mes que corresponde según las fechas de sus movimientos. Nunca junta dos meses con datos: si no puede decidir, lo informa para que lo revises.
+
+**Selector de período por año:** junto al período hay un filtro de **año** (por defecto el del período elegido). Elige *Todos* para ver todos los períodos o un año anterior para ver solo sus meses.
+
 ## Combustible: costo y rendimiento
 
 - Al registrar un llenado escribe el **precio por litro** (se sugiere el último que usaste) o el **total pagado**; la app calcula lo otro.

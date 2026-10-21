@@ -84,6 +84,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .monthpick button{border:0;background:none;width:30px;height:30px;border-radius:50%;cursor:pointer;display:grid;place-items:center;color:var(--ink2)}
 .monthpick button:hover{background:var(--sunk)}
 .monthpick select{border:0;background:none;font-weight:600;padding:4px 2px;cursor:pointer}
+.monthpick .yearsel{color:var(--muted);border-right:1px solid var(--line);padding-right:6px;margin-right:2px}
+@media (max-width:420px){.top h2{display:none}.monthpick{margin-left:auto}}
 
 .bottom{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px))}
 .bottom button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;color:var(--muted);padding:4px 0;cursor:pointer;font-weight:500}
@@ -362,6 +364,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
       <span class="sync" id="sync" hidden role="status" aria-live="polite"></span>
       <div class="monthpick" id="mp">
         <button type="button" data-act="mes-prev" aria-label="Mes anterior"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <select id="anioSel" class="yearsel" aria-label="Año"></select>
         <select id="mesSel" aria-label="Período"></select>
         <button type="button" data-act="mes-next" aria-label="Mes siguiente"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></button>
       </div>
@@ -405,7 +408,10 @@ const fdate = (s, o = {day:'numeric', month:'short', year:'numeric'}) => { const
 const fday = s => { const d = toDate(s); if (!d) return 'Sin fecha'; const t = d.toLocaleDateString('es-NI', {weekday:'long', day:'numeric', month:'long'}); return t.charAt(0).toUpperCase() + t.slice(1); };
 const cap = s => s ? s.charAt(0) + s.slice(1).toLowerCase() : '';
 const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-const normMes = v => { const t = String(v ?? '').trim().toUpperCase(); const m = t.match(/^(\d{4})-(\d{2})/); return m ? MESES[+m[2] - 1] + '-' + m[1] : t; };
+/* "2026-08-31" (fecha corrida por zona horaria) se toma como el mes siguiente, igual que en el servidor */
+const normMes = v => { const t = String(v ?? '').trim().toUpperCase(); const m = t.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/); if (!m) return t; let mo = +m[2], y = +m[1]; if (m[3] && +m[3] > 15) { mo++; if (mo > 12) { mo = 1; y++; } } return MESES[mo - 1] + '-' + y; };
+/** En la tabla de períodos, Mes + Anio mandan sobre Mes_Anio */
+const fixPeriodRows = rows => rows.forEach(p => { if (p.Mes && p.Anio) p.Mes_Anio = String(p.Mes).trim().toUpperCase() + '-' + Number(p.Anio); });
 const mesLabel = m => { if (!m) return ''; const [a, b] = m.split('-'); return cap(a) + ' ' + b; };
 const truthy = v => v === true || v === 'TRUE' || v === 'true' || v === 1;
 const lsGet = k => { try { return localStorage.getItem('ge_' + k); } catch (e) { return null; } };
@@ -445,6 +451,7 @@ const DB = {
       this.cols[name] = tb.cols;
       this.t[name] = tb.rows.map(r => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(r[i]) : r[i]); return o; });
     }
+    if (this.t.Mes_Anio) fixPeriodRows(this.t.Mes_Anio);
     ['Bancos', 'Movimientos_Banco'].forEach(n => { if (!this.t[n]) { this.t[n] = []; this.cols[n] = n === 'Bancos' ? ['ID_Banco'] : ['ID_Mov']; } });
     this.ver++;
   },
@@ -544,7 +551,8 @@ function ledger(bid) {
 const mesesConDatos = () => {
   const I = DB.idx(); const s = new Set();
   Object.values(I.headerByMes).forEach(hm => Object.keys(hm).forEach(m => s.add(m)));
-  return periodos().filter(p => s.has(p.Mes_Anio) || truthy(p.Abierta)).map(p => p.Mes_Anio);
+  const seen = new Set();
+  return periodos().filter(p => (s.has(p.Mes_Anio) || truthy(p.Abierta)) && !seen.has(p.Mes_Anio) && seen.add(p.Mes_Anio)).map(p => p.Mes_Anio);
 };
 const mesAnterior = mes => { const ps = periodos(); const i = ps.findIndex(p => p.Mes_Anio === mes); return i > 0 ? ps[i-1].Mes_Anio : null; };
 const MOD_PERM = {Ingresos: 'ingresos.editar', Presupuesto: 'presupuesto.editar', Gastos: 'gastos.editar', Retiros: 'retiros.editar'};
@@ -755,7 +763,7 @@ const Sync = {
       if (r.full) { await this.full(); if (!FORM) render(); }
       else {
         let n = 0; (r.changes || []).forEach(c => { DB.apply(c); n++; });
-        if (r.periods) { const tb = r.periods, rows = tb.rows.map(x => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(x[i]) : x[i]); return o; });
+        if (r.periods) { const tb = r.periods, rows = tb.rows.map(x => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(x[i]) : x[i]); return o; }); fixPeriodRows(rows);
           if (JSON.stringify(rows) !== JSON.stringify(DB.t.Mes_Anio)) { const before = activePeriod(); DB.t.Mes_Anio = rows; DB.cols.Mes_Anio = tb.cols; DB.ver++; n++;
             const now = activePeriod(); if (now && now !== before && !FORM) { S.mes = now; toast('Período activo: ' + mesLabel(now)); } } }
         if (r.fullTables && r.fullTables.length) { await this.full(r.fullTables); n++; }
@@ -812,11 +820,17 @@ function renderNav() {
   $('#bottom').innerHTML = ['inicio', 'gastos', 'retiros', 'presupuesto', 'mas'].map(v =>
     `<button data-go="${v}" ${(S.view === v || (v === 'mas' && inMore)) ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('');
 }
+const yearOf = m => String(m || '').split('-')[1] || '';
 function renderMonthPicker() {
-  const ms = mesesConDatos();
-  if (S.mes && !ms.includes(S.mes)) ms.push(S.mes);
+  const all = mesesConDatos();
+  if (S.mes && !all.includes(S.mes)) all.push(S.mes);
   const act = activePeriod();
-  $('#mesSel').innerHTML = ms.slice().reverse().map(m => `<option value="${m}" ${m === S.mes ? 'selected' : ''}>${mesLabel(m)}${m === act ? ' (activo)' : ''}</option>`).join('');
+  const years = [...new Set(all.map(yearOf))].filter(Boolean).sort((a, b) => b - a);
+  if (!S.yearSel || (S.yearSel !== 'all' && !years.includes(S.yearSel))) S.yearSel = yearOf(S.mes) || years[0];
+  if (S.yearSel !== 'all' && yearOf(S.mes) !== S.yearSel) S.yearSel = yearOf(S.mes);
+  $('#anioSel').innerHTML = `<option value="all" ${S.yearSel === 'all' ? 'selected' : ''}>Todos</option>` + years.map(y => `<option value="${y}" ${y === S.yearSel ? 'selected' : ''}>${y}</option>`).join('');
+  const ms = S.yearSel === 'all' ? all : all.filter(m => yearOf(m) === S.yearSel);
+  $('#mesSel').innerHTML = ms.slice().reverse().map(m => `<option value="${m}" ${m === S.mes ? 'selected' : ''}>${S.yearSel === 'all' ? mesLabel(m) : cap(m.split('-')[0])}${m === act ? ' (activo)' : ''}</option>`).join('');
   $('#mesSel').title = 'Período ' + rangeLabel(S.mes);
   $('#mp').style.display = VIEWS[S.view].mes ? '' : 'none';
 }
@@ -1862,6 +1876,11 @@ document.addEventListener('input', e => {
 document.addEventListener('change', async e => {
   const el = e.target, b = el.dataset.bind;
   if (el.id === 'mesSel') { S.mes = el.value; render(); return; }
+  if (el.id === 'anioSel') {
+    S.yearSel = el.value;
+    if (el.value !== 'all' && yearOf(S.mes) !== el.value) { const ms = mesesConDatos().filter(m => yearOf(m) === el.value); const act = activePeriod(); S.mes = ms.includes(act) ? act : ms[ms.length - 1]; }
+    render(); return;
+  }
   if (el.id === 'diaIni') {
     const e0 = (DB.t.Empresa || [])[0]; if (!e0) return;
     el.disabled = true;
