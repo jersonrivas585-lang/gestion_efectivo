@@ -1,76 +1,126 @@
-# Publicar la app en Netlify
+# Publicar la app en Netlify con usuario y contraseña
 
-La app vive en Netlify y los datos siguen en tu Google Sheets. Apps Script hace de puente entre las dos.
+La app vive en Netlify, los datos en tu Google Sheets y Apps Script hace de puente. Cada persona entra con su propio usuario y contraseña.
 
-## 1. Preparar Apps Script (una sola vez)
+## 1. Actualizar Apps Script
 
-1. En tu hoja de Google: *Extensiones → Apps Script*. Debe tener el archivo `Code.gs` del paquete.
-2. *Configuración del proyecto (engranaje) → Propiedades del script → Agregar propiedad*:
-   - Propiedad: `API_TOKEN`
-   - Valor: una clave larga y difícil de adivinar, por ejemplo de 30 caracteres. Guárdala, la usarás en cada celular.
-3. *Implementar → Nueva implementación → Aplicación web*:
-   - Ejecutar como: **Yo**
-   - Quién tiene acceso: **Cualquier usuario** (sin cuenta). Es necesario para que Netlify pueda llamar al servicio; el token es lo que protege los datos.
-4. Copia la URL que termina en `/exec`.
+1. En tu hoja de Google: *Extensiones → Apps Script*.
+2. Reemplaza todo el contenido de `Código.gs` por el nuevo `Code.gs` del paquete.
+3. Guarda (ícono de disco).
+4. *Implementar → Gestionar implementaciones → Editar (lápiz) → Versión: Nueva versión → Implementar*. Confirma que siga con *Ejecutar como: Yo* y *Acceso: Cualquier usuario*. La URL `/exec` no cambia.
+5. Si antes creaste la propiedad `API_TOKEN`, ya puedes borrarla en *Configuración del proyecto → Propiedades del script*. Ya no se usa.
 
-> Si tu cuenta es de Google Workspace y no aparece la opción *Cualquier usuario*, el administrador la tiene bloqueada. En ese caso usa una cuenta Gmail personal para la hoja y el script.
+## 2. La hoja Usuarios
 
-## 2. Subir el proyecto a GitHub
+La hoja tiene la misma estructura que usas en tus otras apps:
 
-La variable de entorno solo se aplica cuando Netlify *construye* el sitio, y eso no ocurre con arrastrar y soltar (Netlify Drop). Por eso el sitio se conecta a un repositorio:
-
-1. Crea un repositorio en GitHub, por ejemplo `efectivo-app` (puede ser privado).
-2. Sube el contenido de la carpeta `netlify` a la raíz del repositorio: `index.html`, `config.js`, `build-config.js`, `netlify.toml`, `sw.js`, `manifest.webmanifest` e `icons/`.
-3. En Netlify: *Add new site → Import an existing project → GitHub* y elige el repositorio. Deja los campos de compilación como vienen: `netlify.toml` ya indica el comando `node build-config.js` y el directorio `.`.
-
-## 3. Crear la variable APPS_SCRIPT_URL
-
-1. En tu sitio de Netlify: *Site configuration → Environment variables → Add a variable → Add a single variable*.
-2. Llena:
-   - **Key:** `APPS_SCRIPT_URL`
-   - **Value:** la URL de Apps Script, por ejemplo `https://script.google.com/macros/s/AKfycb…/exec`
-   - **Scopes:** deja *All scopes* (o al menos *Builds*).
-   - **Deploy contexts:** *Same value for all deploy contexts*.
-3. Pulsa *Create variable*.
-4. Ve a *Deploys → Trigger deploy → Deploy site* para que el cambio se aplique.
-
-En el registro del despliegue debe aparecer `✔ config.js generado con la URL de Apps Script`. Si la variable falta o tiene otro formato, el despliegue se detiene con un mensaje que lo explica, y el sitio anterior sigue en línea.
-
-**Con la terminal (opcional):** instala Netlify CLI (`npm install -g netlify-cli`), entra a la carpeta y ejecuta:
-
-```
-netlify login
-netlify link
-netlify env:set APPS_SCRIPT_URL "https://script.google.com/macros/s/XXXXXXXX/exec"
-netlify deploy --build --prod
-```
-
-**Cuándo cambiarla:** solo si creas una implementación *nueva* en Apps Script (la URL cambia). Si editas una implementación existente con *Nueva versión*, la URL se mantiene y no hay que tocar nada. Tras cambiar la variable, vuelve a desplegar.
-
-**Sobre el token:** no lo guardes como variable de Netlify. `config.js` se descarga en el navegador de cualquiera que abra el sitio, así que todo lo que entre ahí es visible. La URL puede ser pública; el token se escribe en cada equipo.
-
-## 4. Abrir en cada equipo
-
-1. Abre tu dirección de Netlify.
-2. Escribe el token en la pantalla de conexión y pulsa *Probar y conectar*. Queda guardado en ese navegador.
-3. En el celular: Chrome → menú → *Instalar app* (Android), o Safari → Compartir → *Agregar a inicio* (iPhone). Queda con su ícono y se abre a pantalla completa.
-
-Para quitar el acceso de un equipo: *Conexión → Cerrar sesión en este equipo*. Si pierdes un celular, cambia el valor de `API_TOKEN` en Apps Script; todos los equipos tendrán que escribir el token nuevo.
-
-## Qué incluye la carpeta
-
-| Archivo | Función |
+| Columna | Contenido |
 |---|---|
-| `index.html` | La app |
-| `config.js` | URL del servicio; se genera en cada despliegue |
-| `build-config.js` | Lee `APPS_SCRIPT_URL` y escribe `config.js` |
-| `manifest.webmanifest`, `icons/` | Permiten instalarla como app en el celular |
-| `sw.js` | Abre la app rápido aunque la señal sea débil (los datos siempre se piden en vivo) |
-| `netlify.toml` | Cabeceras de seguridad: la página solo puede comunicarse con Google Apps Script y Google Fonts |
+| Usuario | Nombre para entrar, en minúsculas (ej. `jrivas`, `jessy.rivas`) |
+| Nombre | Nombre completo que muestra la app |
+| Rol | `admin`, `supervisor`, `registrador` o `consulta` |
+| Activo | TRUE / FALSE. FALSE bloquea la entrada y cierra sus sesiones |
+| DebeCambiarClave | TRUE obliga a crear una contraseña propia al entrar |
+| ClaveHash / ClaveSal | Contraseña cifrada (encabezado rojo). No editar |
+| UltimoAcceso / Alta | Fecha y hora en formato ISO (UTC) |
+| AltaPor | Quién creó el usuario (`plantilla` si fue desde la hoja) |
+| PermisosPersonalizados | JSON que ajusta permisos de ese usuario, ej. `{"gastos.editar":true}`. `[]` = sin ajustes |
+
+**Crear el primer administrador:** recarga la hoja, ve a *Efectivo → Crear o restablecer usuario* y autoriza el script la primera vez. Si ya tenías la hoja Usuarios de la versión anterior, se convierte sola a esta estructura la primera vez que alguien entra (o con *Efectivo → Preparar hoja Usuarios*).
+
+Los demás usuarios se crean desde la app: *Mi cuenta → Usuarios → Agregar usuario*. Ahí eliges el rol, marcas o desmarcas permisos y decides si debe cambiar la contraseña al entrar.
+
+## 3. Netlify
+
+La variable `APPS_SCRIPT_URL` se mantiene igual. En GitHub reemplaza o agrega estos archivos (los demás no cambian):
+
+| Archivo | Cambio |
+|---|---|
+| `index.html` | Bancos, dólares, importación de presupuesto, corrección de períodos |
+| `build-config.js` | Genera también `assetlinks.json` para la app Android |
+| `manifest.webmanifest` | Ajustes para la app instalada |
+| `netlify.toml` | Cabecera para `assetlinks.json` |
+| `sw.js` | Nueva versión de caché |
+| `vendor/xlsx.full.min.js` | **Nuevo**: lector de Excel. Créalo en la carpeta `vendor` |
+
+Netlify despliega solo. Si en Apps Script tenías un archivo HTML llamado `Index`, puedes borrarlo: ya no se usa.
+
+## 4. Usar la app
+
+- Abre tu dirección de Netlify, escribe usuario y contraseña, y pulsa *Entrar*. La sesión dura 30 días en ese equipo.
+- En el celular: Chrome → *Instalar app* (Android) o Safari → Compartir → *Agregar a inicio* (iPhone).
+- *Mi cuenta* permite cambiar tu contraseña y cerrar sesión. Al cambiarla se cierran tus sesiones en otros equipos.
+
+## Roles y permisos
+
+| Permiso | admin | supervisor | registrador | consulta |
+|---|:-:|:-:|:-:|:-:|
+| `ingresos.editar` | ✓ | ✓ | ✓ | |
+| `presupuesto.editar` | ✓ | ✓ | | |
+| `gastos.editar` | ✓ | ✓ | ✓ | |
+| `retiros.editar` | ✓ | ✓ | ✓ | |
+| `tarjetas.editar` | ✓ | ✓ | ✓ | |
+| `combustible.editar` | ✓ | ✓ | ✓ | |
+| `bancos.editar` | ✓ | ✓ | ✓ | |
+| `cortes.guardar` | ✓ | ✓ | | |
+| `catalogos.editar` | ✓ | ✓ | | |
+| `periodos.gestionar` | ✓ | ✓ | | |
+| `usuarios.gestionar` | ✓ | | | |
+
+Todos los roles pueden consultar toda la información. Un rol que no exista aquí (por ejemplo `cobrador`, copiado de otra app) se trata como `consulta`. Las llaves de PermisosPersonalizados que pertenecen a otras apps (como `auditoria.ver`) se conservan intactas.
+
+**Importante si copias usuarios de otra app:** las contraseñas solo funcionarán si esa app cifra con el mismo método (función `hash_` en `Code.gs`). Si no es así, copia las filas, pon una contraseña temporal a cada uno desde *Mi cuenta → Usuarios* y deja marcado *Pedir que cree su propia contraseña*.
+
+## App Android sin barra del navegador (PWABuilder)
+
+La APK de PWABuilder es una *Trusted Web Activity*. Android solo la abre a pantalla completa si el sitio demuestra que la app es suya con el archivo `/.well-known/assetlinks.json`. Sin ese archivo, o si no coincide, la abre como pestaña de Chrome con la barra de dirección.
+
+1. En el ZIP que descargaste de PWABuilder hay un archivo **assetlinks.json** (y un *signing key info*). Ábrelo con el Bloc de notas y copia:
+   - `package_name`, por ejemplo `app.netlify.efectivo_rivas.twa`
+   - el valor de `sha256_cert_fingerprints`, del tipo `AB:CD:12:…` (32 pares separados por dos puntos)
+2. En Netlify, *Site configuration → Environment variables*, crea dos variables:
+   - `ANDROID_PACKAGE_ID` = el package_name
+   - `ANDROID_SHA256` = la huella. Si subes la app a Google Play, agrega también la huella de *Play Console → Configuración → Integridad de la app → Firma de apps*, separadas por coma.
+3. *Deploys → Trigger deploy → Deploy site*. En el registro debe aparecer `✔ .well-known/assetlinks.json generado`.
+4. Comprueba que abre: `https://TU-SITIO.netlify.app/.well-known/assetlinks.json`
+5. En el celular, desinstala la app, borra los datos de Chrome para ese sitio (o reinicia el teléfono) e instala la APK otra vez.
+
+Guarda bien el archivo `signing.keystore` y su contraseña que vienen en el ZIP de PWABuilder: los necesitas para publicar actualizaciones con la misma huella.
+
+## Cuentas de banco y dólares
+
+La sección **Bancos** muestra el saldo de cada cuenta. Al conectar por primera vez se crean solas: *Avanz Córdobas*, *BAC Córdobas* y *BAC Dólares*.
+
+1. **Saldo inicial:** en *Bancos → Saldo inicial y datos* escribe lo que tiene cada cuenta hoy y la fecha. Solo cuentan los movimientos desde esa fecha, así el historial de Access no altera los saldos.
+2. **Ingresos:** al registrar un ingreso eliges en qué cuenta se depositó (o *Efectivo, sin banco*). Así la suma de ingresos en córdobas coincide con lo depositado en los bancos.
+3. **Retiros:** eliges desde qué cuenta sale. Si es la cuenta en dólares, escribes el monto en US$ y el tipo de cambio; la app calcula los córdobas, descuenta los dólares y registra un **ingreso automático** por la conversión.
+4. **Transferir entre cuentas:** botón en Bancos. Entre cuentas en córdobas solo mueve el saldo. De dólares a córdobas convierte con el tipo de cambio y registra el ingreso automático. De córdobas a dólares es compra de dólares: no cuenta como gasto ni como retiro de efectivo.
+5. **Depósito o ajuste:** un depósito en dólares entra solo a la cuenta en US$; un depósito en córdobas se registra también como ingreso. El ajuste corrige un saldo sin tocar ingresos ni retiros.
+
+Los ingresos automáticos se editan o eliminan desde el retiro o la transferencia que los generó. El tipo de cambio que uses queda como sugerencia para la próxima vez.
+
+## Importar el presupuesto desde Excel
+
+En **Presupuesto** usa *Descargar plantilla* (trae el presupuesto del mes o del mes anterior) o el archivo `Plantilla_Presupuesto.xlsx` del paquete. Llénalo y usa *Importar desde Excel*.
+
+- Columnas que reconoce: **Cuenta** (código como `C014`, o el nombre de la cuenta), **Descripción**, **Monto**; opcionales **Cantidad** y **Unidad**. También entiende encabezados como Código, Concepto, Partida, Valor, Total o Importe, y el encabezado puede estar en cualquiera de las primeras 20 filas.
+- Todo lo que esté después de la fila **TOTAL** se ignora.
+- Antes de importar ves el resumen, las filas con error (por ejemplo una cuenta que no existe) y eliges si **reemplazas** el presupuesto del mes o lo **sumas** al existente.
+
+## Períodos que aparecían como fecha
+
+Google Sheets convertía textos como `SEPTIEMBRE-2026` en fechas al guardarlos, por eso el selector mostraba "2026 09" y el mes salía en cero. Ahora todo texto se guarda tal cual. La primera vez que alguien entra, el servicio repara solo los períodos ya convertidos y une los encabezados mensuales duplicados. También puedes hacerlo a mano en la hoja (*Efectivo → Revisar hojas y reparar períodos*) o en la app (*Períodos → Revisar y reparar períodos*).
+
+## Seguridad
+
+- Tras 5 intentos fallidos, ese usuario queda bloqueado 15 minutos.
+- Si pierdes un celular: desactiva el usuario en *Mi cuenta → Usuarios*, o en la hoja usa *Efectivo → Cerrar todas las sesiones*.
+- ¿Olvidaste la contraseña? Otro administrador la cambia desde la app, o en la hoja con *Efectivo → Crear o restablecer usuario* (escribiendo el mismo usuario).
 
 ## Si algo falla
 
-- **Token no válido:** el token escrito no coincide con `API_TOKEN`, o falta la propiedad.
-- **Failed to fetch / no conecta:** la implementación no está como *Cualquier usuario*, o la URL no termina en `/exec`.
-- **El despliegue falla con «Falta la variable»:** revisa que la clave sea exactamente `APPS_SCRIPT_URL` y que su alcance incluya *Builds*.
-- **Cambié Code.gs y no se nota:** en Apps Script, *Implementar → Gestionar implementaciones → Editar → Nueva versión*. La URL se mantiene.
+- **«Aún no hay usuarios»:** crea el primero con el menú Efectivo de la hoja (paso 2).
+- **No aparece el menú Efectivo:** recarga la hoja; si sigue sin aparecer, confirma que guardaste `Code.gs`.
+- **«Acción desconocida: login»:** Apps Script sigue con la versión anterior. Repite el paso 1.4 (*Nueva versión*).
+- **«Falta la dirección del servicio»:** la variable `APPS_SCRIPT_URL` no llegó al despliegue; revisa el Deploy log.
+- **«No hay conexión con el servidor»:** revisa el internet, o que la implementación esté con acceso *Cualquier usuario*.

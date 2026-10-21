@@ -1,6 +1,6 @@
 /* Service worker: guarda la app para abrirla rápido y sin señal.
    Los datos siempre se piden en vivo a Google Sheets (no se guardan aquí). */
-const CACHE = 'efectivo-v1';
+const CACHE = 'efectivo-v2';
 const SHELL = ['/', '/index.html', '/config.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {

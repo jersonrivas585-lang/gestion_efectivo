@@ -239,6 +239,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .field{display:flex;flex-direction:column;gap:5px;grid-column:1 / -1}
 .field.half{grid-column:auto}
+.field[hidden]{display:none}
 .field label{font-size:13px;font-weight:600;color:var(--ink2)}
 .field .hint{font-size:12px;color:var(--muted)}
 .field.check{flex-direction:row;align-items:center;justify-content:space-between}
@@ -272,6 +273,16 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .pwd{position:relative}
 .pwd .input{padding-right:58px}
 .pwd-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:var(--sunk);border-radius:7px;padding:5px 9px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink2)}
+.bankgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px}
+.bankcard{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);padding:14px 16px;cursor:pointer}
+.bankcard:hover{background:var(--sunk)}
+.bankcard.on{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-soft)}
+.bankcard small{color:var(--muted);font-size:12.5px}
+.bankcard b{font-size:15px}
+.bankcard .bal{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
+.fpreview{grid-column:1 / -1;font-size:13.5px;background:var(--teal-soft);border-radius:9px;padding:9px 12px}
+.fpreview:empty{display:none}
+.imp-err{color:var(--over);font-size:13px;margin:4px 0}
 .perms{display:grid;grid-template-columns:1fr;gap:2px;border:1px solid var(--line);border-radius:10px;padding:6px}
 .perm{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:14px}
 .field label.perm{font-weight:400;color:var(--ink)}
@@ -279,7 +290,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .perm input{width:17px;height:17px;accent-color:var(--teal)}
 .perm code{font-size:11px;color:var(--muted)}
 .perm.custom{background:var(--sun-soft)}
-@media (max-width:560px){.perm code{display:none}}
+@media (max-width:560px){.perm code{display:none}.bankcard{padding:12px}.bankcard .bal{font-size:18px}.bankcard b{font-size:14px}}
 .sideuser{margin-top:auto;padding:14px 10px 4px;border-top:1px solid var(--line);font-size:13.5px}
 .sideuser b{display:block}
 .sideuser button{border:0;background:none;padding:4px 0;color:var(--teal);cursor:pointer;font-weight:600}
@@ -358,12 +369,15 @@ const toDate = s => { if (!s) return null; const m = String(s).match(/^(\d{4})-(
 const fdate = (s, o = {day:'numeric', month:'short', year:'numeric'}) => { const d = toDate(s); return d ? d.toLocaleDateString('es-NI', o) : ''; };
 const fday = s => { const d = toDate(s); if (!d) return 'Sin fecha'; const t = d.toLocaleDateString('es-NI', {weekday:'long', day:'numeric', month:'long'}); return t.charAt(0).toUpperCase() + t.slice(1); };
 const cap = s => s ? s.charAt(0) + s.slice(1).toLowerCase() : '';
+const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+const normMes = v => { const t = String(v ?? '').trim().toUpperCase(); const m = t.match(/^(\d{4})-(\d{2})/); return m ? MESES[+m[2] - 1] + '-' + m[1] : t; };
 const mesLabel = m => { if (!m) return ''; const [a, b] = m.split('-'); return cap(a) + ' ' + b; };
 const truthy = v => v === true || v === 'TRUE' || v === 'true' || v === 1;
 const lsGet = k => { try { return localStorage.getItem('ge_' + k); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { v === null ? localStorage.removeItem('ge_' + k) : localStorage.setItem('ge_' + k, v); } catch (e) {} };
 
 const ICON = {
+  bank:'<path d="M3 10l9-6 9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/>',
   home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
   cart:'<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h9.7a1 1 0 0 0 1-.8L21 7H6"/>',
   cash:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 10v4M18 10v4"/>',
@@ -394,8 +408,9 @@ const DB = {
     this.t = {}; this.cols = {};
     for (const [name, tb] of Object.entries(payload.tables)) {
       this.cols[name] = tb.cols;
-      this.t[name] = tb.rows.map(r => { const o = {}; tb.cols.forEach((c, i) => o[c] = r[i]); return o; });
+      this.t[name] = tb.rows.map(r => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(r[i]) : r[i]); return o; });
     }
+    ['Bancos', 'Movimientos_Banco'].forEach(n => { if (!this.t[n]) { this.t[n] = []; this.cols[n] = n === 'Bancos' ? ['ID_Banco'] : ['ID_Mov']; } });
     this.ver++;
   },
   key(name) { return this.cols[name][0]; },
@@ -446,6 +461,33 @@ const consolidado = mes => {
   }));
 };
 const periodos = () => [...DB.t.Mes_Anio].sort((a, b) => a.ID - b.ID);
+/* Cuentas de banco */
+const TC_DEF = 36.6243;
+const bancos = (all) => (DB.t.Bancos || []).filter(b => all || truthy(b.Activa)).sort((a, b) => (Number(a.Orden) || 0) - (Number(b.Orden) || 0));
+const banco = id => (DB.t.Bancos || []).find(b => String(b.ID_Banco) === String(id));
+const curOf = id => (banco(id) || {}).Moneda || 'NIO';
+const usd = v => { v = r2(v); return (v < 0 ? '−' : '') + 'US$ ' + NF.format(Math.abs(v)); };
+const fcur = (v, cur) => cur === 'USD' ? usd(v) : money(v);
+const bankName = id => id === '' || id === null || id === undefined ? 'Efectivo, sin banco' : (banco(id) || {}).Nombre || 'Banco ' + id;
+const lastTC = () => Number(lsGet('tc')) || TC_DEF;
+/** Movimientos de una cuenta: ingresos, retiros, transferencias y ajustes, con saldo acumulado */
+function ledger(bid) {
+  const b = banco(bid); if (!b) return {rows: [], saldo: 0};
+  const cur = b.Moneda, start = String(b.Fecha_Inicial || '').slice(0, 10), out = [];
+  const add = (fecha, desc, amt, src, extra) => { if (!start || String(fecha).slice(0, 10) >= start) out.push(Object.assign({fecha: String(fecha).slice(0, 10), desc, amt: r2(amt), src}, extra || {})); };
+  const ing = {}; DB.t.Ingresos.forEach(h => ing[h.ID_Ingresos] = h.Mes_Anio);
+  if (cur === 'NIO') DB.t.Ingresos_Detalle.filter(r => String(r.ID_Banco) === String(bid)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Total) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, {tipo: 'Ingreso'}));
+  DB.t.Retiros_Detalle.filter(r => String(r.ID_Banco) === String(bid)).forEach(r => add(r.Fecha_Retiro, r.Movimiento, -(cur === 'USD' ? Number(r.Monto_Moneda) || 0 : Number(r.Total) || 0), {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, {tipo: 'Retiro', alt: cur === 'USD' ? money(r.Total) : ''}));
+  (DB.t.Movimientos_Banco || []).forEach(m => {
+    const src = {t: 'Movimientos_Banco', id: m.ID_Mov};
+    if (m.Tipo === 'Ajuste') { if (String(m.ID_Banco_Destino) === String(bid)) add(m.Fecha, m.Descripcion || 'Ajuste de saldo', Number(m.Monto) || 0, src, {tipo: 'Ajuste'}); return; }
+    if (String(m.ID_Banco_Origen) === String(bid) && m.Tipo === 'Transferencia') add(m.Fecha, 'Transferencia a ' + bankName(m.ID_Banco_Destino) + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto) || 0), src, {tipo: 'Transferencia'});
+    if (String(m.ID_Banco_Destino) === String(bid) && !(cur === 'NIO' && m.ID_Ingreso_Auto)) add(m.Fecha, (m.Tipo === 'Depósito' ? 'Depósito' : 'Transferencia de ' + bankName(m.ID_Banco_Origen)) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto_Destino) || 0, src, {tipo: m.Tipo});
+  });
+  out.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  let bal = Number(b.Saldo_Inicial) || 0; out.forEach(r => { bal = r2(bal + r.amt); r.bal = bal; });
+  return {rows: out, saldo: bal, inicial: Number(b.Saldo_Inicial) || 0, start};
+}
 const mesesConDatos = () => {
   const I = DB.idx(); const s = new Set();
   Object.values(I.headerByMes).forEach(hm => Object.keys(hm).forEach(m => s.add(m)));
@@ -508,13 +550,55 @@ const Demo = {
     const t = sum(DB.t[det].filter(d => String(d[rel.fk]) === String(hid)));
     return this._upsert(rel.header, Object.assign({}, DB.t[rel.header].find(h => String(h[rel.hkey]) === String(hid)), {Total: t}));
   },
+  _add(ch, t, o) { (ch.upserts[t] = ch.upserts[t] || []).push(o); },
+  _saveDet(table, row, mes, ch) {
+    const rel = REL[table]; const k = DB.key(table);
+    const prev = row[k] ? DB.t[table].find(x => String(x[k]) === String(row[k])) : null;
+    if (rel) { if (mes) row[rel.fk] = this._header(rel, mes)[rel.hkey]; if (!row.Fecha_Registro) row.Fecha_Registro = todayISO(); }
+    const saved = this._upsert(table, row); this._add(ch, table, saved);
+    if (rel) { this._add(ch, rel.header, this._recalc(table, saved[rel.fk])); if (prev && String(prev[rel.fk]) !== String(saved[rel.fk])) this._add(ch, rel.header, this._recalc(table, prev[rel.fk])); }
+    return saved;
+  },
+  _sync(table, saved, ch) {
+    const key = table === 'Retiros_Detalle' ? 'Id_DetRetiros' : 'ID_Mov';
+    let need = false, mes = '', total = 0, bid = '', desc = '', fecha = todayISO();
+    if (table === 'Retiros_Detalle') { const b = banco(saved.ID_Banco); if (b && b.Moneda === 'USD') { need = true; total = Number(saved.Total) || 0; bid = b.ID_Banco; fecha = saved.Fecha_Retiro || fecha;
+      desc = 'Retiro de ' + b.Nombre + ': ' + usd(saved.Monto_Moneda) + ' a T/C ' + saved.Tipo_Cambio; const h = DB.t.Retiros.find(x => String(x.Id_Retiros) === String(saved.Id_Retiros)); mes = h ? h.Mes_Anio : ''; } }
+    else { const o = banco(saved.ID_Banco_Origen), d = banco(saved.ID_Banco_Destino);
+      if (d && d.Moneda === 'NIO' && (saved.Tipo === 'Depósito' || (saved.Tipo === 'Transferencia' && o && o.Moneda === 'USD'))) { need = true; total = Number(saved.Monto_Destino) || 0; bid = d.ID_Banco; mes = saved.Mes_Anio; fecha = saved.Fecha || fecha;
+        desc = saved.Tipo === 'Depósito' ? 'Depósito en ' + d.Nombre + (saved.Descripcion ? ': ' + saved.Descripcion : '') : 'Cambio de ' + usd(saved.Monto) + ' (' + o.Nombre + ' a ' + d.Nombre + ', T/C ' + saved.Tipo_Cambio + ')'; } }
+    const ex = saved.ID_Ingreso_Auto;
+    if (need && mes) {
+      const row = {Descripcion: desc, Total: r2(total), Cuenta_Ingresos: 'C001', ID_Banco: bid, Origen: (table === 'Retiros_Detalle' ? 'RET:' : 'MOV:') + saved[key], Observaciones: 'Generado automáticamente', Fecha_Registro: fecha};
+      if (ex && DB.t.Ingresos_Detalle.some(x => String(x.ID_DetIngresos) === String(ex))) row.ID_DetIngresos = ex;
+      const ing = this._saveDet('Ingresos_Detalle', row, mes, ch);
+      if (String(ex) !== String(ing.ID_DetIngresos)) this._add(ch, table, this._upsert(table, Object.assign({}, saved, {ID_Ingreso_Auto: ing.ID_DetIngresos})));
+    } else if (ex) { this._removeDet('Ingresos_Detalle', ex, ch); this._add(ch, table, this._upsert(table, Object.assign({}, saved, {ID_Ingreso_Auto: ''}))); }
+  },
+  _removeDet(table, id, ch) {
+    const k = DB.key(table); const old = DB.t[table].find(x => String(x[k]) === String(id)); if (!old) return {};
+    DB.t[table] = DB.t[table].filter(x => String(x[k]) !== String(id)); DB.ver++;
+    (ch.deletes[table] = ch.deletes[table] || []).push(id);
+    const rel = REL[table]; if (rel) this._add(ch, rel.header, this._recalc(table, old[rel.fk]));
+    return old;
+  },
+  _guard(table, id) { if (table !== 'Ingresos_Detalle' || !id) return; const r = DB.t.Ingresos_Detalle.find(x => String(x.ID_DetIngresos) === String(id)); if (r && r.Origen) throw new Error('Este ingreso se generó desde un retiro o una transferencia en dólares. Edítalo desde allí.'); },
   save(p) {
-    const ch = {upserts: {}, deletes: {}}; const rel = REL[p.table]; const row = Object.assign({}, p.row);
-    if (rel) { if (p.mes) row[rel.fk] = this._header(rel, p.mes)[rel.hkey]; if (!row.Fecha_Registro) row.Fecha_Registro = todayISO(); }
-    const saved = this._upsert(p.table, row); ch.upserts[p.table] = [saved];
-    if (rel) ch.upserts[rel.header] = [this._recalc(p.table, saved[rel.fk])];
+    try { this._guard(p.table, (p.row || {})[DB.key(p.table)]); } catch (e) { return {error: e.message}; }
+    const ch = {upserts: {}, deletes: {}}; const row = Object.assign({}, p.row);
+    if (p.table === 'Movimientos_Banco') { row.Usuario = 'demo'; row.Fecha_Registro = row.Fecha_Registro || todayISO(); if (p.mes) row.Mes_Anio = p.mes; }
+    const saved = this._saveDet(p.table, row, p.mes, ch);
+    if (p.table === 'Retiros_Detalle' || p.table === 'Movimientos_Banco') this._sync(p.table, saved, ch);
     return ch;
   },
+  replaceMany(p) {
+    const rel = REL[p.table]; const hid = this._header(rel, p.mes)[rel.hkey];
+    const old = DB.t[p.table].filter(d => String(d[rel.fk]) === String(hid)).map(d => d[DB.key(p.table)]);
+    DB.t[p.table] = DB.t[p.table].filter(d => String(d[rel.fk]) !== String(hid)); DB.ver++;
+    const ch = this.saveMany(p); ch.deletes[p.table] = old; if (!p.rows.length) ch.upserts[rel.header] = [this._recalc(p.table, hid)];
+    return ch;
+  },
+  repair() { return {report: []}; },
   saveMany(p) {
     const ch = {upserts: {}, deletes: {}}; const rel = REL[p.table]; ch.upserts[p.table] = [];
     const hid = rel && p.mes ? this._header(rel, p.mes)[rel.hkey] : null;
@@ -523,11 +607,10 @@ const Demo = {
     return ch;
   },
   remove(p) {
-    const ch = {upserts: {}, deletes: {}}; const k = DB.key(p.table);
-    const old = DB.t[p.table].find(x => String(x[k]) === String(p.id));
-    DB.t[p.table] = DB.t[p.table].filter(x => String(x[k]) !== String(p.id)); DB.ver++;
-    ch.deletes[p.table] = [p.id];
-    const rel = REL[p.table]; if (rel && old) ch.upserts[rel.header] = [this._recalc(p.table, old[rel.fk])];
+    try { this._guard(p.table, p.id); } catch (e) { return {error: e.message}; }
+    const ch = {upserts: {}, deletes: {}};
+    const old = this._removeDet(p.table, p.id, ch);
+    if (old.ID_Ingreso_Auto) this._removeDet('Ingresos_Detalle', old.ID_Ingreso_Auto, ch);
     return ch;
   },
   saveResumen(p) {
@@ -558,6 +641,7 @@ const VIEWS = {
   retiros:     {t: 'Retiros', icon: 'cash', main: true, mes: true},
   presupuesto: {t: 'Presupuesto', icon: 'plan', main: true, mes: true},
   ingresos:    {t: 'Ingresos', icon: 'income', mes: true, d: 'Salario, bonos y saldos del mes'},
+  bancos:      {t: 'Bancos', icon: 'bank', mes: true, d: 'Saldos de Avanz y BAC, transferencias y dólares'},
   historico:   {t: 'Histórico', icon: 'chart', d: 'Totales por mes y por año desde 2018'},
   cuenta:      {t: 'Análisis por cuenta', icon: 'account', d: 'Cómo ha cambiado cada sobre en el tiempo'},
   combustible: {t: 'Combustible', icon: 'fuel', d: 'Llenados y rendimiento en km por litro'},
@@ -568,11 +652,11 @@ const VIEWS = {
   conexion:    {t: 'Mi cuenta', icon: 'plug', d: 'Contraseña, usuarios y apariencia'},
   mas:         {t: 'Más', icon: 'more'}
 };
-const MORE = ['ingresos', 'historico', 'cuenta', 'combustible', 'tarjetas', 'cortes', 'catalogos', 'periodos', 'conexion'];
+const MORE = ['ingresos', 'bancos', 'historico', 'cuenta', 'combustible', 'tarjetas', 'cortes', 'catalogos', 'periodos', 'conexion'];
 
 function go(v) { S.view = v; S.tab = ''; try { history.replaceState(null, '', '#' + v); } catch (e) {} render(); window.scrollTo(0, 0); }
 function renderNav() {
-  const side = ['inicio', 'gastos', 'retiros', 'presupuesto', 'ingresos', '|', 'historico', 'cuenta', 'combustible', 'tarjetas', 'cortes', '|', 'catalogos', 'periodos', 'conexion'];
+  const side = ['inicio', 'gastos', 'retiros', 'presupuesto', 'ingresos', 'bancos', '|', 'historico', 'cuenta', 'combustible', 'tarjetas', 'cortes', '|', 'catalogos', 'periodos', 'conexion'];
   const emp = (DB.t.Empresa && DB.t.Empresa[0]) ? DB.t.Empresa[0].Empresa : '';
   $('#side').innerHTML = `<div class="brand"><b>Efectivo</b><span>${esc(cap(emp.split(' ')[0]) + ' ' + cap(emp.split(' ')[1] || ''))}</span></div>` +
     side.map(v => v === '|' ? '<div class="navsep"></div>' :
@@ -593,7 +677,7 @@ function render() {
   $('#ttl').textContent = VIEWS[S.view].t;
   const fn = V[S.view] || V.inicio;
   $('#view').innerHTML = fn();
-  const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Ingresos_Detalle', combustible: 'Consumo_Combustible', tarjetas: 'Referencias_Tarjetas'}[S.view];
+  const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Ingresos_Detalle', bancos: 'Movimientos_Banco', combustible: 'Consumo_Combustible', tarjetas: 'Referencias_Tarjetas'}[S.view];
   const fabOk = fabFor && (REL[fabFor] ? canEdit(REL[fabFor].mod) : can(FORMS[fabFor].perm));
   fab.hidden = !fabOk; fab.dataset.new = fabFor || '';
   $('#banner').innerHTML = Backend.mode === 'demo' ? `<div class="demo-banner">Modo demostración con los datos exportados de Access. Los cambios se guardan solo en esta pestaña.</div>` : '';
@@ -736,27 +820,66 @@ V.retiros = () => {
   const rows = detail('Retiros_Detalle', S.mes), t = totals(S.mes);
   const byMov = {}; rows.forEach(r => byMov[r.Movimiento] = (byMov[r.Movimiento] || 0) + (Number(r.Total) || 0));
   const top = Object.entries(byMov).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const byBank = {}; rows.forEach(r => { const k = r.ID_Banco === '' || r.ID_Banco === undefined ? '' : String(r.ID_Banco); byBank[k] = (byBank[k] || 0) + (Number(r.Total) || 0); });
   return `${lockNote('Retiros')}
   <div class="figs three">
     <div class="fig"><small>Retirado</small><b class="num">${money(t.R)}</b></div>
     <div class="fig"><small>Gastado</small><b class="num">${money(t.G)}</b></div>
     <div class="fig"><small>En mano</small><b class="num ${t.mano < 0 ? 'neg' : ''}">${money(t.mano)}</b></div>
   </div>
+  ${rows.length && bancos().length ? `<section class="section"><h3>Por cuenta de banco</h3><div class="panel" style="padding:4px 12px">${Object.entries(byBank).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="env" style="cursor:default"><span class="nm">${esc(bankName(k))}</span><div class="track"><div class="fill" style="width:${t.R ? v / t.R * 100 : 0}%"></div></div><span class="rest"><b class="num">${money(v)}</b></span></div>`).join('')}</div></section>` : ''}
   ${top.length ? `<section class="section"><h3>Por tipo de movimiento</h3><div class="panel" style="padding:4px 12px">${top.map(([m, v]) => `<div class="env" style="cursor:default"><span class="nm">${esc(m)}</span><div class="track"><div class="fill" style="width:${t.R ? v / t.R * 100 : 0}%;background:var(--sun)"></div></div><span class="rest"><b class="num">${money(v)}</b></span></div>`).join('')}</div></section>` : ''}
   <div class="toolbar"><span class="spacer"></span>${canEdit('Retiros') ? '<button class="btn primary desk-only" data-new="Retiros_Detalle">Registrar retiro</button>' : ''}</div>
   ${rows.length ? `<div class="list">${listGrouped(rows.slice().sort((a, b) => b.Id_DetRetiros - a.Id_DetRetiros), 'Fecha_Retiro', r => `
     <button class="item" data-edit="Retiros_Detalle" data-id="${r.Id_DetRetiros}"><span class="dot" style="background:var(--sun)"></span>
-      <span class="tx"><b>${esc(r.Movimiento)}</b><small>Registrado ${fdate(r.Fecha_Registro)}</small></span><span class="amt num">${money(r.Total)}</span></button>`)}</div>`
+      <span class="tx"><b>${esc(r.Movimiento)}</b><small>${esc(bankName(r.ID_Banco))}${Number(r.Monto_Moneda) ? ', ' + usd(r.Monto_Moneda) + ' a ' + r.Tipo_Cambio : ''}</small></span><span class="amt num">${money(r.Total)}</span></button>`)}</div>`
     : '<div class="panel empty"><b>No hay retiros en este mes</b>Registra cada retiro de cajero, transferencia o pago con banca móvil.</div>'}`;
 };
 
 V.ingresos = () => {
   const rows = detail('Ingresos_Detalle', S.mes);
+  const byBank = {}; rows.forEach(r => { const k = r.ID_Banco === '' || r.ID_Banco === undefined ? '' : String(r.ID_Banco); byBank[k] = (byBank[k] || 0) + (Number(r.Total) || 0); });
+  const enBancos = r2(Object.entries(byBank).filter(([k]) => k !== '').reduce((a, [, v]) => a + v, 0));
   return `${lockNote('Ingresos')}
+  ${rows.length && bancos().length ? `<div class="figs three"><div class="fig"><small>Ingresos del mes</small><b class="num">${money(sum(rows))}</b></div>
+    <div class="fig" data-go="bancos"><small>Depositado en bancos</small><b class="num">${money(enBancos)}</b></div>
+    <div class="fig"><small>Efectivo o sin banco</small><b class="num">${money(byBank[''] || 0)}</b></div></div>
+    <p class="muted" style="font-size:13px;margin:8px 2px 0">${Object.entries(byBank).filter(([k]) => k !== '').map(([k, v]) => esc(bankName(k)) + ': ' + money(v)).join('; ')}</p>` : ''}
   <div class="toolbar"><div class="sumline" style="margin:0;flex:1"><span>${rows.length} ingresos</span><b class="num">${money(sum(rows))}</b></div>${canEdit('Ingresos') ? '<button class="btn primary desk-only" data-new="Ingresos_Detalle">Registrar ingreso</button>' : ''}</div>
-  ${rows.length ? `<div class="list">${rows.map(r => `<button class="item" data-edit="Ingresos_Detalle" data-id="${r.ID_DetIngresos}"><span class="dot" style="background:var(--good)"></span>
-    <span class="tx"><b>${esc(r.Descripcion)}</b><small>${fdate(r.Fecha_Registro)}${r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num pos">${money(r.Total)}</span></button>`).join('')}</div>`
+  ${rows.length ? `<div class="list">${rows.map(r => `<button class="item" data-edit="Ingresos_Detalle" data-id="${r.ID_DetIngresos}"><span class="dot" style="background:${r.Origen ? 'var(--teal)' : 'var(--good)'}"></span>
+    <span class="tx"><b>${esc(r.Descripcion)}</b><small>${esc(bankName(r.ID_Banco))}, ${fdate(r.Fecha_Registro)}${r.Origen ? ', automático' : r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num pos">${money(r.Total)}</span></button>`).join('')}</div>`
     : '<div class="panel empty"><b>No hay ingresos en este mes</b>Empieza por el salario y el saldo del mes anterior.</div>'}`;
+};
+
+V.bancos = () => {
+  const bs = bancos();
+  if (!bs.length) return '<div class="panel empty" style="margin-top:16px"><b>Aún no hay cuentas de banco</b>Se crean solas al conectar con la hoja actualizada, o agrégalas en Catálogos.</div>';
+  if (!S.banco || !banco(S.banco)) S.banco = String(bs[0].ID_Banco);
+  const L = {}; bs.forEach(b => L[b.ID_Banco] = ledger(b.ID_Banco));
+  const totNIO = r2(bs.filter(b => b.Moneda === 'NIO').reduce((a, b) => a + L[b.ID_Banco].saldo, 0));
+  const totUSD = r2(bs.filter(b => b.Moneda === 'USD').reduce((a, b) => a + L[b.ID_Banco].saldo, 0));
+  const ing = detail('Ingresos_Detalle', S.mes), ret = detail('Retiros_Detalle', S.mes);
+  const sinBancoI = sum(ing.filter(r => r.ID_Banco === '' || r.ID_Banco === undefined)), sinBancoR = ret.filter(r => r.ID_Banco === '' || r.ID_Banco === undefined).length;
+  const cur = banco(S.banco), led = L[S.banco], ed = can('bancos.editar');
+  const shown = led.rows.slice().reverse().slice(0, 200);
+  return `
+  <section class="section"><div class="bankgrid">${bs.map(b => `<button class="bankcard ${String(b.ID_Banco) === S.banco ? 'on' : ''}" data-banco="${b.ID_Banco}">
+    <small>${esc(b.Banco)}${b.Numero ? ', ' + esc(b.Numero) : ''}</small><b>${esc(b.Nombre)}</b>
+    <span class="num bal ${L[b.ID_Banco].saldo < 0 ? 'neg' : ''}">${fcur(L[b.ID_Banco].saldo, b.Moneda)}</span>
+    ${b.Moneda === 'USD' ? `<small class="num">≈ ${money(L[b.ID_Banco].saldo * lastTC())} a ${lastTC()}</small>` : '<small>&nbsp;</small>'}</button>`).join('')}</div>
+    <div class="sumline" style="margin-top:12px"><span>Total en córdobas${totUSD ? ', más ' + usd(totUSD) : ''}</span><b class="num">${money(totNIO)}</b></div></section>
+  <section class="section"><h3>${esc(mesLabel(S.mes))} <small>ingresos y retiros del mes por cuenta</small></h3>
+    <div class="tablewrap"><table class="t"><thead><tr><th>Cuenta</th><th class="n">Ingresos</th><th class="n">Retiros</th></tr></thead><tbody>
+    ${bs.map(b => `<tr data-banco="${b.ID_Banco}"><td>${esc(b.Nombre)}</td><td class="n">${money(sum(ing.filter(r => String(r.ID_Banco) === String(b.ID_Banco))))}</td><td class="n">${money(sum(ret.filter(r => String(r.ID_Banco) === String(b.ID_Banco))))}</td></tr>`).join('')}
+    <tr style="cursor:default"><td>Efectivo o sin banco</td><td class="n">${money(sinBancoI)}</td><td class="n">${money(sum(ret.filter(r => r.ID_Banco === '' || r.ID_Banco === undefined)))}</td></tr></tbody>
+    <tfoot><tr><td>Total del mes</td><td class="n">${money(sum(ing))}</td><td class="n">${money(sum(ret))}</td></tr></tfoot></table></div>
+    ${sinBancoR ? `<p class="muted" style="font-size:13px">${sinBancoR} retiros de este mes no tienen banco asignado. Ábrelos en Retiros y elige la cuenta para que los saldos cuadren.</p>` : ''}</section>
+  <section class="section"><h3>Movimientos de ${esc(cur.Nombre)} <small>${led.start ? 'desde ' + fdate(led.start) + ', saldo inicial ' + fcur(led.inicial, cur.Moneda) : ''}</small></h3>
+    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir entre cuentas</button><button class="btn" data-act="mov-dep">Depósito o ajuste</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `<button class="btn small" data-edit="Bancos" data-id="${cur.ID_Banco}">Saldo inicial y datos</button>` : ''}</div>
+    ${shown.length ? `<div class="list">${shown.map(r => `<button class="item" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt >= 0 ? 'var(--good)' : 'var(--sun)'}"></span>
+      <span class="tx"><b>${esc(r.desc)}</b><small>${fdate(r.fecha)}, ${esc(r.tipo)}${r.alt ? ', ' + r.alt + ' en córdobas' : ''}</small></span>
+      <span class="amt num ${r.amt >= 0 ? 'pos' : ''}">${r.amt >= 0 ? '+' : ''}${fcur(r.amt, cur.Moneda)}<small>Saldo ${fcur(r.bal, cur.Moneda)}</small></span></button>`).join('')}</div>`
+      : `<div class="panel empty"><b>Sin movimientos desde ${fdate(led.start) || 'el inicio'}</b>Los ingresos y retiros que asignes a esta cuenta aparecerán aquí.</div>`}</section>`;
 };
 
 V.presupuesto = () => {
@@ -779,6 +902,8 @@ V.presupuesto = () => {
     <div class="fig"><small>Sin asignar</small><b class="num ${ing - tp < 0 ? 'neg' : ''}">${money(ing - tp)}</b></div>
   </div>
   <div class="toolbar"><span class="spacer"></span>
+    <button class="btn" data-act="tpl-ppto">Descargar plantilla</button>
+    ${ed ? '<button class="btn" data-act="imp-ppto">Importar desde Excel</button>' : ''}
     ${ed && prevRows.length ? `<button class="btn" data-act="copiar-ppto">Copiar de ${esc(mesLabel(prev))}</button>` : ''}
     ${ed ? '<button class="btn primary desk-only" data-new="Presupuesto_Detalle">Agregar partida</button>' : ''}
   </div>
@@ -874,6 +999,7 @@ V.cortes = () => {
 };
 
 const CATS = {
+  Bancos: {t: 'Cuentas de banco', cols: [['Nombre', 'Nombre'], ['Banco', 'Banco'], ['Moneda', 'Moneda'], ['Saldo_Inicial', 'Saldo inicial', 'n'], ['Fecha_Inicial', 'Desde', 'd'], ['Activa', 'Activa', 'b']]},
   Cuentas: {t: 'Cuentas', cols: [['Codigo', 'Código'], ['Cuentas', 'Nombre'], ['Cuenta_de_Gastos', 'Gasto', 'b'], ['Cuenta_de_Ingresos', 'Ingreso', 'b'], ['Activa', 'Activa', 'b']]},
   Items: {t: 'Artículos de gasto', cols: [['Descripcion', 'Descripción'], ['Cuenta', 'Cuenta', 'c'], ['UM', 'Unidad', 'u']]},
   Items_Ingresos: {t: 'Conceptos de ingreso', cols: [['Descripcion', 'Descripción'], ['Cuenta', 'Cuenta', 'c']]},
@@ -882,8 +1008,9 @@ const CATS = {
 };
 V.catalogos = () => {
   if (!S.tab || !CATS[S.tab]) S.tab = 'Cuentas';
+  if (!DB.t[S.tab]) DB.t[S.tab] = [];
   const c = CATS[S.tab], rows = DB.t[S.tab], k = DB.key(S.tab);
-  const cell = (r, [f, , ty]) => ty === 'b' ? (truthy(r[f]) ? 'Sí' : 'No') : ty === 'c' ? esc(cuentaNombre(r[f])) : ty === 'u' ? esc(DB.idx().umById[r[f]] || r[f]) : esc(r[f]);
+  const cell = (r, [f, , ty]) => ty === 'n' ? fcur(r[f], r.Moneda) : ty === 'd' ? fdate(r[f]) : ty === 'b' ? (truthy(r[f]) ? 'Sí' : 'No') : ty === 'c' ? esc(cuentaNombre(r[f])) : ty === 'u' ? esc(DB.idx().umById[r[f]] || r[f]) : esc(r[f]);
   return `<div class="tabs">${Object.entries(CATS).map(([n, v]) => `<button class="tab" data-tab="${n}" aria-pressed="${n === S.tab}">${v.t}</button>`).join('')}</div>
   <div class="toolbar"><span class="muted">${rows.length} registros</span><span class="spacer"></span>${can('catalogos.editar') ? `<button class="btn primary" data-new="${S.tab}">Agregar</button>` : ''}</div>
   <div class="tablewrap"><table class="t"><thead><tr>${c.cols.map(x => `<th>${x[1]}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr data-edit="${S.tab}" data-id="${esc(r[k])}">${c.cols.map(x => `<td>${cell(r, x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -894,6 +1021,7 @@ V.periodos = () => {
   if (!S.anio || !years.map(String).includes(String(S.anio))) S.anio = String(years[0]);
   const flags = [['Abierta', 'Abierto'], ['Ingresos', 'Ingresos'], ['Presupuesto', 'Presupuesto'], ['Gastos', 'Gastos'], ['Retiros', 'Retiros'], ['Guardar_Resumen', 'Corte']];
   return `<p class="muted">Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
+  ${Backend.online && can('periodos.gestionar') ? '<div class="notice info"><span>Si un período aparece como fecha (por ejemplo 2026 09) o con datos en cero, revisa la hoja.</span><button class="btn small" data-act="repair">Revisar y reparar períodos</button></div>' : ''}
   <div class="toolbar"><div class="tabs" style="margin:0">${years.map(y => `<button class="tab" data-anio="${y}" aria-pressed="${String(y) === String(S.anio)}">${y}</button>`).join('')}</div><span class="spacer"></span>${can('periodos.gestionar') ? `<button class="btn" data-act="add-year">Crear año ${Math.max(...years) + 1}</button>` : ''}</div>
   <div class="tablewrap"><table class="t"><thead><tr><th>Mes</th>${flags.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead>
   <tbody>${ps.filter(p => String(p.Anio) === String(S.anio)).map(p => `<tr style="cursor:default"><td>${cap(p.Mes)}</td>${flags.map(([f, l]) => `<td><label class="toggle" aria-label="${l} ${cap(p.Mes)}"><input type="checkbox" data-flag="${f}" data-pid="${p.ID}" ${truthy(p[f]) ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></label></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -955,14 +1083,52 @@ const FORMS = {
     {k: 'Total', l: 'Monto presupuestado (C$)', ty: 'number', req: 1, step: '0.01'}]},
   Ingresos_Detalle: {t: 'ingreso', mod: 'Ingresos', fields: [
     {k: 'Descripcion', l: 'Concepto', ty: 'text', req: 1, list: () => [...DB.t.Items_Ingresos.map(i => i.Descripcion), ...histDesc('Ingresos_Detalle', 'Descripcion')]},
-    {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01'},
+    {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01', half: 1},
+    {k: 'ID_Banco', l: 'Depositado en', ty: 'select', half: 1, opts: () => [...bancos().filter(b => b.Moneda === 'NIO').map(b => [b.ID_Banco, b.Nombre]), ['', 'Efectivo, sin banco']], def: () => lsGet('bank_ing') ?? (bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? ''},
     {k: 'Cuenta_Ingresos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(false), def: 'C001', half: 1},
     {k: 'Fecha_Registro', l: 'Fecha', ty: 'date', def: todayISO, half: 1},
-    {k: 'Observaciones', l: 'Observaciones', ty: 'text'}]},
+    {k: 'Observaciones', l: 'Observaciones', ty: 'text'}],
+    after: o => lsSet('bank_ing', String(o.ID_Banco))},
   Retiros_Detalle: {t: 'retiro', mod: 'Retiros', fields: [
-    {k: 'Fecha_Retiro', l: 'Fecha del retiro', ty: 'date', req: 1, def: todayISO},
+    {k: 'Fecha_Retiro', l: 'Fecha del retiro', ty: 'date', req: 1, def: todayISO, half: 1},
+    {k: 'ID_Banco', l: 'Desde la cuenta', ty: 'select', half: 1, opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), ['', 'Sin banco']], def: () => lsGet('bank_ret') ?? (bancos()[0] || {}).ID_Banco ?? ''},
     {k: 'Movimiento', l: 'Movimiento', ty: 'text', req: 1, list: () => [...DB.t.Obs_Retiros.filter(o => truthy(o.Mostrar)).map(o => o.Observaciones_Retiro), ...histDesc('Retiros_Detalle', 'Movimiento')], def: 'Retiro de Cajero Automatico'},
-    {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01'}]},
+    {k: 'Monto_Moneda', l: 'Monto (US$)', ty: 'number', req: 1, step: '0.01', half: 1, show: o => curOf(o.ID_Banco) === 'USD'},
+    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: lastTC, show: o => curOf(o.ID_Banco) === 'USD'},
+    {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01', show: o => curOf(o.ID_Banco) !== 'USD'}],
+    preview: o => curOf(o.ID_Banco) === 'USD' && Number(o.Monto_Moneda) ? `Se descuentan ${usd(o.Monto_Moneda)} de ${esc(bankName(o.ID_Banco))} y entran ${money(Number(o.Monto_Moneda) * (Number(o.Tipo_Cambio) || 0))} al mes: un ingreso automático por la conversión y este retiro en córdobas.` : '',
+    before: o => { if (curOf(o.ID_Banco) === 'USD') { o.Total = r2(Number(o.Monto_Moneda) * Number(o.Tipo_Cambio)); } else { o.Monto_Moneda = ''; o.Tipo_Cambio = ''; } },
+    after: o => { lsSet('bank_ret', String(o.ID_Banco)); if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); }},
+  Movimientos_Banco: {t: 'movimiento de banco', perm: 'bancos.editar', needsMes: 1, fields: [
+    {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Transferencia', 'Transferencia entre cuentas'], ['Depósito', 'Depósito en cuenta'], ['Ajuste', 'Ajuste de saldo']], def: 'Transferencia'},
+    {k: 'Fecha', l: 'Fecha', ty: 'date', req: 1, def: todayISO, half: 1},
+    {k: 'ID_Banco_Origen', l: 'Desde', ty: 'select', half: 1, num: 1, opts: () => bancos().map(b => [b.ID_Banco, b.Nombre]), def: () => (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Transferencia'},
+    {k: 'ID_Banco_Destino', l: 'Hacia', ty: 'select', half: 1, num: 1, opts: () => bancos().map(b => [b.ID_Banco, b.Nombre]), def: () => (bancos()[1] || bancos()[0] || {}).ID_Banco},
+    {k: 'Monto', l: 'Monto', ty: 'number', req: 1, step: '0.01', half: 1},
+    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: lastTC, show: o => o.Tipo === 'Transferencia' && curOf(o.ID_Banco_Origen) !== curOf(o.ID_Banco_Destino)},
+    {k: 'Descripcion', l: 'Nota', ty: 'text'}],
+    label: o => ({Monto: 'Monto (' + (curOf(o.Tipo === 'Transferencia' ? o.ID_Banco_Origen : o.ID_Banco_Destino) === 'USD' ? 'US$' : 'C$') + ')' + (o.Tipo === 'Ajuste' ? ', negativo para restar' : ''), ID_Banco_Destino: o.Tipo === 'Transferencia' ? 'Hacia' : 'Cuenta'}),
+    preview: o => { const m = Number(o.Monto) || 0; if (!m) return '';
+      if (o.Tipo === 'Ajuste') return `El saldo de ${esc(bankName(o.ID_Banco_Destino))} cambia en ${fcur(m, curOf(o.ID_Banco_Destino))}. No afecta ingresos ni retiros.`;
+      if (o.Tipo === 'Depósito') return curOf(o.ID_Banco_Destino) === 'NIO' ? `Entran ${money(m)} a ${esc(bankName(o.ID_Banco_Destino))} y se registra como ingreso del mes.` : `Entran ${usd(m)} a ${esc(bankName(o.ID_Banco_Destino))}. Los dólares cuentan como ingreso cuando los conviertes a córdobas.`;
+      const co = curOf(o.ID_Banco_Origen), cd = curOf(o.ID_Banco_Destino), tc = Number(o.Tipo_Cambio) || 0;
+      const dest = co === cd ? m : co === 'USD' ? m * tc : (tc ? m / tc : 0);
+      return `Sale ${fcur(m, co)} de ${esc(bankName(o.ID_Banco_Origen))} y entra ${fcur(dest, cd)} a ${esc(bankName(o.ID_Banco_Destino))}.` + (co === 'USD' && cd === 'NIO' ? ' Los córdobas se registran como ingreso del mes.' : co === 'NIO' && cd === 'USD' ? ' Los córdobas salen del mes como compra de dólares (no es gasto ni retiro de efectivo).' : ''); },
+    validate: o => o.Tipo === 'Transferencia' && String(o.ID_Banco_Origen) === String(o.ID_Banco_Destino) ? 'Elige dos cuentas distintas' : (o.Tipo !== 'Ajuste' && Number(o.Monto) <= 0 ? 'El monto debe ser mayor que cero' : ''),
+    before: o => { const co = o.Tipo === 'Transferencia' ? curOf(o.ID_Banco_Origen) : curOf(o.ID_Banco_Destino), cd = curOf(o.ID_Banco_Destino), m = Number(o.Monto) || 0, tc = Number(o.Tipo_Cambio) || 0;
+      if (o.Tipo !== 'Transferencia') o.ID_Banco_Origen = '';
+      if (!(o.Tipo === 'Transferencia' && co !== cd)) o.Tipo_Cambio = '';
+      o.Moneda = co; o.Monto_Destino = r2(co === cd ? m : co === 'USD' ? m * tc : m / tc); o.Monto_C = r2(co === 'USD' ? m * (tc || lastTC()) : m); },
+    after: o => { if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); }},
+  Bancos: {t: 'cuenta de banco', g: 'a', perm: 'catalogos.editar', fields: [
+    {k: 'Banco', l: 'Banco', ty: 'text', req: 1, half: 1, list: () => histDesc('Bancos', 'Banco')},
+    {k: 'Moneda', l: 'Moneda', ty: 'select', half: 1, opts: () => [['NIO', 'Córdobas (C$)'], ['USD', 'Dólares (US$)']], def: 'NIO'},
+    {k: 'Nombre', l: 'Nombre que se muestra', ty: 'text', req: 1, hint: 'Ejemplo: BAC Córdobas'},
+    {k: 'Numero', l: 'Número de cuenta (opcional)', ty: 'text', hint: 'Puedes poner solo los últimos 4 dígitos'},
+    {k: 'Saldo_Inicial', l: 'Saldo inicial', ty: 'number', step: '0.01', half: 1, def: 0, hint: 'Lo que tenía la cuenta en la fecha inicial'},
+    {k: 'Fecha_Inicial', l: 'Fecha del saldo inicial', ty: 'date', half: 1, def: todayISO, hint: 'Solo cuentan movimientos desde esta fecha'},
+    {k: 'Orden', l: 'Orden', ty: 'number', half: 1, def: () => bancos(true).length + 1},
+    {k: 'Activa', l: 'Activa', ty: 'bool', def: true}]},
   Referencias_Tarjetas: {t: 'consumo con tarjeta', perm: 'tarjetas.editar', fields: [
     {k: 'Fecha', l: 'Fecha', ty: 'date', req: 1, def: todayISO, half: 1},
     {k: 'Moneda', l: 'Moneda', ty: 'select', opts: () => [['Córdoba', 'Córdoba'], ['Dólar', 'Dólar']], def: 'Córdoba', half: 1},
@@ -1017,7 +1183,8 @@ function openForm(table, id) {
   const F = FORMS[table]; if (!F) return;
   const k = DB.key(table);
   const rec = id !== undefined && id !== null ? DB.t[table].find(r => String(r[k]) === String(id)) : null;
-  const ro = (F.mod && !canEdit(F.mod)) || (F.perm && !can(F.perm));
+  const auto = table === 'Ingresos_Detalle' && rec && rec.Origen;
+  const ro = (F.mod && !canEdit(F.mod)) || (F.perm && !can(F.perm)) || !!auto;
   const o = rec ? Object.assign({}, rec) : {};
   if (!rec) F.fields.forEach(f => { if (f.def !== undefined) o[f.k] = typeof f.def === 'function' ? f.def() : f.def; });
   FORM = {table, rec, o, F};
@@ -1028,25 +1195,35 @@ function openForm(table, id) {
     else if (f.ty === 'bool') return `<div class="field check"><label for="${idf}">${f.l}</label><label class="toggle"><input type="checkbox" id="${idf}" name="${f.k}" ${truthy(v) ? 'checked' : ''} ${dis}><span></span></label></div>`;
     else if (f.ty === 'pct') inp = `<input class="input" id="${idf}" name="${f.k}" type="number" step="any" inputmode="decimal" value="${v === '' ? '' : r2(Number(v) * 100)}" ${dis}>`;
     else inp = `<input class="input" id="${idf}" name="${f.k}" type="${f.ty === 'number' ? 'number' : f.ty}" ${f.ty === 'number' ? `inputmode="decimal" step="${f.step || 'any'}"` : ''} value="${esc(f.ty === 'date' ? String(v).slice(0, 10) : v)}" ${f.list ? `list="dl_${f.k}" autocomplete="off"` : ''} ${dis} ${f.req ? 'required' : ''}>${f.list ? `<datalist id="dl_${f.k}"></datalist>` : ''}`;
-    return `<div class="field ${f.half ? 'half' : ''}"><label for="${idf}">${f.l}</label>${inp}${f.hint ? `<span class="hint">${f.hint}</span>` : ''}</div>`;
+    return `<div class="field ${f.half ? 'half' : ''}" data-fk="${f.k}"><label for="${idf}">${f.l}</label>${inp}${f.hint ? `<span class="hint">${f.hint}</span>` : ''}</div>`;
   };
   const title = (rec ? (ro ? 'Ver ' : 'Editar ') : (F.g === 'a' ? 'Nueva ' : 'Nuevo ')) + F.t;
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="frm" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <h4>${esc(title)}${REL[table] ? ` <span class="pill">${esc(mesLabel(S.mes))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
-    ${ro ? '<div class="notice" style="margin-top:0">Período cerrado: solo lectura.</div>' : ''}
-    <div class="fgrid">${F.fields.map(fieldHtml).join('')}</div>
+    ${auto ? '<div class="notice info" style="margin-top:0">Ingreso automático por una conversión de dólares. Se cambia desde el retiro o la transferencia que lo generó.</div>' : ro ? '<div class="notice" style="margin-top:0">Solo lectura: período cerrado o sin permiso.</div>' : ''}
+    <div class="fgrid">${F.fields.map(fieldHtml).join('')}<div class="fpreview" id="fpreview"></div></div>
     <div class="actions">${rec && !ro ? '<button type="button" class="btn danger" data-act="del">Eliminar</button>' : ''}<span class="spacer"></span><button type="button" class="btn" data-close="1">Cancelar</button>${ro ? '' : `<button type="submit" class="btn primary">${rec ? 'Guardar cambios' : 'Guardar ' + F.t}</button>`}</div>
   </form></div>`;
-  fillLists();
+  fillLists(); formDynamics();
   const first = $('#frm input:not([disabled]), #frm select:not([disabled])'); if (first && !rec) setTimeout(() => first.focus(), 30);
 }
+/** Muestra u oculta campos, ajusta etiquetas y la vista previa según lo que se va llenando */
+function formDynamics() {
+  if (!FORM) return;
+  const o = readForm(), F = FORM.F;
+  F.fields.forEach(f => { const w = $(`#frm [data-fk="${f.k}"]`); if (w && f.show) w.hidden = !f.show(o); });
+  if (F.label) Object.entries(F.label(o)).forEach(([k, l]) => { const lb = $(`#frm [data-fk="${k}"] > label`); if (lb) lb.textContent = l; });
+  const pv = $('#fpreview'); if (pv) pv.innerHTML = F.preview ? F.preview(o) : '';
+}
+const fieldVisible = f => { const w = $(`#frm [data-fk="${f.k}"]`); return !w || !w.hidden; };
 function readForm() {
   const o = Object.assign({}, FORM.o);
   FORM.F.fields.forEach(f => { const el = $('#f_' + f.k); if (!el) return;
     if (f.ty === 'bool') o[f.k] = el.checked;
     else if (f.ty === 'number') o[f.k] = el.value === '' ? '' : Number(el.value);
     else if (f.ty === 'pct') o[f.k] = el.value === '' ? 0 : Number(el.value) / 100;
-    else if (f.ty === 'select' && f.num) o[f.k] = Number(el.value);
+    else if (f.ty === 'select' && f.num) o[f.k] = el.value === '' ? '' : Number(el.value);
+    else if (f.ty === 'select' && f.k === 'ID_Banco') o[f.k] = el.value === '' ? '' : Number(el.value);
     else o[f.k] = el.value.trim(); });
   return o;
 }
@@ -1064,13 +1241,15 @@ function autofillFromHistory(el) {
 }
 async function submitForm() {
   const o = readForm();
-  for (const f of FORM.F.fields) if (f.req && (o[f.k] === '' || o[f.k] === undefined || (f.ty === 'number' && isNaN(o[f.k])))) { toast('Completa el campo ' + f.l.replace(/ \(.*\)/, '').toLowerCase(), true); const el = $('#f_' + f.k); el && el.focus(); return; }
+  for (const f of FORM.F.fields) if (f.req && fieldVisible(f) && (o[f.k] === '' || o[f.k] === undefined || (f.ty === 'number' && isNaN(o[f.k])))) { toast('Completa el campo ' + f.l.replace(/ \(.*\)/, '').toLowerCase(), true); const el = $('#f_' + f.k); el && el.focus(); return; }
   if (!FORM.rec && FORM.table === 'Cuentas' && DB.t.Cuentas.some(c => c.Codigo === o.Codigo)) { toast('Ya existe una cuenta con ese código', true); return; }
+  const verr = FORM.F.validate ? FORM.F.validate(o) : ''; if (verr) { toast(verr, true); return; }
   if (FORM.F.before) FORM.F.before(o);
   const btn = $('#frm button[type=submit]'); btn.disabled = true; btn.textContent = 'Guardando…';
   try {
-    const ch = await Backend.call('save', {table: FORM.table, row: o, mes: REL[FORM.table] && !FORM.rec ? S.mes : undefined});
-    DB.apply(ch); closeModal(); render(); toast(cap(FORM.F.t.toUpperCase()) + ' guardad' + (FORM.F.g || 'o'));
+    const ch = await Backend.call('save', {table: FORM.table, row: o, mes: (REL[FORM.table] || FORM.F.needsMes) && !FORM.rec ? S.mes : undefined});
+    const F = FORM.F; if (F.after) F.after(o);
+    DB.apply(ch); closeModal(); render(); toast(cap(F.t.toUpperCase()) + ' guardad' + (F.g || 'o'));
   } catch (e) { btn.disabled = false; btn.textContent = 'Guardar'; toast('No se pudo guardar: ' + e.message, true); }
 }
 async function deleteRecord() {
@@ -1132,6 +1311,87 @@ function renderPerms(rol, custom) {
     return `<label class="perm ${v !== def[p.id] ? 'custom' : ''}"><input type="checkbox" data-perm="${esc(p.id)}" ${v ? 'checked' : ''}><span>${esc(p.nombre)}</span><code>${esc(p.id)}</code></label>`; }).join('');
 }
 
+/* ---------- Presupuesto desde Excel ---------- */
+const XLSX_SRC = '/vendor/xlsx.full.min.js';
+let xlsxP = null;
+const loadXLSX = () => xlsxP || (xlsxP = new Promise((res, rej) => { if (window.XLSX) return res(window.XLSX); const sc = document.createElement('script'); sc.src = XLSX_SRC; sc.onload = () => res(window.XLSX); sc.onerror = () => { xlsxP = null; rej(new Error('No se pudo cargar el lector de Excel. Revisa tu conexión.')); }; document.head.appendChild(sc); }));
+const nrm = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const HMAP = {
+  cuenta: ['cuenta', 'codigo', 'cod', 'cod.', 'codigo cuenta', 'cuenta_gastos', 'cuenta gastos', 'cuentas'],
+  desc: ['descripcion', 'concepto', 'partida', 'detalle', 'articulo', 'descripcion de la partida'],
+  cant: ['cantidad', 'cant', 'cant.'],
+  um: ['um', 'u/m', 'u.m.', 'unidad', 'unidad de medida', 'medida'],
+  total: ['monto', 'total', 'presupuesto', 'valor', 'importe', 'monto c$', 'total c$', 'monto (c$)', 'total_ppto']
+};
+const toNum = v => { if (typeof v === 'number') return v; const t = String(v ?? '').replace(/[C$US\s]/gi, '').replace(/,/g, ''); return t === '' ? NaN : Number(t); };
+function findCuenta(v) {
+  const n = nrm(v); if (!n) return null;
+  const cs = DB.t.Cuentas.filter(c => truthy(c.Cuenta_de_Gastos));
+  return cs.find(c => nrm(c.Codigo) === n) || cs.find(c => nrm(c.Cuentas) === n) || cs.find(c => nrm(c.Cuentas_Gastos) === n) || cs.find(c => n.startsWith(nrm(c.Codigo) + '-') || n.startsWith(nrm(c.Codigo) + ' ')) || null;
+}
+function parseBudget(wb) {
+  const name = wb.SheetNames.find(n => nrm(n) === 'presupuesto') || wb.SheetNames[0];
+  const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], {header: 1, raw: true, defval: ''});
+  let hr = -1, map = {};
+  for (let i = 0; i < Math.min(aoa.length, 20) && hr < 0; i++) {
+    const m = {}; aoa[i].forEach((c, j) => { const h = nrm(c); Object.entries(HMAP).forEach(([k, al]) => { if (m[k] === undefined && al.includes(h)) m[k] = j; }); });
+    if (m.cuenta !== undefined && m.total !== undefined && m.desc !== undefined) { hr = i; map = m; }
+  }
+  if (hr < 0) throw new Error('No encontré los encabezados. La hoja debe tener columnas Cuenta, Descripción y Monto (Cantidad y Unidad son opcionales).');
+  const ums = {}; DB.t.UM.forEach(u => ums[nrm(u.UM)] = u.UM);
+  const rows = [], errors = [], warns = [];
+  for (let i = hr + 1; i < aoa.length; i++) {
+    const r = aoa[i], fila = i + 1;
+    const cta = r[map.cuenta], desc = String(r[map.desc] ?? '').trim(), tot = toNum(r[map.total]);
+    if (!String(cta).trim() && !desc && (r[map.total] === '' || r[map.total] === undefined)) continue;
+    if (/^total/.test(nrm(desc)) || /^total/.test(nrm(cta))) break; // lo que sigue a TOTAL son notas
+    const c = findCuenta(cta);
+    if (!c) { errors.push(`Fila ${fila}: la cuenta “${cta}” no existe en el catálogo.`); continue; }
+    if (!desc) { errors.push(`Fila ${fila}: falta la descripción.`); continue; }
+    if (isNaN(tot)) { errors.push(`Fila ${fila}: el monto “${r[map.total]}” no es un número.`); continue; }
+    let um = 'Unidad';
+    if (map.um !== undefined && String(r[map.um]).trim()) { um = ums[nrm(r[map.um])]; if (!um) { warns.push(`Fila ${fila}: unidad “${r[map.um]}” desconocida, se usará Unidad.`); um = 'Unidad'; } }
+    const cant = map.cant !== undefined && String(r[map.cant]).trim() !== '' ? toNum(r[map.cant]) : 1;
+    rows.push({Cuenta_Gastos: c.Codigo, Descripcion: desc, Cantidad: isNaN(cant) ? 1 : cant, UM: um, Total: r2(tot), _cta: c.Cuentas});
+  }
+  return {rows, errors, warns, hoja: name};
+}
+function pickBudgetFile() {
+  if (!canEdit('Presupuesto')) return toast('El presupuesto de este mes está cerrado o no tienes permiso', true);
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.xlsm,.csv';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    try { const X = await loadXLSX(); const wb = X.read(await f.arrayBuffer(), {type: 'array'}); S.imp = parseBudget(wb); S.imp.file = f.name; openImportPreview(); }
+    catch (e) { toast(e.message || 'No se pudo leer el archivo', true); }
+  };
+  inp.click();
+}
+function openImportPreview() {
+  const I = S.imp, existing = detail('Presupuesto_Detalle', S.mes).length, tot = sum(I.rows), ing = sum(detail('Ingresos_Detalle', S.mes));
+  sheetModal('frmImp', 'Importar presupuesto de ' + mesLabel(S.mes), `
+    <p style="margin:0 0 10px">${esc(I.file)}, hoja ${esc(I.hoja)}: <b>${I.rows.length} partidas</b> por <b>${money(tot)}</b>${ing ? `. Ingresos del mes: ${money(ing)}, quedarían ${money(ing - tot)} sin asignar` : ''}.</p>
+    ${I.errors.length ? `<div class="notice" style="display:block"><b>${I.errors.length} filas no se importarán:</b>${I.errors.slice(0, 12).map(e => `<div class="imp-err">${esc(e)}</div>`).join('')}${I.errors.length > 12 ? `<div class="imp-err">y ${I.errors.length - 12} más…</div>` : ''}</div>` : ''}
+    ${I.warns.length ? `<p class="muted" style="font-size:13px">${I.warns.slice(0, 5).map(esc).join('<br>')}</p>` : ''}
+    ${I.rows.length ? `<div class="tablewrap" style="max-height:260px;overflow:auto;margin:10px 0"><table class="t"><thead><tr><th>Cuenta</th><th>Descripción</th><th class="n">Cant.</th><th>Unidad</th><th class="n">Monto</th></tr></thead><tbody>
+      ${I.rows.map(r => `<tr style="cursor:default"><td>${esc(r._cta)}</td><td>${esc(r.Descripcion)}</td><td class="n">${r.Cantidad}</td><td>${esc(r.UM)}</td><td class="n">${money(r.Total)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${existing ? `<div class="field check"><label for="impRep">Reemplazar las ${existing} partidas que ya tiene ${esc(mesLabel(S.mes))}</label><label class="toggle"><input type="checkbox" id="impRep" checked><span></span></label></div>
+      <p class="muted" style="font-size:12.5px;margin:4px 0 0">Si lo desmarcas, las partidas del archivo se suman a las existentes.</p>` : ''}`,
+    I.rows.length ? `Importar ${I.rows.length} partidas` : 'Cerrar');
+}
+function downloadBudgetTemplate() {
+  loadXLSX().then(X => {
+    const src = detail('Presupuesto_Detalle', S.mes).length ? S.mes : mesAnterior(S.mes);
+    const rows = (src ? detail('Presupuesto_Detalle', src) : []).slice().sort((a, b) => String(a.Cuenta_Gastos).localeCompare(String(b.Cuenta_Gastos)));
+    const aoa = [['Cuenta', 'Nombre de la cuenta', 'Descripción', 'Cantidad', 'Unidad', 'Monto']]
+      .concat(rows.map(r => [r.Cuenta_Gastos, cuentaNombre(r.Cuenta_Gastos), r.Descripcion, Number(r.Cantidad) || 1, r.UM || 'Unidad', Number(r.Total) || 0]));
+    const ws = X.utils.aoa_to_sheet(aoa); ws['!cols'] = [{wch: 9}, {wch: 26}, {wch: 44}, {wch: 10}, {wch: 10}, {wch: 14}];
+    const cs = X.utils.aoa_to_sheet([['Código', 'Cuenta']].concat(DB.t.Cuentas.filter(c => truthy(c.Cuenta_de_Gastos) && truthy(c.Activa)).map(c => [c.Codigo, c.Cuentas]))); cs['!cols'] = [{wch: 9}, {wch: 30}];
+    const us = X.utils.aoa_to_sheet([['Unidad']].concat(DB.t.UM.map(u => [u.UM])));
+    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Presupuesto'); X.utils.book_append_sheet(wb, cs, 'Cuentas'); X.utils.book_append_sheet(wb, us, 'Unidades');
+    X.writeFile(wb, 'Plantilla_Presupuesto_' + S.mes + '.xlsx');
+  }).catch(e => toast(e.message, true));
+}
+
 /* ---------- Inicio de sesión ---------- */
 function showLogin(msg) {
   document.body.classList.add('locked'); closeModal();
@@ -1149,11 +1409,12 @@ function toast(msg, err) { clearTimeout(toastT); let el = $('.toast'); if (!el) 
 
 /* ---------- Eventos ---------- */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
+  const t = e.target.closest('[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
   if (!t) return;
   const d = t.dataset;
   if (d.close !== undefined) { if (e.target === t) closeModal(); return; }
   if (d.user) { openUserForm(d.user); return; }
+  if (d.banco) { S.banco = d.banco; render(); return; }
   if (d.go) { e.preventDefault(); go(d.go); return; }
   if (d.new) { const F = FORMS[d.new]; if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
   if (d.edit) { openForm(d.edit, d.id); return; }
@@ -1189,6 +1450,10 @@ document.addEventListener('click', async e => {
     Auth.clear(); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'mov-transfer' || a === 'mov-dep') { openForm('Movimientos_Banco'); if (a === 'mov-dep') { $('#f_Tipo').value = 'Depósito'; $('#f_ID_Banco_Destino').value = S.banco; } else if (S.banco) { $('#f_ID_Banco_Origen').value = S.banco; const o = bancos().find(b => String(b.ID_Banco) !== S.banco); if (o) $('#f_ID_Banco_Destino').value = o.ID_Banco; } formDynamics(); return; }
+  if (a === 'repair') { t.disabled = true; try { const r = await Backend.call('repair'); toast((r.report || []).length ? r.report.length + ' correcciones aplicadas' : 'Todo estaba en orden'); await boot(); } catch (err) { toast(err.message, true); } t.disabled = false; return; }
+  if (a === 'imp-ppto') return pickBudgetFile();
+  if (a === 'tpl-ppto') return downloadBudgetTemplate();
   if (a === 'user-new') return openUserForm();
   if (a === 'eye') { const i = $('#lp'); const show = i.type === 'password'; i.type = show ? 'text' : 'password'; t.textContent = show ? 'Ocultar' : 'Ver'; t.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña'); return; }
 });
@@ -1212,6 +1477,14 @@ document.addEventListener('submit', e => {
     try { const r = await Backend.call('changePassword', {actual: S.tmpPwd, nueva: n}); S.tmpPwd = null; Auth.set(r.session, r.user); hideLogin(); await boot(); toast('Contraseña creada'); }
     catch (err) { $('#npMsg').textContent = err.message; }
     b.disabled = false;
+  })();
+  if (e.target.id === 'frmImp') (async () => {
+    const I = S.imp; if (!I || !I.rows.length) { closeModal(); return; }
+    const rep = $('#impRep') ? $('#impRep').checked : false;
+    const b = e.target.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Importando…';
+    try { const ch = await Backend.call(rep ? 'replaceMany' : 'saveMany', {table: 'Presupuesto_Detalle', mes: S.mes, rows: I.rows.map(({_cta, ...r}) => r)});
+      DB.apply(ch); S.imp = null; closeModal(); render(); toast(I.rows.length + ' partidas importadas'); }
+    catch (err) { b.disabled = false; b.textContent = 'Importar'; toast('No se pudo importar: ' + err.message, true); }
   })();
   if (e.target.id === 'frmPwd') (async () => {
     const a = $('#pa').value, n = $('#pn').value, c = $('#pc').value;
@@ -1242,6 +1515,7 @@ let qT;
 document.addEventListener('input', e => {
   const b = e.target.dataset.bind;
   if (b === 'q') { S.q = e.target.value; clearTimeout(qT); qT = setTimeout(() => { const pos = e.target.selectionStart; render(); const el = $('[data-bind=q]'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 220); }
+  if (FORM && e.target.closest('#frm')) formDynamics();
   if (FORM && e.target.name === 'Descripcion_Gasto' && e.inputType === 'insertReplacementText') autofillFromHistory(e.target);
 });
 document.addEventListener('change', async e => {
@@ -1251,7 +1525,7 @@ document.addEventListener('change', async e => {
   if (b === 'all') { S.all = el.checked; render(); return; }
   if (el.id === 'ur' && $('#uperms')) { renderPerms(el.value, {}); return; }
   if (el.dataset.perm) { const def = roleDefaults($('#ur').value); el.closest('.perm').classList.toggle('custom', el.checked !== def[el.dataset.perm]); return; }
-  if (FORM) { if (FORM.F.fields.some(f => f.dep === el.name)) fillLists(); if (el.name === 'Descripcion_Gasto') autofillFromHistory(el); return; }
+  if (FORM) { formDynamics(); if (FORM.F.fields.some(f => f.dep === el.name)) fillLists(); if (el.name === 'Descripcion_Gasto') autofillFromHistory(el); return; }
   if (el.dataset.flag) {
     const p = DB.t.Mes_Anio.find(x => String(x.ID) === el.dataset.pid); const row = {ID: p.ID}; row[el.dataset.flag] = el.checked;
     el.disabled = true;
