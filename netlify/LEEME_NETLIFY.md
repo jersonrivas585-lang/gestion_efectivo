@@ -103,14 +103,13 @@ Los ingresos automáticos se editan o eliminan desde el retiro o la transferenci
 
 En **Inicio**, la sección *Dinero disponible* muestra lo que tienes para gastar en el período: el saldo de cada cuenta en córdobas (ingresos depositados − retiros ± transferencias), el **efectivo en mano** (efectivo recibido + retiros − gastos) y el **total disponible** (ingresos − gastos, el mismo criterio de Access). La cuenta en dólares aparece aparte. Toca una cuenta para ver sus movimientos.
 
-**Al empezar un período** (por ejemplo Octubre), si aún no tiene ingresos aparece el botón **Iniciar Octubre 2026**. Propone, con la fecha de inicio del período:
-- *Saldo de Mes Anterior (Cuenta)* por cada cuenta, con lo que quedó del período anterior (si ese período no tenía bancos asignados, eliges la cuenta);
-- *Saldo de Mes Anterior (Disp. En Mano)* con el efectivo que quedó;
-- *Salario Mensual* con el monto del último salario.
+**Al empezar un período** (por ejemplo Octubre), aparece el botón **Iniciar Octubre 2026**. Muestra el **disponible con que cerró el período anterior** y propone pasarlo como ingresos, con la fecha de inicio del período:
+- *Saldo de Mes Anterior (Cuenta)* por cada cuenta (Avanz, BAC) con su saldo al cierre;
+- *Saldo de Mes Anterior (Disp. En Mano)* con el efectivo al cierre.
 
-Revisas montos y cuentas, desmarcas lo que no aplique y la ventana muestra el **total a registrar** (solo de las líneas activadas, separado en bancos y efectivo); se registran todos juntos como ingresos.
+Si quedan montos de los registros de Access sin banco asignado, aparecen aparte y desactivados cuando ya hay saldos por cuenta (actívalos solo si no están incluidos). El **total a registrar** suma solo lo activado.
 
-Si el período anterior tiene movimientos hechos con la app nueva (ingresos con banco, retiros, gastos o transferencias), la ventana los lista en el paso **1** con el botón **Mover a …**: los saldos sugeridos ya no los cuentan, así solo quedan los saldos reales que pasan al período nuevo. Para corregirlos, abre el registro: si su período está abierto, cambia el campo **Período**; si está cerrado, usa el botón **Mover a …** (por ejemplo *Mover a Octubre 2026*). Un gasto con débito mueve también su retiro.
+Si algún registro quedó en el período equivocado, ábrelo: con el campo **Período** (si está abierto) o el botón **Mover a …** (si está cerrado) lo pasas al correcto.
 
 ## Gastos en efectivo: solo con efectivo disponible
 

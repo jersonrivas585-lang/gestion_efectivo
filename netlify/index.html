@@ -406,7 +406,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.21-0348';
+const APP_VERSION = '2026.10.21-0402';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -965,28 +965,25 @@ function disponible(mes, excl) {
 }
 /** Ingresos sugeridos para abrir un período: saldos que quedaron del anterior y el último salario */
 function aperturaSugerida(mes) {
-  const prev = mesAnterior(mes); if (!prev) return {prev: null, lineas: [], mover: []};
-  const mover = newRowsIn(prev), ex = new Set();
-  mover.forEach(m => { ex.add(m.t + ':' + m.id); if (m.r.ID_Ingreso_Auto) ex.add('Ingresos_Detalle:' + m.r.ID_Ingreso_Auto); if (m.r.ID_Retiro_Auto) { ex.add('Retiros_Detalle:' + m.r.ID_Retiro_Auto); const ar = DB.t.Retiros_Detalle.find(x => String(x.Id_DetRetiros) === String(m.r.ID_Retiro_Auto)); if (ar && ar.ID_Ingreso_Auto) ex.add('Ingresos_Detalle:' + ar.ID_Ingreso_Auto); } });
-  const d = disponible(prev, ex), L = [];
-  d.cuentas.forEach(c => { if (Math.abs(c.v) >= 0.01) L.push({Descripcion: 'Saldo de Mes Anterior (Cuenta)', Total: c.v, ID_Banco: c.b.ID_Banco, on: c.v > 0}); });
-  if (Math.abs(d.sinBanco) >= 0.01) L.push({Descripcion: 'Saldo de Mes Anterior (Cuenta)', Total: d.sinBanco, ID_Banco: (bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? '', on: d.sinBanco > 0, nota: 'En ' + mesLabel(prev) + ' no tenía banco asignado: elige la cuenta'});
-  if (Math.abs(d.mano) >= 0.01) L.push({Descripcion: 'Saldo de Mes Anterior (Disp. En Mano)', Total: d.mano, ID_Banco: 0, on: d.mano > 0, nota: 'Cuenta el efectivo y corrige si hace falta'});
-  const sal = DB.t.Ingresos_Detalle.filter(r => /salario mensual/i.test(r.Descripcion)).sort((a, b) => (Number(a.ID_DetIngresos) || 0) - (Number(b.ID_DetIngresos) || 0)).pop();
-  if (sal && !detail('Ingresos_Detalle', mes).some(r => /salario mensual/i.test(r.Descripcion))) L.push({Descripcion: 'Salario Mensual', Total: Number(sal.Total) || 0, ID_Banco: sal.ID_Banco !== '' && banco(sal.ID_Banco) ? sal.ID_Banco : ((bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? ''), on: true, nota: 'Monto del último salario: corrígelo si cambió'});
-  return {prev, lineas: L, mover};
+  const prev = mesAnterior(mes); if (!prev) return {prev: null, lineas: []};
+  const d = disponible(prev), L = [];
+  // Saldo de cada cuenta y el efectivo con que cerró el período anterior: eso pasa como ingreso del nuevo
+  d.cuentas.forEach(c => { if (Math.abs(c.v) >= 0.01) L.push({Descripcion: 'Saldo de Mes Anterior (Cuenta)', Total: c.v, ID_Banco: c.b.ID_Banco, on: c.v > 0, nota: 'Saldo de ' + c.b.Nombre + ' al cierre de ' + mesLabel(prev)}); });
+  if (Math.abs(d.sinBanco) >= 0.01) {
+    const hayCuentas = d.cuentas.some(c => Math.abs(c.v) >= 0.01);
+    L.push({Descripcion: 'Saldo de Mes Anterior (Cuenta)', Total: d.sinBanco, ID_Banco: (bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? '', on: d.sinBanco > 0 && !hayCuentas,
+      nota: hayCuentas ? 'Resto de los registros de Access sin banco. Actívalo solo si no está incluido en los saldos de arriba' : 'Registros de Access sin banco asignado: elige la cuenta'});
+  }
+  if (Math.abs(d.mano) >= 0.01) L.push({Descripcion: 'Saldo de Mes Anterior (Disp. En Mano)', Total: d.mano, ID_Banco: 0, on: d.mano > 0, nota: 'Efectivo al cierre de ' + mesLabel(prev)});
+  return {prev, lineas: L, total: d.total};
 }
 function openApertura() {
   if (!ensureTarget('Ingresos')) return toast('No hay un período abierto para ingresos', true);
   const A = aperturaSugerida(S.mes); S.apertura = A;
   const opts = sel => [...bancos().filter(b => b.Moneda === 'NIO').map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo, sin banco']].map(([v, l]) => `<option value="${v}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(l)}</option>`).join('');
   sheetModal('frmApertura', 'Iniciar ' + mesLabel(S.mes), `
-    ${A.mover.length ? `<div class="movebox"><b>1. Registros de ${esc(mesLabel(S.mes))} que quedaron en ${esc(mesLabel(A.prev))}</b>
-      <small>Se hicieron con la app nueva dentro de ${esc(mesLabel(A.prev))}. Los saldos de abajo ya no los cuentan; muévelos a ${esc(mesLabel(S.mes))} para que queden donde corresponden.</small>
-      ${A.mover.map((m, i) => `<label class="mvrow"><input type="checkbox" data-mv="${i}" checked><span>${esc(m.tipo)}: ${esc(m.desc)}</span><b class="num">${money(m.total)}</b></label>`).join('')}
-      <button type="button" class="btn small primary" data-act="ap-move" style="margin-top:8px">Mover a ${esc(mesLabel(S.mes))}</button></div>
-      <p style="margin:14px 0 6px"><b>2. Saldos con los que empiezas</b></p>` : ''}
-    <p style="margin:0 0 12px">Registra los ingresos con los que empiezas el período: lo que quedó de ${A.prev ? '<b>' + esc(mesLabel(A.prev)) + '</b>' : 'el período anterior'} en cada cuenta, el efectivo en mano y el salario. Revisa los montos y la cuenta de cada uno.</p>
+    <p style="margin:0 0 4px">Pasa como ingresos de <b>${esc(mesLabel(S.mes))}</b> el saldo disponible con que cerró ${A.prev ? '<b>' + esc(mesLabel(A.prev)) + '</b>' : 'el período anterior'}: lo de cada cuenta y el efectivo en mano.</p>
+    ${A.prev ? `<div class="aptotal" style="margin:6px 0 10px;border-top:0;padding-top:0"><span class="muted" style="font-weight:600">Disponible al cierre de ${esc(mesLabel(A.prev))}</span><b class="num">${money(A.total)}</b></div>` : ''}
     ${A.lineas.length ? A.lineas.map((l, i) => `<div class="apline">
       <label class="toggle" aria-label="Incluir"><input type="checkbox" data-ap="${i}" ${l.on ? 'checked' : ''}><span></span></label>
       <div class="apbody"><b>${esc(l.Descripcion)}</b>${l.nota ? `<small>${esc(l.nota)}</small>` : ''}
