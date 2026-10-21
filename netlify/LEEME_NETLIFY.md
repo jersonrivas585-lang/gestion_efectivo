@@ -114,6 +114,8 @@ El dinero se lleva como en la realidad, por **cuenta**: Avanz Córdobas, BAC Có
   - *Transferencia entre tus cuentas* (también depositar efectivo o pasar de dólares a córdobas): baja una y sube la otra; no es ingreso ni gasto.
 - **Dinero disponible** = cuentas en córdobas + efectivo. La cuenta en dólares se muestra aparte, con su equivalente al T/C del período.
 
+**Movimientos anteriores a los saldos:** en *Bancos*, cada cuenta muestra también los movimientos (depósitos, transferencias, ingresos, retiros, gastos con débito) que se hicieron **antes** de la fecha y hora de los saldos actuales. Salen atenuados con la nota «Anterior a los saldos» y no cambian el saldo, porque el saldo que escribiste ya los incluye. Los depósitos de versiones anteriores se pueden abrir, corregir o eliminar.
+
 **Saldo disponible al registrar:** en los formularios de retiro, gasto y transferencia, debajo de la cuenta aparece el **saldo disponible** y cuánto quedaría con el monto escrito (en US$ para la cuenta en dólares; el efectivo en mano para gastos en efectivo). Un retiro o una transferencia que supera el saldo no se puede guardar. Mientras no escribas los saldos actuales, solo se muestra el saldo sin bloquear.
 
 ## Cuenta en dólares: comprar y depositar
