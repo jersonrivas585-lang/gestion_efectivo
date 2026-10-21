@@ -660,6 +660,7 @@ const Demo = {
     return ch;
   },
   repair() { return {report: []}; },
+  updateMany(p) { const ch = {upserts: {}, deletes: {}}; p.rows.forEach(r => this._add(ch, p.table, this._upsert(p.table, Object.assign({}, DB.t[p.table].find(x => String(x[DB.key(p.table)]) === String(r[DB.key(p.table)])), r)))); return ch; },
   sync() { return {seq: 0, changes: []}; },
   saveMany(p) {
     const ch = {upserts: {}, deletes: {}}; const rel = REL[p.table]; ch.upserts[p.table] = [];
@@ -1141,7 +1142,7 @@ function showFuelResult(r, fromList) {
   const avg = fuelAvg(r.ID, 10, u), diff = avg && main ? (main - avg) / avg * 100 : 0;
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><div class="sheet fuelres" role="dialog" aria-modal="true" aria-label="Cálculo de rendimiento">
     <h4>Rendimiento del llenado <span class="pill">${fdatetime(r.Fecha)}</span><button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
-    ${c.km > 0 ? `<p class="fuel-say">Manejaste <b>${NF0.format(c.km)} kilómetros</b>.<br>Usaste <b>${c.litros.toFixed(3)} litros</b> (${c.galones.toFixed(3)} galones).</p>
+    ${c.km > 0 ? `<p class="fuel-say">Manejaste <b>${NF0.format(c.km)} kilómetros</b> (${NF.format(c.km / 1.60934)} millas).<br>Usaste <b>${c.litros.toFixed(3)} litros</b> (${c.galones.toFixed(3)} galones).</p>
       <div class="tabs" style="justify-content:center;margin:6px 0 10px">${['L', 'GL'].map(x => `<button type="button" class="tab" data-funit="${x}" data-fres="1" aria-pressed="${u === x}">${uLabel(x)}</button>`).join('')}</div>
       <div class="fuel-kml num">${main.toFixed(2)}<span>${uLabel(u)}</span></div>
       <p class="muted" style="margin:6px 0 0;font-size:15px">${other.toFixed(2)} ${uLabel(u === 'GL' ? 'L' : 'GL')}</p>${fuelGauge(main, u)}
@@ -1179,6 +1180,7 @@ V.combustible = () => {
     <div class="fig"><small>Costo por km</small><b class="num">${cpk ? money(cpk) : '—'}</b></div>
   </div>
   <p class="muted" style="font-size:12.5px;margin:8px 2px 0">El costo del combustible se lleva aparte y no se suma a Gastos, porque se paga con tarjeta de crédito.</p>
+  ${(() => { const sin = rows.filter(r => !(Number(r.Precio_Litro) > 0)); return sin.length && can('combustible.editar') ? `<div class="notice"><span>${sin.length} llenados no tienen precio por litro, así que no tienen costo.</span><button class="btn small" data-act="fuel-price">Completar precio</button></div>` : ''; })()}
   <section class="section"><h3>Rendimiento <small>últimos 30 llenados</small>
     <span class="tabs" style="margin:0 0 0 auto">${['L', 'GL'].map(x => `<button type="button" class="tab" data-funit="${x}" aria-pressed="${u === x}">${uLabel(x)}</button>`).join('')}</span></h3>
     <div class="panel">${lineChart(last30.map(r => fdate(r.Fecha, {day: 'numeric', month: 'short'})), serie, {name: uLabel(u)})}</div></section>
@@ -1382,9 +1384,10 @@ const FORMS = {
       return (c.km > 0 ? `Recorriste ${NF0.format(c.km)} km con ${c.litros.toFixed(3)} litros (${c.galones.toFixed(3)} galones): <b>${c.kml.toFixed(2)} km/L</b> y <b>${c.kmg.toFixed(2)} km/GL</b>.` : 'Primer llenado registrado: el rendimiento se calcula desde el próximo.') +
         (c.costo ? ` Costo ${money(c.costo)} (${money(c.precio)} por litro).` : '') + ' No se registra como gasto.'; },
     before: o => { const c = fuelCalc(o);
-      const FG = 3.78541, FM = 1.60934; o.Factor_GL = FG; o.Factor_Milla = FM; o.Horometro_Millas = o.Horometro_Km;
+      const FG = 3.78541, FM = 1.60934; o.Factor_GL = FG; o.Factor_Milla = FM;
+      o.Horometro_Millas = Math.round(Number(o.Horometro_Km) / FM * 10) / 10;
       o.Litro = c.litros; o.Galon = c.galones;
-      o.Km_Recorrido = c.km; o.Millas_Recorrido = c.km;
+      o.Km_Recorrido = c.km; o.Millas_Recorrido = Math.round(c.km / FM * 10) / 10;
       o.km_galon = c.kmg || ''; o.km_litros = c.kml || '';
       o.Precio_Litro = c.precio || ''; o.Costo = c.costo || '';
       if (!o.No) o.No = (c.prev ? Number(c.prev.No) || 0 : 0) + 1; },
@@ -1730,6 +1733,16 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'fuel-price') {
+    const sin = fuelRows().filter(r => !(Number(r.Precio_Litro) > 0) && !isTmp(r.ID));
+    const desde = (sin.slice(-1)[0] || {}).Fecha ? String(sin.slice(-10)[0].Fecha).slice(0, 10) : todayISO();
+    sheetModal('frmFuelPrice', 'Completar precio por litro', `<p style="margin:0 0 12px">Se aplicará el precio a los llenados <b>sin precio</b> desde la fecha que elijas. El costo se calcula con los litros de cada llenado. No afecta Gastos.</p>
+      <div class="fgrid"><div class="field half"><label for="fpP">Precio por litro (C$)</label><input class="input" id="fpP" type="number" step="any" inputmode="decimal" value="${lastFuelPrice() || ''}"></div>
+      <div class="field half"><label for="fpD">Desde</label><input class="input" id="fpD" type="date" value="${desde}"></div></div>
+      <p class="muted" id="fpN" style="font-size:13px"></p>`, 'Aplicar precio');
+    const upd = () => { const d = $('#fpD').value, n = sin.filter(r => String(r.Fecha).slice(0, 10) >= d).length, pz = Number($('#fpP').value) || 0; $('#fpN').textContent = n + ' llenados' + (pz ? ', costo total ' + money(sin.filter(r => String(r.Fecha).slice(0, 10) >= d).reduce((a, r) => a + (Number(r.Litro) || 0) * pz, 0)) : ''); };
+    $('#fpD').oninput = upd; $('#fpP').oninput = upd; upd(); return;
+  }
   if (a === 'open-src') { const [kind, id] = String(t.dataset.src).split(':'); const tb = {GAS: 'Gastos_Detalle', RET: 'Retiros_Detalle', MOV: 'Movimientos_Banco'}[kind]; closeModal(); if (tb) openForm(tb, id); return; }
   if (a === 'dt-now') { const el = $('#' + t.dataset.for); if (el) { el.value = toDTL(nowDT()); el.dispatchEvent(new Event('input', {bubbles: true})); } return; }
   if (a === 'fuel-edit') { const id = t.dataset.fid; closeModal(); openForm('Consumo_Combustible', id); return; }
@@ -1760,6 +1773,16 @@ document.addEventListener('submit', e => {
     try { const r = await Backend.call('changePassword', {actual: S.tmpPwd, nueva: n}); S.tmpPwd = null; Auth.set(r.session, r.user); hideLogin(); await boot(); toast('Contraseña creada'); }
     catch (err) { $('#npMsg').textContent = err.message; }
     b.disabled = false;
+  })();
+  if (e.target.id === 'frmFuelPrice') (async () => {
+    const pz = Number($('#fpP').value), d = $('#fpD').value;
+    if (!(pz > 0)) return toast('Escribe el precio por litro', true);
+    const rows = fuelRows().filter(r => !(Number(r.Precio_Litro) > 0) && !isTmp(r.ID) && String(r.Fecha).slice(0, 10) >= d)
+      .map(r => ({ID: r.ID, Precio_Litro: pz, Costo: r2((Number(r.Litro) || 0) * pz)}));
+    if (!rows.length) return toast('No hay llenados sin precio desde esa fecha', true);
+    const b = e.target.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Aplicando…';
+    try { const ch = await Q.run(() => Backend.call('updateMany', {table: 'Consumo_Combustible', rows})); commit(ch); lsSet('precio_litro', String(pz)); closeModal(); render(); toast(rows.length + ' llenados con precio y costo'); }
+    catch (err) { b.disabled = false; b.textContent = 'Aplicar precio'; toast(err.message, true); }
   })();
   if (e.target.id === 'frmImp') (async () => {
     const I = S.imp; if (!I || !I.rows.length) { closeModal(); return; }
