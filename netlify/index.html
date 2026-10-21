@@ -409,7 +409,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.21-1349';
+const APP_VERSION = '2026.10.21-1402';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -573,6 +573,11 @@ const TC_DEF = 36.6243;
 const bancos = (all) => (DB.t.Bancos || []).filter(b => all || truthy(b.Activa)).sort((a, b) => (Number(a.Orden) || 0) - (Number(b.Orden) || 0));
 const banco = id => (DB.t.Bancos || []).find(b => String(b.ID_Banco) === String(id));
 const curOf = id => (banco(id) || {}).Moneda || 'NIO';
+const isUsdBank = id => !!banco(id) && curOf(id) === 'USD';
+/** Compra de dólares: de córdobas o efectivo a la cuenta en dólares (se registra también como gasto) */
+const movAdj = () => FORM && FORM.rec && FORM.rec.Tipo === 'Transferencia' ? {ID_Banco: FORM.rec.ID_Banco_Origen, Total: FORM.rec.Monto, Monto_Moneda: FORM.rec.Monto} : null;
+const isBuyUsd = o => o.Tipo === 'Transferencia' && curOf(o.ID_Banco_Origen) !== 'USD' && isUsdBank(o.ID_Banco_Destino);
+const defaultGastoCuenta = () => ((DB.t.Cuentas || []).find(c => /ahorr/i.test(c.Cuentas) && truthy(c.Cuenta_de_Gastos) && truthy(c.Activa)) || (DB.t.Cuentas || []).find(c => truthy(c.Cuenta_de_Gastos) && truthy(c.Activa)) || {}).Codigo || '';
 const usd = v => { v = r2(v); return (v < 0 ? '−' : '') + 'US$ ' + NF.format(Math.abs(v)); };
 const fcur = (v, cur) => cur === 'USD' ? usd(v) : money(v);
 const bankName = id => id === '' || id === null || id === undefined || Number(id) === 0 ? 'Efectivo' : (banco(id) || {}).Nombre || 'Banco ' + id;
@@ -606,6 +611,7 @@ function ledger(bid) {
   const cur = b.Moneda, start = dtKey(b.Fecha_Inicial), out = [];
   const add = (fecha, desc, amt, src, extra) => { if (after(fecha, start)) out.push(Object.assign({fecha: dtKey(fecha), desc, amt: r2(amt), src}, extra || {})); };
   const mine = r => String(r.ID_Banco) === String(bid) && !r.Origen;
+  if (cur === 'USD') DB.t.Ingresos_Detalle.filter(r => mine(r) && !isCarry(r)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Monto_Moneda) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, {tipo: 'Depósito en dólares', alt: money(r.Total)}));
   if (cur === 'NIO') DB.t.Ingresos_Detalle.filter(r => mine(r) && !isCarry(r)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Total) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, {tipo: 'Ingreso'}));
   DB.t.Retiros_Detalle.filter(mine).forEach(r => add(r.Fecha_Retiro, r.Movimiento, -(cur === 'USD' ? Number(r.Monto_Moneda) || 0 : Number(r.Total) || 0), {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, {tipo: 'Retiro de efectivo', alt: cur === 'USD' ? money(r.Total) : ''}));
   DB.t.Gastos_Detalle.filter(mine).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(cur === 'USD' ? Number(r.Monto_Moneda) || 0 : Number(r.Total) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, {tipo: 'Gasto con débito', alt: cur === 'USD' ? money(r.Total) : ''}));
@@ -625,7 +631,7 @@ function cashLedger() {
   const add = (fecha, desc, amt, src, tipo) => { if (after(fecha, start)) out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo}); };
   DB.t.Ingresos_Detalle.filter(r => noBank(r) && !r.Origen && !isCarry(r)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Total) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, 'Ingreso en efectivo'));
   DB.t.Retiros_Detalle.filter(r => !r.Origen).forEach(r => add(r.Fecha_Retiro, r.Movimiento + (banco(r.ID_Banco) ? ' (' + bankName(r.ID_Banco) + ')' : ''), Number(r.Total) || 0, {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, 'Retiro de efectivo'));
-  DB.t.Gastos_Detalle.filter(noBank).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(Number(r.Total) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, 'Gasto en efectivo'));
+  DB.t.Gastos_Detalle.filter(r => noBank(r) && !r.Origen).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(Number(r.Total) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, 'Gasto en efectivo'));
   (DB.t.Movimientos_Banco || []).filter(m => m.Tipo === 'Transferencia').forEach(m => {
     if (String(m.ID_Banco_Origen) === '0') add(m.Fecha, 'Depósito a ' + bankName(m.ID_Banco_Destino), -(Number(m.Monto) || 0), {t: 'Movimientos_Banco', id: m.ID_Mov}, 'Transferencia');
     if (String(m.ID_Banco_Destino) === '0') add(m.Fecha, 'Desde ' + bankName(m.ID_Banco_Origen), Number(m.Monto_Destino) || 0, {t: 'Movimientos_Banco', id: m.ID_Mov}, 'Transferencia'); });
@@ -742,15 +748,26 @@ const Demo = {
     const rel = REL[table]; if (rel) this._add(ch, rel.header, this._recalc(table, old[rel.fk]));
     return old;
   },
-  _guard(table, id) { if ((table !== 'Ingresos_Detalle' && table !== 'Retiros_Detalle') || !id) return; const k = DB.key(table); const r = DB.t[table].find(x => String(x[k]) === String(id)); if (r && r.Origen) throw new Error(table === 'Retiros_Detalle' ? 'Este retiro se generó desde un gasto pagado con débito. Edítalo desde el gasto.' : 'Este ingreso se generó desde un retiro o una transferencia en dólares. Edítalo desde allí.'); },
+  _guard(table, id) { if ((table !== 'Ingresos_Detalle' && table !== 'Retiros_Detalle' && table !== 'Gastos_Detalle') || !id) return; const k = DB.key(table); const r = DB.t[table].find(x => String(x[k]) === String(id)); if (r && r.Origen) throw new Error(table === 'Gastos_Detalle' ? 'Este gasto se generó desde una transferencia a la cuenta en dólares. Edítalo desde la transferencia.' : table === 'Retiros_Detalle' ? 'Este retiro se generó desde un gasto pagado con débito. Edítalo desde el gasto.' : 'Este ingreso se generó desde un retiro o una transferencia en dólares. Edítalo desde allí.'); },
   save(p) {
     try { this._guard(p.table, (p.row || {})[DB.key(p.table)]); } catch (e) { return {error: e.message}; }
     const ch = {upserts: {}, deletes: {}}; const row = Object.assign({}, p.row);
     if (p.table === 'Cuentas' && !String(row.Codigo || '').trim()) { row.Codigo = nextCodigo(); row.Cuentas_Gastos = row.Codigo + '-' + (row.Cuentas || ''); }
     if (p.table === 'Movimientos_Banco') { row.Usuario = 'demo'; row.Fecha_Registro = row.Fecha_Registro || todayISO(); if (p.mes) row.Mes_Anio = p.mes; }
     const saved = this._saveDet(p.table, row, p.mes, ch);
-
+    if (p.table === 'Movimientos_Banco') this._syncGastoMov(saved, ch);
     return ch;
+  },
+  _syncGastoMov(m, ch) {
+    const o = String(m.ID_Banco_Origen) === '0' ? {Moneda: 'NIO', ID_Banco: ''} : banco(m.ID_Banco_Origen), d = banco(m.ID_Banco_Destino);
+    const need = m.Tipo === 'Transferencia' && o && o.Moneda === 'NIO' && d && d.Moneda === 'USD' && m.Mes_Anio;
+    const ex = m.ID_Gasto_Auto, exists = ex && DB.t.Gastos_Detalle.some(x => String(x.ID_Detalle_Gastos) === String(ex));
+    if (need) {
+      const row = {Fecha: m.Fecha, Cuenta_Gastos: m.Cuenta_Gastos || defaultGastoCuenta(), Descripcion_Gasto: 'Compra de dólares: ' + d.Nombre + ' (' + usd(m.Monto_Destino) + ' a T/C ' + m.Tipo_Cambio + ')', Cantidad: 1, UM: 'Unidad', Total: Number(m.Monto) || 0, Precio_Unitario: Number(m.Monto) || 0, ID_Banco: o.ID_Banco, Origen: 'MOV:' + m.ID_Mov, Descripcion_Adicional: 'Generado automáticamente'};
+      if (exists) row.ID_Detalle_Gastos = ex;
+      const g = this._saveDet('Gastos_Detalle', row, m.Mes_Anio, ch);
+      if (String(ex) !== String(g.ID_Detalle_Gastos)) this._add(ch, 'Movimientos_Banco', this._upsert('Movimientos_Banco', Object.assign({}, m, {ID_Gasto_Auto: g.ID_Detalle_Gastos})));
+    } else if (ex) { this._removeDet('Gastos_Detalle', ex, ch); this._add(ch, 'Movimientos_Banco', this._upsert('Movimientos_Banco', Object.assign({}, m, {ID_Gasto_Auto: ''}))); }
   },
   _syncGasto(g, ch) {
     const b = banco(g.ID_Banco), ex = g.ID_Retiro_Auto, exists = ex && DB.t.Retiros_Detalle.some(x => String(x.Id_DetRetiros) === String(ex));
@@ -787,6 +804,7 @@ const Demo = {
     const ch = {upserts: {}, deletes: {}};
     let old = this._removeDet(p.table, p.id, ch);
     if (!old[DB.key(p.table)] && p.prev) { old = p.prev; ch.deletes[p.table] = [p.id]; const rel = REL[p.table]; if (rel) this._add(ch, rel.header, this._recalc(p.table, old[rel.fk])); }
+    if (old.ID_Gasto_Auto) this._removeDet('Gastos_Detalle', old.ID_Gasto_Auto, ch);
     if (old.ID_Ingreso_Auto) this._removeDet('Ingresos_Detalle', old.ID_Ingreso_Auto, ch);
     if (old.ID_Retiro_Auto) { const o = this._removeDet('Retiros_Detalle', old.ID_Retiro_Auto, ch); if (o.ID_Ingreso_Auto) this._removeDet('Ingresos_Detalle', o.ID_Ingreso_Auto, ch); }
     return ch;
@@ -1121,7 +1139,7 @@ V.gastos = () => {
   ${S.all && !q && !S.cuenta ? '<div class="panel empty"><b>Busca en todo el historial</b>Escribe una descripción o elige una cuenta para buscar desde 2018.</div>' :
     n ? `<div class="list">${listGrouped(shown, 'Fecha', r => `
       <button class="item ${r._pending ? 'pending' : ''}" data-edit="Gastos_Detalle" data-id="${r.ID_Detalle_Gastos}">
-        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${hasTime(r.Fecha) ? ftime(r.Fecha) + ', ' : ''}${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.ID_Banco !== '' && r.ID_Banco !== undefined && banco(r.ID_Banco) ? ', débito ' + esc(bankName(r.ID_Banco)) + (Number(r.Monto_Moneda) ? ' ' + usd(r.Monto_Moneda) : '') : ''}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
+        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${hasTime(r.Fecha) ? ftime(r.Fecha) + ', ' : ''}${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.ID_Banco !== '' && r.ID_Banco !== undefined && banco(r.ID_Banco) ? (r.Origen ? ', compra de dólares desde ' : ', débito ') + esc(bankName(r.ID_Banco)) + (Number(r.Monto_Moneda) ? ' ' + usd(r.Monto_Moneda) : '') : ''}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
         <span class="amt num">${money(r.Total)}${Number(r.Cantidad) > 1 ? `<small>${money(r.Precio_Unitario)} c/u</small>` : ''}</span>
       </button>`)}</div>` : `<div class="panel empty"><b>No hay gastos${q || S.cuenta ? ' con ese filtro' : ' en este mes'}</b>${canEdit('Gastos') ? 'Usa Registrar gasto para agregar el primero.' : ''}</div>`}`;
 };
@@ -1148,17 +1166,17 @@ V.retiros = () => {
 
 V.ingresos = () => {
   const rows = rowsFor('Ingresos_Detalle', S.mes);
-  const byBank = {}; rows.forEach(r => { const k = !banco(r.ID_Banco) ? '' : String(r.ID_Banco); byBank[k] = (byBank[k] || 0) + (Number(r.Total) || 0); });
+  const byBank = {}, byUsd = {}; rows.forEach(r => { const k = !banco(r.ID_Banco) ? '' : String(r.ID_Banco); byBank[k] = (byBank[k] || 0) + (Number(r.Total) || 0); if (isUsdBank(r.ID_Banco)) byUsd[k] = (byUsd[k] || 0) + (Number(r.Monto_Moneda) || 0); });
   const enBancos = r2(Object.entries(byBank).filter(([k]) => k !== '').reduce((a, [, v]) => a + v, 0));
   return `${lockNote('Ingresos')}
   ${isNewPeriod(S.mes) ? `<p class="muted" style="margin:12px 2px 0">Ingresos con fecha ${rangeLabel(S.mes)}. Los saldos de mes anterior ya no se registran: los saldos están en Bancos.</p>` : ''}
   ${rows.length && bancos().length ? `<div class="figs three"><div class="fig"><small>Ingresos del mes</small><b class="num">${money(sum(rows))}</b></div>
     <div class="fig" data-go="bancos"><small>Depositado en bancos</small><b class="num">${money(enBancos)}</b></div>
     <div class="fig"><small>Efectivo o sin banco</small><b class="num">${money(byBank[''] || 0)}</b></div></div>
-    <p class="muted" style="font-size:13px;margin:8px 2px 0">${Object.entries(byBank).filter(([k]) => k !== '').map(([k, v]) => esc(bankName(k)) + ': ' + money(v)).join('; ')}</p>` : ''}
+    <p class="muted" style="font-size:13px;margin:8px 2px 0">${Object.entries(byBank).filter(([k]) => k !== '').map(([k, v]) => esc(bankName(k)) + ': ' + (byUsd[k] ? usd(byUsd[k]) + ' (' + money(v) + ')' : money(v))).join('; ')}</p>` : ''}
   <div class="toolbar"><div class="sumline" style="margin:0;flex:1"><span>${rows.length} ingresos</span><b class="num">${money(sum(rows))}</b></div>${canAdd('Ingresos') ? '<button class="btn primary desk-only" data-new="Ingresos_Detalle">Registrar ingreso</button>' : ''}</div>
   ${rows.length ? `<div class="list">${rows.map(r => `<button class="item" data-edit="Ingresos_Detalle" data-id="${r.ID_DetIngresos}"><span class="dot" style="background:${r.Origen ? 'var(--teal)' : 'var(--good)'}"></span>
-    <span class="tx"><b>${esc(r.Descripcion)}</b><small>${esc(bankName(r.ID_Banco))}, ${fdatetime(r.Fecha_Registro)}${r.Origen ? ', automático' : r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num pos">${money(r.Total)}</span></button>`).join('')}</div>`
+    <span class="tx"><b>${esc(r.Descripcion)}</b><small>${esc(bankName(r.ID_Banco))}${Number(r.Monto_Moneda) ? ', ' + usd(r.Monto_Moneda) + ' a ' + r.Tipo_Cambio : ''}, ${fdatetime(r.Fecha_Registro)}${r.Origen ? ', automático' : r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num pos">${money(r.Total)}</span></button>`).join('')}</div>`
     : `<div class="panel empty"><b>No hay ingresos en este mes</b>Registra cada ingreso con su fecha: se suma al período que le corresponde.</div>`}`;
 };
 
@@ -1178,7 +1196,7 @@ V.bancos = () => {
   </div>
   <div class="sumline" style="margin-top:12px"><span>Disponible para gastar (cuentas en córdobas + efectivo)</span><b class="num">${money(D.total)}</b></div></section>
   <section class="section"><h3>Movimientos de ${esc(cur.Nombre)} <small>${led.start ? 'desde ' + fdatetime(led.start) + ', saldo inicial ' + fcur(led.inicial, cur.Moneda) : ''}</small></h3>
-    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir entre cuentas</button><button class="btn" data-act="mov-dep">Ajuste de saldo</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') || !Backend.online ? '<button class="btn small" data-act="saldos">Ajustar saldos actuales</button>' : ''}</div>
+    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir entre cuentas</button><button class="btn" data-act="mov-dep">Ajuste de saldo</button>' : ''}${!ef && cur.Moneda === 'USD' ? `${ed ? '<button class="btn" data-act="usd-buy">Comprar dólares</button>' : ''}${canAdd('Ingresos') ? '<button class="btn" data-act="usd-dep">Depositar dólares recibidos</button>' : ''}` : ''}<span class="spacer"></span>${can('catalogos.editar') || !Backend.online ? '<button class="btn small" data-act="saldos">Ajustar saldos actuales</button>' : ''}</div>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">${ef ? 'Sube con los retiros de cajero y los ingresos en efectivo; baja con los gastos pagados en efectivo.' : 'Sube con los ingresos depositados y las transferencias que recibes; baja con los retiros de cajero, los gastos con débito o pago directo y las transferencias que haces.'}</p>
     ${shown.length ? `<div class="list">${shown.map(r => `<button class="item" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt >= 0 ? 'var(--good)' : 'var(--sun)'}"></span>
       <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)}${r.alt ? ', ' + r.alt + ' en córdobas' : ''}</small></span>
@@ -1500,12 +1518,16 @@ const FORMS = {
     {k: 'Total', l: 'Monto presupuestado (C$)', ty: 'number', req: 1, step: '0.01'}]},
   Ingresos_Detalle: {t: 'ingreso', mod: 'Ingresos', fields: [
     {k: 'Descripcion', l: 'Concepto', ty: 'text', req: 1, list: () => [...DB.t.Items_Ingresos.map(i => i.Descripcion), ...histDesc('Ingresos_Detalle', 'Descripcion')]},
-    {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01', half: 1},
-    {k: 'ID_Banco', l: 'Depositado en', ty: 'select', half: 1, opts: () => [...bancos().filter(b => b.Moneda === 'NIO').map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo, sin banco']], def: () => lsGet('bank_ing') ?? (bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? ''},
+    {k: 'ID_Banco', l: 'Depositado en', ty: 'select', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), [0, 'Efectivo, sin banco']], def: () => lsGet('bank_ing') ?? (bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? ''},
+    {k: 'Monto_Moneda', l: 'Monto recibido (US$)', ty: 'number', req: 1, step: '0.01', half: 1, show: o => isUsdBank(o.ID_Banco)},
+    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: () => tcFor(S.mes), hint: tcHint, show: o => isUsdBank(o.ID_Banco)},
+    {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01', show: o => !isUsdBank(o.ID_Banco)},
     {k: 'Cuenta_Ingresos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(false), def: 'C001', half: 1},
     {k: 'Fecha_Registro', l: 'Fecha y hora del ingreso', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo entró el dinero.'},
     {k: 'Observaciones', l: 'Observaciones', ty: 'text'}],
-    after: o => lsSet('bank_ing', String(o.ID_Banco))},
+    preview: o => isUsdBank(o.ID_Banco) && Number(o.Monto_Moneda) ? `Entran <b>${usd(o.Monto_Moneda)}</b> a ${esc(bankName(o.ID_Banco))}. Cuenta como ingreso de <b>${money(Number(o.Monto_Moneda) * (Number(o.Tipo_Cambio) || 0))}</b> y no cambia lo que tienes en córdobas ni en efectivo.` : '',
+    before: o => { if (isUsdBank(o.ID_Banco)) o.Total = r2(Number(o.Monto_Moneda) * Number(o.Tipo_Cambio)); else { o.Monto_Moneda = ''; o.Tipo_Cambio = ''; } },
+    after: o => { lsSet('bank_ing', String(o.ID_Banco)); if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); }},
   Retiros_Detalle: {t: 'retiro', mod: 'Retiros', fields: [
     {k: 'Fecha_Retiro', l: 'Fecha y hora del retiro', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo se hizo el retiro. Cámbialo si lo registras después.'},
     {k: 'ID_Banco', l: 'Desde la cuenta', ty: 'select', live: o => saldoLine(o.ID_Banco, curOf(o.ID_Banco) === 'USD' ? o.Monto_Moneda : o.Total, FORM && FORM.rec), hint: 'Solo retiros de cajero o retiro sin tarjeta: el dinero pasa a tu efectivo. Pagos y transferencias a otros se registran como gasto.', opts: () => bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), def: () => lsGet('bank_ret') ?? (bancos()[0] || {}).ID_Banco ?? ''},
@@ -1522,10 +1544,11 @@ const FORMS = {
   Movimientos_Banco: {t: 'movimiento de banco', perm: 'bancos.editar', needsMes: 1, fields: [
     {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Transferencia', 'Transferencia entre cuentas'], ['Ajuste', 'Ajuste de saldo']], def: 'Transferencia'},
     {k: 'Fecha', l: 'Fecha y hora', ty: 'datetime', req: 1, def: nowDT},
-    {k: 'ID_Banco_Origen', l: 'Desde', ty: 'select', half: 1, num: 1, live: o => o.Tipo === 'Transferencia' ? saldoLine(o.ID_Banco_Origen, o.Monto, null) : '', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano']], def: () => (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Transferencia'},
+    {k: 'ID_Banco_Origen', l: 'Desde', ty: 'select', half: 1, num: 1, live: o => o.Tipo === 'Transferencia' ? saldoLine(o.ID_Banco_Origen, o.Monto, movAdj()) : '', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano']], def: () => (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Transferencia'},
     {k: 'ID_Banco_Destino', l: 'Hacia', ty: 'select', half: 1, num: 1, opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano']], def: () => (bancos()[1] || bancos()[0] || {}).ID_Banco},
     {k: 'Monto', l: 'Monto', ty: 'number', req: 1, step: '0.01', half: 1},
     {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: () => tcFor(S.mes), hint: tcHint, show: o => o.Tipo === 'Transferencia' && curOf(o.ID_Banco_Origen) !== curOf(o.ID_Banco_Destino)},
+    {k: 'Cuenta_Gastos', l: 'Registrar el gasto en la cuenta', ty: 'select', opts: () => optsCuentas(true), def: () => defaultGastoCuenta(), fillEmpty: 1, show: isBuyUsd, hint: 'Los córdobas que pasan a dólares salen de lo que puedes gastar, por eso se registran como gasto.'},
     {k: 'Descripcion', l: 'Nota', ty: 'text'}],
     label: o => ({Monto: 'Monto (' + (curOf(o.Tipo === 'Transferencia' ? o.ID_Banco_Origen : o.ID_Banco_Destino) === 'USD' ? 'US$' : 'C$') + ')' + (o.Tipo === 'Ajuste' ? ', negativo para restar' : ''), ID_Banco_Destino: o.Tipo === 'Transferencia' ? 'Hacia' : 'Cuenta'}),
     preview: o => { const m = Number(o.Monto) || 0; if (!m) return '';
@@ -1533,11 +1556,17 @@ const FORMS = {
       if (o.Tipo === 'Depósito') return curOf(o.ID_Banco_Destino) === 'NIO' ? `Entran ${money(m)} a ${esc(bankName(o.ID_Banco_Destino))} y se registra como ingreso del mes.` : `Entran ${usd(m)} a ${esc(bankName(o.ID_Banco_Destino))}. Los dólares cuentan como ingreso cuando los conviertes a córdobas.`;
       const co = curOf(o.ID_Banco_Origen), cd = curOf(o.ID_Banco_Destino), tc = Number(o.Tipo_Cambio) || 0;
       const dest = co === cd ? m : co === 'USD' ? m * tc : (tc ? m / tc : 0);
-      return `Sale ${fcur(m, co)} de ${esc(bankName(o.ID_Banco_Origen))} y entra ${fcur(dest, cd)} a ${esc(bankName(o.ID_Banco_Destino))}.` + (co !== cd ? ' Es un cambio de moneda entre tus cuentas: no es ingreso ni gasto.' : ''); },
-    validate: o => o.Tipo === 'Transferencia' && String(o.ID_Banco_Origen) === String(o.ID_Banco_Destino) ? 'Elige dos cuentas distintas' : (o.Tipo !== 'Ajuste' && Number(o.Monto) <= 0 ? 'El monto debe ser mayor que cero' : ''),
+      return `Sale ${fcur(m, co)} de ${esc(bankName(o.ID_Banco_Origen))} y entra ${fcur(dest, cd)} a ${esc(bankName(o.ID_Banco_Destino))}.`
+        + (isBuyUsd(o) ? ` Se registra también como <b>gasto de ${money(m)}</b> en ${esc(cuentaNombre(o.Cuenta_Gastos))}.` : co === 'USD' && cd !== 'USD' ? ' Es un cambio de dólares a córdobas entre tus cuentas: no se registra como ingreso.' : ''); },
+    validate: o => {
+      if (o.Tipo === 'Transferencia' && String(o.ID_Banco_Origen) === String(o.ID_Banco_Destino)) return 'Elige dos cuentas distintas';
+      if (o.Tipo !== 'Ajuste' && Number(o.Monto) <= 0) return 'El monto debe ser mayor que cero';
+      if (o.Tipo === 'Transferencia' && saldosConfigurados()) { const a = availOf(o.ID_Banco_Origen, movAdj()); if (Number(o.Monto) > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)} y la transferencia es de ${fcur(Number(o.Monto), a.cur)}`; }
+      return ''; },
     before: o => { const co = o.Tipo === 'Transferencia' ? curOf(o.ID_Banco_Origen) : curOf(o.ID_Banco_Destino), cd = curOf(o.ID_Banco_Destino), m = Number(o.Monto) || 0, tc = Number(o.Tipo_Cambio) || 0;
       if (o.Tipo !== 'Transferencia') o.ID_Banco_Origen = '';
       if (!(o.Tipo === 'Transferencia' && co !== cd)) o.Tipo_Cambio = '';
+      if (!isBuyUsd(o)) o.Cuenta_Gastos = ''; else if (!o.Cuenta_Gastos) o.Cuenta_Gastos = defaultGastoCuenta();
       o.Moneda = co; o.Monto_Destino = r2(co === cd ? m : co === 'USD' ? m * tc : m / tc); o.Monto_C = r2(co === 'USD' ? m * (tc || lastTC()) : m); },
     after: o => { if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); }},
   Bancos: {t: 'cuenta de banco', g: 'a', perm: 'catalogos.editar', fields: [
@@ -1610,10 +1639,11 @@ function openForm(table, id) {
   const F = FORMS[table]; if (!F) return;
   const k = DB.key(table);
   const rec = id !== undefined && id !== null ? DB.t[table].find(r => String(r[k]) === String(id)) : null;
-  const auto = (table === 'Ingresos_Detalle' || table === 'Retiros_Detalle') && rec && rec.Origen;
+  const auto = (table === 'Ingresos_Detalle' || table === 'Retiros_Detalle' || table === 'Gastos_Detalle') && rec && rec.Origen;
   const ro = (F.mod && !canEdit(F.mod)) || (F.perm && !can(F.perm)) || !!auto;
   const o = rec ? Object.assign({}, rec) : {};
   if (!rec) F.fields.forEach(f => { if (f.def !== undefined) o[f.k] = typeof f.def === 'function' ? f.def() : f.def; });
+  else F.fields.forEach(f => { if (f.fillEmpty && (o[f.k] === '' || o[f.k] === undefined) && f.def !== undefined) o[f.k] = typeof f.def === 'function' ? f.def() : f.def; });
   FORM = {table, rec, o, F};
   const fieldHtml = f => {
     const v = o[f.k] ?? '', dis = ro || (rec && f.keyEdit) || f.auto ? 'disabled' : '', idf = 'f_' + f.k;
@@ -1629,7 +1659,7 @@ function openForm(table, id) {
   const title = (rec ? (ro ? 'Ver ' : 'Editar ') : (F.g === 'a' ? 'Nueva ' : 'Nuevo ')) + F.t;
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="frm" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <h4>${esc(title)}${REL[table] ? ` <span class="pill">${esc(mesLabel(S.mes))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
-    ${auto ? (table === 'Retiros_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Retiro automático por un gasto pagado con tarjeta de débito. Se cambia desde el gasto.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el gasto</button></div>`
+    ${auto ? (table === 'Gastos_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Gasto automático por una transferencia a la cuenta en dólares. Se cambia desde la transferencia.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir la transferencia</button></div>` : table === 'Retiros_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Retiro automático por un gasto pagado con tarjeta de débito. Se cambia desde el gasto.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el gasto</button></div>`
       : `<div class="notice info" style="margin-top:0"><span>Ingreso automático por una conversión de dólares. Se cambia desde el movimiento que lo generó.</span>${/^(RET|MOV):/.test(rec.Origen) ? `<button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el origen</button>` : ''}</div>`) : ro ? '<div class="notice" style="margin-top:0">Solo lectura: período cerrado o sin permiso.</div>' : ''}
     ${(() => { if (!rec || !REL[table] || auto) return '';
       const cur = recPeriod(table, rec), mod = REL[table].mod, tg = periodos().filter(p => truthy(p[mod]) && p.Mes_Anio !== cur).map(p => p.Mes_Anio);
@@ -1938,6 +1968,8 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'usd-dep') { openForm('Ingresos_Detalle'); const sel = $('#f_ID_Banco'); if (sel) { sel.value = S.banco; formDynamics(); } return; }
+  if (a === 'usd-buy') { openForm('Movimientos_Banco'); const o = bancos().find(b => b.Moneda === 'NIO'); if ($('#f_ID_Banco_Origen') && o) $('#f_ID_Banco_Origen').value = o.ID_Banco; if ($('#f_ID_Banco_Destino')) $('#f_ID_Banco_Destino').value = S.banco; formDynamics(); return; }
   if (a === 'move-period') {
     const tb = FORM.table, rec = FORM.rec, to = t.dataset.to, rel = REL[tb], k = DB.key(tb);
     if (!confirm(`¿Mover este registro a ${mesLabel(to)}?`)) return;

@@ -116,6 +116,13 @@ El dinero se lleva como en la realidad, por **cuenta**: Avanz Córdobas, BAC Có
 
 **Saldo disponible al registrar:** en los formularios de retiro, gasto y transferencia, debajo de la cuenta aparece el **saldo disponible** y cuánto quedaría con el monto escrito (en US$ para la cuenta en dólares; el efectivo en mano para gastos en efectivo). Un retiro o una transferencia que supera el saldo no se puede guardar. Mientras no escribas los saldos actuales, solo se muestra el saldo sin bloquear.
 
+## Cuenta en dólares: comprar y depositar
+
+- **Comprar dólares** (transferir de una cuenta en córdobas, o del efectivo, a *BAC Dólares*): en *Bancos → BAC Dólares → Comprar dólares* (o *Transferir entre cuentas*) eliges la cuenta de origen, el monto en córdobas y el tipo de cambio. Baja la cuenta de córdobas, suben los dólares y, como ese dinero sale de lo que puedes gastar, se registra **también como gasto** en la cuenta que elijas (por defecto *Ahorros*), en el período activo. Ese gasto queda ligado a la transferencia: se edita o se elimina desde ella.
+- **Depositar dólares recibidos** (por ejemplo, te pagan en dólares en efectivo y los depositas): en *Bancos → BAC Dólares → Depositar dólares recibidos* o en *Registrar ingreso → Depositado en: BAC Dólares*. Escribes los US$ y el tipo de cambio; suben los dólares de la cuenta y cuenta como ingreso por su equivalente en córdobas. No cambia lo que tienes en córdobas ni en efectivo.
+- Pasar de dólares a córdobas (retiro o transferencia desde la cuenta en dólares) mueve el saldo pero **no** se registra como ingreso.
+- Las transferencias que superan el saldo de la cuenta de origen no se pueden guardar (una vez escritos los saldos actuales).
+
 ## Qué controlan los períodos
 
 Los períodos (del 20 al 19) solo agrupan **gastos y presupuesto**: los sobres, lo gastado contra lo presupuestado y los cortes. **Ingresos y retiros** no se abren ni se cierran por período: cada uno se asigna solo al período que corresponde a su fecha, así el resumen de un período muestra los ingresos y retiros que hubo entre sus fechas.
