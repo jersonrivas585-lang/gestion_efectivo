@@ -415,7 +415,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.21-1640';
+const APP_VERSION = '2026.10.21-1711';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1385,6 +1385,7 @@ function showFuelResult(r, fromList) {
       <div class="fig"><small>Precio por litro</small><b class="num">${c.precio ? money(c.precio) : '—'}</b></div>
       <div class="fig"><small>Costo por km</small><b class="num">${c.costo && c.km ? money(c.costo / c.km) : '—'}</b></div></div>
     <p class="muted" style="font-size:12.5px;margin:10px 0 0">Odómetro ${NF0.format(r.Horometro_Km)} km. ${truthy(r.Full) ? 'Tanque lleno.' : 'Llenado parcial: el rendimiento puede variar.'} El costo no se registra en Gastos.</p>
+    ${truthy(r.Aditivo) ? '<p style="margin:8px 0 0"><span class="pill warn">Se agregó aditivo</span></p>' : ''}${r.Nota ? `<p class="muted" style="margin:8px 0 0;font-size:13.5px">Nota: ${esc(r.Nota)}</p>` : ''}
     <div class="actions"><span class="spacer"></span>${fromList && can('combustible.editar') && !isTmp(r.ID) ? `<button type="button" class="btn" data-act="fuel-edit" data-fid="${r.ID}">Editar</button>` : ''}<button type="button" class="btn primary" data-close="1">Listo</button></div>
   </div></div>`;
   S.fuelShown = {r, fromList};
@@ -1412,6 +1413,8 @@ V.combustible = () => {
     <div class="fig"><small>Cargado en el mes</small><b class="num">${NF.format(sum(mRows, 'Litro'))} L<span class="sub">${NF.format(sum(mRows, 'Litro') / GL_L)} GL</span></b></div>
     <div class="fig"><small>Costo por km</small><b class="num">${cpk ? money(cpk) : '—'}</b></div>
   </div>
+  ${(() => { const a = rows.filter(r => truthy(r.Aditivo)).pop(); if (!a) return ''; const dias = Math.floor((Date.now() - new Date(String(a.Fecha).slice(0, 10) + 'T00:00:00').getTime()) / 864e5);
+    return `<p style="font-size:13.5px;margin:10px 2px 0"><span class="pill warn">Aditivo</span> Último aditivo: <b>${fdate(a.Fecha)}</b>${dias === 0 ? ' (hoy)' : dias > 0 ? ` (hace ${dias} ${dias === 1 ? 'día' : 'días'})` : ''}${a.Nota ? `. ${esc(a.Nota)}` : ''}</p>`; })()}
   <p class="muted" style="font-size:12.5px;margin:8px 2px 0">El costo del combustible se lleva aparte y no se suma a Gastos, porque se paga con tarjeta de crédito.</p>
   ${(() => { const sin = rows.filter(r => !(Number(r.Precio_Litro) > 0)); return sin.length && can('combustible.editar') ? `<div class="notice"><span>${sin.length} llenados no tienen precio por litro, así que no tienen costo.</span><button class="btn small" data-act="fuel-price">Completar precio</button></div>` : ''; })()}
   <section class="section"><h3>Rendimiento <small>últimos 30 llenados</small>
@@ -1421,7 +1424,7 @@ V.combustible = () => {
   <div class="toolbar"><span class="muted">${rows.length} llenados</span><span class="spacer"></span>${can('combustible.editar') ? '<button class="btn primary desk-only" data-new="Consumo_Combustible">Registrar llenado</button>' : ''}</div>
   <div class="list">${rows.slice().reverse().slice(0, 300).map(r => `<button class="item ${r._pending ? 'pending' : ''}" data-fuel="${r.ID}">
     <span class="tx"><b>${fdatetime(r.Fecha)}</b>
-      <small>Odómetro ${NF0.format(r.Horometro_Km)} km, ${Number(r.Litro).toFixed(3)} L (${(Number(r.Galon) || Number(r.Litro) / GL_L).toFixed(3)} GL)${truthy(r.Full) ? '' : ', parcial'}</small>${Number(r.Km_Recorrido) > 0 ? `<small>${r.Km_Recorrido} km recorridos</small>` : ''}${Number(r.Costo) ? `<small>Costo: ${money(r.Costo)} (${money(r.Precio_Litro)} por litro)</small>` : ''}</span>
+      <small>Odómetro ${NF0.format(r.Horometro_Km)} km, ${Number(r.Litro).toFixed(3)} L (${(Number(r.Galon) || Number(r.Litro) / GL_L).toFixed(3)} GL)${truthy(r.Full) ? '' : ', parcial'}</small>${Number(r.Km_Recorrido) > 0 ? `<small>${r.Km_Recorrido} km recorridos</small>` : ''}${Number(r.Costo) ? `<small>Costo: ${money(r.Costo)} (${money(r.Precio_Litro)} por litro)</small>` : ''}${truthy(r.Aditivo) ? '<small><span class="pill warn">Aditivo</span></small>' : ''}${r.Nota ? `<small style="white-space:normal">${esc(r.Nota)}</small>` : ''}</span>
     <span class="amt num">${Number(r.km_litros) > 0 ? perf(r, 'L').toFixed(2) : '—'}<small>km/L</small>${Number(r.km_litros) > 0 ? `<small class="g">${perf(r, 'GL').toFixed(2)} km/GL</small>` : ''}</span></button>`).join('')}</div>`;
 };
 
@@ -1646,7 +1649,9 @@ const FORMS = {
     {k: 'UM', l: 'Unidad', ty: 'select', opts: () => [['LT', 'Litros'], ['GL', 'Galones']], def: 'LT', half: 1},
     {k: 'Precio_Litro', l: 'Precio por litro (C$)', ty: 'number', step: 'any', half: 1, def: () => lastFuelPrice()},
     {k: 'Costo', l: 'Total pagado (C$)', ty: 'number', step: '0.01', half: 1, hint: 'Opcional: si lo escribes, se calcula el precio por litro'},
-    {k: 'Full', l: 'Tanque lleno', ty: 'bool', def: true}],
+    {k: 'Full', l: 'Tanque lleno', ty: 'bool', def: true},
+    {k: 'Aditivo', l: 'Se agregó aditivo de combustible', ty: 'bool', def: false},
+    {k: 'Nota', l: 'Nota (opcional)', ty: 'text'}],
     preview: o => { const c = fuelCalc(o); if (!Number(o.Cantidad)) return '';
       return (c.km > 0 ? `Recorriste ${NF0.format(c.km)} km con ${c.litros.toFixed(3)} litros (${c.galones.toFixed(3)} galones): <b>${c.kml.toFixed(2)} km/L</b> y <b>${c.kmg.toFixed(2)} km/GL</b>.` : 'Primer llenado registrado: el rendimiento se calcula desde el próximo.') +
         (c.costo ? ` Costo ${money(c.costo)} (${money(c.precio)} por litro).` : '') + ' No se registra como gasto.'; },
