@@ -105,7 +105,7 @@ Al agregar una cuenta en *Catálogos → Cuentas* el código se asigna solo: el 
 
 El dinero se lleva como en la realidad, por **cuenta**: Avanz Córdobas, BAC Córdobas, BAC Dólares y **Efectivo en mano**. Los saldos no dependen del período.
 
-- **Saldos actuales:** la primera vez, en *Inicio* o *Bancos*, usa **Escribir saldos actuales**: lo que tienes ahora en cada cuenta (míralo en la app del banco) y el efectivo. Desde ese momento la app suma y resta sola. Puedes **Ajustar saldos actuales** cuando quieras, por ejemplo al conciliar con el banco. Los ingresos «Saldo de Mes Anterior» que se habían registrado ya no hacen falta: la misma ventana ofrece quitarlos.
+- **Saldos actuales:** la primera vez, en *Inicio* o *Bancos*, usa **Escribir saldos actuales**: lo que tienes ahora en cada cuenta (míralo en la app del banco) y el efectivo. Desde ese momento la app suma y resta sola. Puedes **Ajustar saldos actuales** cuando quieras, por ejemplo al conciliar con el banco. Los ingresos «Saldo de Mes Anterior» que registraste con la app en octubre ya no hacen falta: la misma ventana ofrece quitarlos (solo esos; los de Access no se tocan). Si una versión anterior alcanzó a borrar alguno de Access, el servidor los restaura solo, o en la hoja con *Efectivo → Restaurar saldos de Access borrados*.
 - **Qué mueve cada cuenta:**
   - *Ingreso:* sube la cuenta donde se depositó (o el efectivo).
   - *Retiro:* solo retiro de cajero o retiro sin tarjeta; baja la cuenta y sube el efectivo.

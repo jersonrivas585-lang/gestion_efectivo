@@ -406,7 +406,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.21-1113';
+const APP_VERSION = '2026.10.21-1338';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -600,6 +600,7 @@ function ledger(bid) {
 }
 function cashLedger() {
   const e = empresa(), start = dtKey(e.Fecha_Efectivo_Inicial), out = [];
+  if (!start) return {rows: [], saldo: 0, inicial: 0, start: ''};
   const add = (fecha, desc, amt, src, tipo) => { if (after(fecha, start)) out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo}); };
   DB.t.Ingresos_Detalle.filter(r => noBank(r) && !r.Origen && !isCarry(r)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Total) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, 'Ingreso en efectivo'));
   DB.t.Retiros_Detalle.filter(r => !r.Origen).forEach(r => add(r.Fecha_Retiro, r.Movimiento + (banco(r.ID_Banco) ? ' (' + bankName(r.ID_Banco) + ')' : ''), Number(r.Total) || 0, {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, 'Retiro de efectivo'));
@@ -749,6 +750,7 @@ const Demo = {
     return ch;
   },
   repair() { return {report: []}; },
+  removeMany(p) { const ch = {upserts: {}, deletes: {}}; p.ids.forEach(id => { const c = this.remove({table: p.table, id}); Object.entries(c.deletes).forEach(([t, v]) => (ch.deletes[t] = (ch.deletes[t] || []).concat(v))); Object.entries(c.upserts).forEach(([t, v]) => (ch.upserts[t] = (ch.upserts[t] || []).concat(v))); }); return ch; },
   updateMany(p) { const ch = {upserts: {}, deletes: {}}; p.rows.forEach(r => this._add(ch, p.table, this._upsert(p.table, Object.assign({}, DB.t[p.table].find(x => String(x[DB.key(p.table)]) === String(r[DB.key(p.table)])), r)))); return ch; },
   sync() { return {seq: 0, changes: []}; },
   saveMany(p) {
@@ -964,7 +966,7 @@ const V = {};
  */
 /** Fecha desde la que se usan cuentas de banco (la más antigua de Bancos → Fecha del saldo inicial) */
 /** Registrado con esta app (y no traído de Access): tiene banco, efectivo marcado (0) o fecha de registro con hora */
-const isNew = r => r.ID_Banco === 0 || String(r.ID_Banco) === '0' || !!banco(r.ID_Banco) || /\d{2}:\d{2}/.test(String(r.Fecha_Registro || ''));
+const isNew = r => r.ID_Banco === 0 || String(r.ID_Banco) === '0' || !!banco(r.ID_Banco) || r.Observaciones === 'Apertura del período';
 /** Movimientos hechos con la app dentro de un período (candidatos a pertenecer al período siguiente) */
 function newRowsIn(mes) {
   const out = [];
@@ -984,7 +986,7 @@ function disponible() {
 /** Saldos actuales de cada cuenta y del efectivo: punto de partida de los saldos (se puede volver a ajustar) */
 function openSaldos() {
   if (!can('catalogos.editar') && Backend.online) return toast('Solo un administrador o supervisor puede ajustar los saldos', true);
-  const D = disponible(), carry = DB.t.Ingresos_Detalle.filter(r => isCarry(r) && isNew(r) && !isTmp(r.ID_DetIngresos));
+  const D = disponible(), carry = DB.t.Ingresos_Detalle.filter(r => isCarry(r) && isNew(r) && !isTmp(r.ID_DetIngresos) && String(r.Fecha_Registro || '').slice(0, 10) >= '2026-10-01');
   const fila = (id, nombre, cur, v) => `<div class="field half"><label for="sv_${id}">${esc(nombre)}${cur === 'USD' ? ' (US$)' : ''}</label><input class="input" id="sv_${id}" type="number" step="0.01" inputmode="decimal" value="${r2(v)}"></div>`;
   sheetModal('frmSaldos', 'Saldos actuales', `
     <p style="margin:0 0 12px">Escribe lo que tienes <b>ahora</b> en cada cuenta (míralo en la app del banco) y el efectivo que tienes en mano. Desde ese momento la app suma y resta sola: ingresos, retiros de cajero, gastos y transferencias.</p>
@@ -2012,7 +2014,7 @@ document.addEventListener('submit', e => {
     try {
       commit(await Q.run(() => Backend.call('updateMany', {table: 'Bancos', rows})));
       commit(await Q.run(() => Backend.call('save', {table: 'Empresa', row: {Empresa: e0.Empresa, Efectivo_Inicial: r2(Number($('#sv_ef').value) || 0), Fecha_Efectivo_Inicial: fecha, Inicio_App: e0.Inicio_App || d}})));
-      for (const r of carry) commit(await Q.run(() => Backend.call('remove', {table: 'Ingresos_Detalle', id: r.ID_DetIngresos})));
+      if (carry.length) commit(await Q.run(() => Backend.call('removeMany', {table: 'Ingresos_Detalle', ids: carry.map(r => r.ID_DetIngresos)})));
       closeModal(); render(); toast('Saldos guardados' + (carry.length ? ' y ' + carry.length + ' saldos de apertura quitados' : ''));
     } catch (err) { b.disabled = false; b.textContent = 'Guardar saldos'; toast(err.message, true); }
   })();
