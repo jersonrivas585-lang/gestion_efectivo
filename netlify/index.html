@@ -202,6 +202,7 @@ table.t th{background:var(--sunk);font-weight:600;color:var(--ink2);position:sti
 table.t td.n,table.t th.n{text-align:right}
 table.t tbody tr{cursor:pointer}
 table.t tbody tr:hover{background:var(--sunk)}
+table.t tr.cur td{background:var(--teal-soft)}
 table.t tfoot td{font-weight:700;background:var(--sunk)}
 
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
@@ -282,7 +283,14 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .bankcard .bal{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
 .fpreview{grid-column:1 / -1;font-size:13.5px;background:var(--teal-soft);border-radius:9px;padding:9px 12px}
 .fpreview:empty{display:none}
+.fwarn{background:var(--sun-soft);border-radius:7px;padding:8px 10px;margin-top:6px}
+.fpreview > .fwarn:first-child{margin-top:0}
 .imp-err{color:var(--over);font-size:13px;margin:4px 0}
+.dtrow{display:flex;gap:8px;align-items:center}
+.dtrow .input{flex:1;min-width:0}
+.fuelfigs .fig b .sub,.fig b .sub{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-top:1px}
+.item .amt small.g{font-weight:600;color:var(--ink2)}
+.section > h3 .tabs .tab{padding:3px 10px;font-size:12.5px}
 .fuelres{text-align:center}
 .fuelres h4{text-align:left}
 .fuel-say{font-size:17px;margin:4px 0 8px;line-height:1.5}
@@ -381,6 +389,12 @@ const money = v => { v = r2(v); return (v < 0 ? '−' : '') + 'C$ ' + NF.format(
 const kfmt = v => { const a = Math.abs(v); return a >= 1000 ? (v/1000).toFixed(a >= 10000 ? 0 : 1) + 'k' : String(Math.round(v)); };
 const pad = n => String(n).padStart(2, '0');
 const todayISO = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); };
+const nowDT = () => { const d = new Date(); return todayISO() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+/** 'aaaa-mm-dd hh:mm[:ss]' o 'aaaa-mm-dd' → valor de <input type=datetime-local> */
+const toDTL = v => { const t = String(v || '').trim(); if (!t) return ''; const m = t.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/); return m ? m[1] + 'T' + (m[2] || '00:00') : ''; };
+const hasTime = v => { const m = String(v || '').match(/[ T](\d{2}):(\d{2})/); return !!m && (m[1] !== '00' || m[2] !== '00'); };
+const ftime = v => { const m = String(v).match(/[ T](\d{2}):(\d{2})/); if (!m) return ''; const d = new Date(2000, 0, 1, +m[1], +m[2]); return d.toLocaleTimeString('es-NI', {hour: 'numeric', minute: '2-digit'}); };
+const fdatetime = v => fdate(v) + (hasTime(v) ? ', ' + ftime(v) : '');
 const nowISO = () => { const d = new Date(); return todayISO() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); };
 const toDate = s => { if (!s) return null; const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : null; };
 const fdate = (s, o = {day:'numeric', month:'short', year:'numeric'}) => { const d = toDate(s); return d ? d.toLocaleDateString('es-NI', o) : ''; };
@@ -478,6 +492,24 @@ const consolidado = mes => {
   }));
 };
 const periodos = () => [...DB.t.Mes_Anio].sort((a, b) => a.ID - b.ID);
+/* Ciclo del período: empieza el día de pago (20) y termina el día anterior del mes siguiente */
+const diaInicio = () => { const v = Number(((DB.t.Empresa || [])[0] || {}).Dia_Inicio_Periodo); return v >= 1 && v <= 28 ? v : 20; };
+function periodRange(mes) {
+  const [n, y] = String(mes || '').split('-'), m = MESES.indexOf(n); if (m < 0) return null;
+  const D = diaInicio(), a = new Date(+y, m, D), b = new Date(+y, m + 1, D - 1);
+  const iso = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  return {desde: iso(a), hasta: iso(b), a, b};
+}
+const fshort = d => d.toLocaleDateString('es-NI', {day: 'numeric', month: 'short'});
+const rangeLabel = mes => { const r = periodRange(mes); return r ? `del ${fshort(r.a)} al ${fshort(r.b)}${r.a.getFullYear() !== r.b.getFullYear() ? ' de ' + r.b.getFullYear() : ''}` : ''; };
+/** Período al que corresponde una fecha según el día de inicio */
+function periodForDate(v) {
+  const d = toDate(v); if (!d) return '';
+  let m = d.getMonth(), y = d.getFullYear();
+  if (d.getDate() < diaInicio()) { m--; if (m < 0) { m = 11; y--; } }
+  return MESES[m] + '-' + y;
+}
+const DATE_FIELD = {Gastos_Detalle: 'Fecha', Retiros_Detalle: 'Fecha_Retiro', Ingresos_Detalle: 'Fecha_Registro'};
 /* Cuentas de banco */
 const TC_DEF = 36.6243;
 const bancos = (all) => (DB.t.Bancos || []).filter(b => all || truthy(b.Activa)).sort((a, b) => (Number(a.Orden) || 0) - (Number(b.Orden) || 0));
@@ -491,7 +523,7 @@ const lastTC = () => Number(lsGet('tc')) || TC_DEF;
 function ledger(bid) {
   const b = banco(bid); if (!b) return {rows: [], saldo: 0};
   const cur = b.Moneda, start = String(b.Fecha_Inicial || '').slice(0, 10), out = [];
-  const add = (fecha, desc, amt, src, extra) => { if (!start || String(fecha).slice(0, 10) >= start) out.push(Object.assign({fecha: String(fecha).slice(0, 10), desc, amt: r2(amt), src}, extra || {})); };
+  const add = (fecha, desc, amt, src, extra) => { if (!start || String(fecha).slice(0, 10) >= start) out.push(Object.assign({fecha: dtKey(fecha), desc, amt: r2(amt), src}, extra || {})); };
   const ing = {}; DB.t.Ingresos.forEach(h => ing[h.ID_Ingresos] = h.Mes_Anio);
   if (cur === 'NIO') DB.t.Ingresos_Detalle.filter(r => String(r.ID_Banco) === String(bid)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Total) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, {tipo: 'Ingreso'}));
   DB.t.Retiros_Detalle.filter(r => String(r.ID_Banco) === String(bid)).forEach(r => add(r.Fecha_Retiro, r.Movimiento, -(cur === 'USD' ? Number(r.Monto_Moneda) || 0 : Number(r.Total) || 0), {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, {tipo: 'Retiro', alt: cur === 'USD' ? money(r.Total) : ''}));
@@ -580,7 +612,7 @@ const Demo = {
     const key = table === 'Retiros_Detalle' ? 'Id_DetRetiros' : 'ID_Mov';
     let need = false, mes = '', total = 0, bid = '', desc = '', fecha = todayISO();
     if (table === 'Retiros_Detalle') { const b = banco(saved.ID_Banco); if (b && b.Moneda === 'USD') { need = true; total = Number(saved.Total) || 0; bid = b.ID_Banco; fecha = saved.Fecha_Retiro || fecha;
-      desc = 'Retiro de ' + b.Nombre + ': ' + usd(saved.Monto_Moneda) + ' a T/C ' + saved.Tipo_Cambio; const h = DB.t.Retiros.find(x => String(x.Id_Retiros) === String(saved.Id_Retiros)); mes = h ? h.Mes_Anio : ''; } }
+      desc = (String(saved.Origen || '').startsWith('GAS:') ? 'Compra con débito ' : 'Retiro de ') + b.Nombre + ': ' + usd(saved.Monto_Moneda) + ' a T/C ' + saved.Tipo_Cambio; const h = DB.t.Retiros.find(x => String(x.Id_Retiros) === String(saved.Id_Retiros)); mes = h ? h.Mes_Anio : ''; } }
     else { const o = banco(saved.ID_Banco_Origen), d = banco(saved.ID_Banco_Destino);
       if (d && d.Moneda === 'NIO' && (saved.Tipo === 'Depósito' || (saved.Tipo === 'Transferencia' && o && o.Moneda === 'USD'))) { need = true; total = Number(saved.Monto_Destino) || 0; bid = d.ID_Banco; mes = saved.Mes_Anio; fecha = saved.Fecha || fecha;
         desc = saved.Tipo === 'Depósito' ? 'Depósito en ' + d.Nombre + (saved.Descripcion ? ': ' + saved.Descripcion : '') : 'Cambio de ' + usd(saved.Monto) + ' (' + o.Nombre + ' a ' + d.Nombre + ', T/C ' + saved.Tipo_Cambio + ')'; } }
@@ -599,14 +631,26 @@ const Demo = {
     const rel = REL[table]; if (rel) this._add(ch, rel.header, this._recalc(table, old[rel.fk]));
     return old;
   },
-  _guard(table, id) { if (table !== 'Ingresos_Detalle' || !id) return; const r = DB.t.Ingresos_Detalle.find(x => String(x.ID_DetIngresos) === String(id)); if (r && r.Origen) throw new Error('Este ingreso se generó desde un retiro o una transferencia en dólares. Edítalo desde allí.'); },
+  _guard(table, id) { if ((table !== 'Ingresos_Detalle' && table !== 'Retiros_Detalle') || !id) return; const k = DB.key(table); const r = DB.t[table].find(x => String(x[k]) === String(id)); if (r && r.Origen) throw new Error(table === 'Retiros_Detalle' ? 'Este retiro se generó desde un gasto pagado con débito. Edítalo desde el gasto.' : 'Este ingreso se generó desde un retiro o una transferencia en dólares. Edítalo desde allí.'); },
   save(p) {
     try { this._guard(p.table, (p.row || {})[DB.key(p.table)]); } catch (e) { return {error: e.message}; }
     const ch = {upserts: {}, deletes: {}}; const row = Object.assign({}, p.row);
     if (p.table === 'Movimientos_Banco') { row.Usuario = 'demo'; row.Fecha_Registro = row.Fecha_Registro || todayISO(); if (p.mes) row.Mes_Anio = p.mes; }
     const saved = this._saveDet(p.table, row, p.mes, ch);
     if (p.table === 'Retiros_Detalle' || p.table === 'Movimientos_Banco') this._sync(p.table, saved, ch);
+    if (p.table === 'Gastos_Detalle') this._syncGasto(saved, ch);
     return ch;
+  },
+  _syncGasto(g, ch) {
+    const b = banco(g.ID_Banco), ex = g.ID_Retiro_Auto, exists = ex && DB.t.Retiros_Detalle.some(x => String(x.Id_DetRetiros) === String(ex));
+    if (b) {
+      const h = DB.t.Gastos.find(x => String(x.ID_Gastos) === String(g.ID_Gastos)); if (!h) return;
+      const u = b.Moneda === 'USD';
+      const row = {Fecha_Retiro: g.Fecha, Movimiento: 'Pago con tarjeta de débito: ' + g.Descripcion_Gasto, Total: Number(g.Total) || 0, ID_Banco: b.ID_Banco, Monto_Moneda: u ? g.Monto_Moneda : '', Tipo_Cambio: u ? g.Tipo_Cambio : '', Origen: 'GAS:' + g.ID_Detalle_Gastos};
+      if (exists) Object.assign(row, {Id_DetRetiros: ex, ID_Ingreso_Auto: DB.t.Retiros_Detalle.find(x => String(x.Id_DetRetiros) === String(ex)).ID_Ingreso_Auto});
+      const r = this._saveDet('Retiros_Detalle', row, h.Mes_Anio, ch); this._sync('Retiros_Detalle', r, ch);
+      if (String(ex) !== String(r.Id_DetRetiros)) this._add(ch, 'Gastos_Detalle', this._upsert('Gastos_Detalle', Object.assign({}, g, {ID_Retiro_Auto: r.Id_DetRetiros})));
+    } else if (ex) { const o = this._removeDet('Retiros_Detalle', ex, ch); if (o.ID_Ingreso_Auto) this._removeDet('Ingresos_Detalle', o.ID_Ingreso_Auto, ch); this._add(ch, 'Gastos_Detalle', this._upsert('Gastos_Detalle', Object.assign({}, g, {ID_Retiro_Auto: ''}))); }
   },
   replaceMany(p) {
     const rel = REL[p.table]; const hid = this._header(rel, p.mes)[rel.hkey];
@@ -630,6 +674,7 @@ const Demo = {
     let old = this._removeDet(p.table, p.id, ch);
     if (!old[DB.key(p.table)] && p.prev) { old = p.prev; ch.deletes[p.table] = [p.id]; const rel = REL[p.table]; if (rel) this._add(ch, rel.header, this._recalc(p.table, old[rel.fk])); }
     if (old.ID_Ingreso_Auto) this._removeDet('Ingresos_Detalle', old.ID_Ingreso_Auto, ch);
+    if (old.ID_Retiro_Auto) { const o = this._removeDet('Retiros_Detalle', old.ID_Retiro_Auto, ch); if (o.ID_Ingreso_Auto) this._removeDet('Ingresos_Detalle', o.ID_Ingreso_Auto, ch); }
     return ch;
   },
   saveResumen(p) {
@@ -751,6 +796,7 @@ function renderMonthPicker() {
   const ms = mesesConDatos();
   if (S.mes && !ms.includes(S.mes)) ms.push(S.mes);
   $('#mesSel').innerHTML = ms.slice().reverse().map(m => `<option value="${m}" ${m === S.mes ? 'selected' : ''}>${mesLabel(m)}</option>`).join('');
+  $('#mesSel').title = 'Período ' + rangeLabel(S.mes);
   $('#mp').style.display = VIEWS[S.view].mes ? '' : 'none';
 }
 function render() {
@@ -822,6 +868,7 @@ V.inicio = () => {
   return `
   <section class="hero">
     <h1 class="mtitle">${esc(mN)}<span class="yr">${esc(yN)} <span class="pill ${truthy(per.Abierta) ? 'open' : ''}" style="vertical-align:4px;margin-left:6px">${truthy(per.Abierta) ? 'Abierto' : 'Cerrado'}</span></span></h1>
+    <p class="muted" style="margin:8px 0 0">Período ${rangeLabel(S.mes)}</p>
     <p class="say">${say}</p>
     <div class="ledger" role="img" aria-label="Gastado ${money(t.G)} de ${money(t.I)}">
       <i class="sp" style="width:${spent / base * 100}%"></i><i class="ov" style="width:${over / base * 100}%"></i><i class="lf" style="width:${left / base * 100}%"></i>
@@ -879,7 +926,7 @@ V.gastos = () => {
   } else rows = detail('Gastos_Detalle', S.mes);
   if (S.cuenta) rows = rows.filter(r => r.Cuenta_Gastos === S.cuenta);
   if (q) rows = rows.filter(r => (String(r.Descripcion_Gasto) + ' ' + String(r.Descripcion_Adicional || '')).toLowerCase().includes(q));
-  const total = sum(rows), n = rows.length; const shown = rows.slice().sort((a, b) => String(b.Fecha).localeCompare(String(a.Fecha)) || b.ID_Detalle_Gastos - a.ID_Detalle_Gastos).slice(0, 400);
+  const total = sum(rows), n = rows.length; const shown = rows.slice().sort((a, b) => dtKey(b.Fecha).localeCompare(dtKey(a.Fecha)) || b.ID_Detalle_Gastos - a.ID_Detalle_Gastos).slice(0, 400);
   const ctas = DB.t.Cuentas.filter(c => truthy(c.Cuenta_de_Gastos));
   return `${S.all ? '' : lockNote('Gastos')}
   <div class="toolbar">
@@ -892,7 +939,7 @@ V.gastos = () => {
   ${S.all && !q && !S.cuenta ? '<div class="panel empty"><b>Busca en todo el historial</b>Escribe una descripción o elige una cuenta para buscar desde 2018.</div>' :
     n ? `<div class="list">${listGrouped(shown, 'Fecha', r => `
       <button class="item ${r._pending ? 'pending' : ''}" data-edit="Gastos_Detalle" data-id="${r.ID_Detalle_Gastos}">
-        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
+        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${hasTime(r.Fecha) ? ftime(r.Fecha) + ', ' : ''}${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.ID_Banco !== '' && r.ID_Banco !== undefined && banco(r.ID_Banco) ? ', débito ' + esc(bankName(r.ID_Banco)) + (Number(r.Monto_Moneda) ? ' ' + usd(r.Monto_Moneda) : '') : ''}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
         <span class="amt num">${money(r.Total)}${Number(r.Cantidad) > 1 ? `<small>${money(r.Precio_Unitario)} c/u</small>` : ''}</span>
       </button>`)}</div>` : `<div class="panel empty"><b>No hay gastos${q || S.cuenta ? ' con ese filtro' : ' en este mes'}</b>${canEdit('Gastos') ? 'Usa Registrar gasto para agregar el primero.' : ''}</div>`}`;
 };
@@ -911,9 +958,9 @@ V.retiros = () => {
   ${rows.length && bancos().length ? `<section class="section"><h3>Por cuenta de banco</h3><div class="panel" style="padding:4px 12px">${Object.entries(byBank).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="env" style="cursor:default"><span class="nm">${esc(bankName(k))}</span><div class="track"><div class="fill" style="width:${t.R ? v / t.R * 100 : 0}%"></div></div><span class="rest"><b class="num">${money(v)}</b></span></div>`).join('')}</div></section>` : ''}
   ${top.length ? `<section class="section"><h3>Por tipo de movimiento</h3><div class="panel" style="padding:4px 12px">${top.map(([m, v]) => `<div class="env" style="cursor:default"><span class="nm">${esc(m)}</span><div class="track"><div class="fill" style="width:${t.R ? v / t.R * 100 : 0}%;background:var(--sun)"></div></div><span class="rest"><b class="num">${money(v)}</b></span></div>`).join('')}</div></section>` : ''}
   <div class="toolbar"><span class="spacer"></span>${canEdit('Retiros') ? '<button class="btn primary desk-only" data-new="Retiros_Detalle">Registrar retiro</button>' : ''}</div>
-  ${rows.length ? `<div class="list">${listGrouped(rows.slice().sort((a, b) => b.Id_DetRetiros - a.Id_DetRetiros), 'Fecha_Retiro', r => `
+  ${rows.length ? `<div class="list">${listGrouped(rows.slice().sort((a, b) => dtKey(b.Fecha_Retiro).localeCompare(dtKey(a.Fecha_Retiro)) || b.Id_DetRetiros - a.Id_DetRetiros), 'Fecha_Retiro', r => `
     <button class="item" data-edit="Retiros_Detalle" data-id="${r.Id_DetRetiros}"><span class="dot" style="background:var(--sun)"></span>
-      <span class="tx"><b>${esc(r.Movimiento)}</b><small>${esc(bankName(r.ID_Banco))}${Number(r.Monto_Moneda) ? ', ' + usd(r.Monto_Moneda) + ' a ' + r.Tipo_Cambio : ''}</small></span><span class="amt num">${money(r.Total)}</span></button>`)}</div>`
+      <span class="tx"><b>${esc(r.Movimiento)}</b><small>${hasTime(r.Fecha_Retiro) ? ftime(r.Fecha_Retiro) + ', ' : ''}${esc(bankName(r.ID_Banco))}${Number(r.Monto_Moneda) ? ', ' + usd(r.Monto_Moneda) + ' a ' + r.Tipo_Cambio : ''}${r.Origen ? ', desde un gasto' : ''}</small></span><span class="amt num">${money(r.Total)}</span></button>`)}</div>`
     : '<div class="panel empty"><b>No hay retiros en este mes</b>Registra cada retiro de cajero, transferencia o pago con banca móvil.</div>'}`;
 };
 
@@ -928,7 +975,7 @@ V.ingresos = () => {
     <p class="muted" style="font-size:13px;margin:8px 2px 0">${Object.entries(byBank).filter(([k]) => k !== '').map(([k, v]) => esc(bankName(k)) + ': ' + money(v)).join('; ')}</p>` : ''}
   <div class="toolbar"><div class="sumline" style="margin:0;flex:1"><span>${rows.length} ingresos</span><b class="num">${money(sum(rows))}</b></div>${canEdit('Ingresos') ? '<button class="btn primary desk-only" data-new="Ingresos_Detalle">Registrar ingreso</button>' : ''}</div>
   ${rows.length ? `<div class="list">${rows.map(r => `<button class="item" data-edit="Ingresos_Detalle" data-id="${r.ID_DetIngresos}"><span class="dot" style="background:${r.Origen ? 'var(--teal)' : 'var(--good)'}"></span>
-    <span class="tx"><b>${esc(r.Descripcion)}</b><small>${esc(bankName(r.ID_Banco))}, ${fdate(r.Fecha_Registro)}${r.Origen ? ', automático' : r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num pos">${money(r.Total)}</span></button>`).join('')}</div>`
+    <span class="tx"><b>${esc(r.Descripcion)}</b><small>${esc(bankName(r.ID_Banco))}, ${fdatetime(r.Fecha_Registro)}${r.Origen ? ', automático' : r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num pos">${money(r.Total)}</span></button>`).join('')}</div>`
     : '<div class="panel empty"><b>No hay ingresos en este mes</b>Empieza por el salario y el saldo del mes anterior.</div>'}`;
 };
 
@@ -958,7 +1005,7 @@ V.bancos = () => {
   <section class="section"><h3>Movimientos de ${esc(cur.Nombre)} <small>${led.start ? 'desde ' + fdate(led.start) + ', saldo inicial ' + fcur(led.inicial, cur.Moneda) : ''}</small></h3>
     <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir entre cuentas</button><button class="btn" data-act="mov-dep">Depósito o ajuste</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `<button class="btn small" data-edit="Bancos" data-id="${cur.ID_Banco}">Saldo inicial y datos</button>` : ''}</div>
     ${shown.length ? `<div class="list">${shown.map(r => `<button class="item" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt >= 0 ? 'var(--good)' : 'var(--sun)'}"></span>
-      <span class="tx"><b>${esc(r.desc)}</b><small>${fdate(r.fecha)}, ${esc(r.tipo)}${r.alt ? ', ' + r.alt + ' en córdobas' : ''}</small></span>
+      <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)}${r.alt ? ', ' + r.alt + ' en córdobas' : ''}</small></span>
       <span class="amt num ${r.amt >= 0 ? 'pos' : ''}">${r.amt >= 0 ? '+' : ''}${fcur(r.amt, cur.Moneda)}<small>Saldo ${fcur(r.bal, cur.Moneda)}</small></span></button>`).join('')}</div>`
       : `<div class="panel empty"><b>Sin movimientos desde ${fdate(led.start) || 'el inicio'}</b>Los ingresos y retiros que asignes a esta cuenta aparecerán aquí.</div>`}</section>`;
 };
@@ -977,17 +1024,18 @@ V.presupuesto = () => {
     return {a, pr, lines, otros, tp: sum(pr), tg: sum(gr)};
   }).sort((x, y) => y.tp - x.tp);
   return `${lockNote('Presupuesto')}
+  <p class="muted" style="margin:12px 2px 0">Presupuesto de <b>${esc(mesLabel(S.mes))}</b>, período ${rangeLabel(S.mes)}.</p>
   <div class="figs three">
     <div class="fig"><small>Ingresos</small><b class="num">${money(ing)}</b></div>
     <div class="fig"><small>Presupuestado</small><b class="num">${money(tp)}</b></div>
     <div class="fig"><small>Sin asignar</small><b class="num ${ing - tp < 0 ? 'neg' : ''}">${money(ing - tp)}</b></div>
   </div>
   <div class="toolbar"><span class="spacer"></span>
-    <button class="btn" data-act="tpl-ppto">Descargar plantilla</button>
+${groups.length ? `    <button class="btn" data-act="tpl-ppto">Descargar plantilla</button>
     ${ed ? '<button class="btn" data-act="imp-ppto">Importar desde Excel</button>' : ''}
     ${ed && prevRows.length ? `<button class="btn" data-act="copiar-ppto">Copiar de ${esc(mesLabel(prev))}</button>` : ''}
     ${ed ? '<button class="btn primary desk-only" data-new="Presupuesto_Detalle">Agregar partida</button>' : ''}
-  </div>
+  ` : ''}</div>
   ${groups.length ? `<div class="list">${groups.map(g => `
     <div class="bgroup">
       <div class="bhead"><span class="t">${esc(cuentaNombre(g.a))}</span><span class="num ${g.tp - g.tg < 0 ? 'neg' : ''}" style="font-weight:700">${money(g.tp - g.tg)}</span>
@@ -996,7 +1044,12 @@ V.presupuesto = () => {
       ${g.lines.map(l => `<button class="bline" data-edit="Presupuesto_Detalle" data-id="${l.p.ID_DetPresupuesto}"><span>${esc(l.p.Descripcion)}${Number(l.p.Cantidad) > 1 ? ` <span class="muted">(${l.p.Cantidad} ${esc(l.p.UM)})</span>` : ''}</span><span class="num">${money(l.p.Total)}</span><span class="num ${l.g > l.p.Total ? 'neg' : ''}">${money(l.g)}</span></button>`).join('')}
       ${g.otros ? `<div class="bline ghost"><span>Otros gastos sin partida</span><span class="num">—</span><span class="num">${money(g.otros)}</span></div>` : ''}
     </div>`).join('')}</div>`
-    : `<div class="panel empty"><b>Este mes no tiene presupuesto</b>${ed && prevRows.length ? `Copia las ${prevRows.length} partidas de ${esc(mesLabel(prev))} y ajusta lo que cambie.` : 'Agrega una partida por cada compromiso del mes.'}</div>`}`;
+    : `<div class="panel empty"><b>${esc(mesLabel(S.mes))} todavía no tiene presupuesto</b>Período ${rangeLabel(S.mes)}. ${ed ? 'Elige cómo cargarlo:' : 'El período está cerrado o no tienes permiso para editar el presupuesto.'}
+      ${ed ? `<div class="row" style="justify-content:center;margin-top:14px">
+        <button class="btn primary" data-act="imp-ppto">Importar desde Excel</button>
+        ${prevRows.length ? `<button class="btn" data-act="copiar-ppto">Copiar ${prevRows.length} partidas de ${esc(mesLabel(prev))}</button>` : ''}
+        <button class="btn" data-act="tpl-ppto">Descargar plantilla</button>
+        <button class="btn" data-new="Presupuesto_Detalle">Agregar partida</button></div>` : ''}</div>`}`;
 };
 
 V.mas = () => `<div class="grid-more" style="margin-top:14px">${MORE.map(v => `<button class="morecard" data-go="${v}">${ico(VIEWS[v].icon)}<span><b>${VIEWS[v].t}</b><small>${VIEWS[v].d}</small></span></button>`).join('')}</div>`;
@@ -1039,48 +1092,60 @@ V.cuenta = () => {
 };
 
 /* ---------- Combustible ---------- */
-const fuelRows = () => DB.t.Consumo_Combustible.slice().sort((a, b) => String(a.Fecha).localeCompare(String(b.Fecha)) || (Number(a.Horometro_Km) - Number(b.Horometro_Km)));
+const GL_L = 3.78541;
+const dtKey = v => String(v || '').replace('T', ' ').slice(0, 16);
+/* km/GL se deriva de km/L (1 galón = 3.78541 L) para que ambas cifras siempre coincidan, también en el historial de Access */
+const perf = (r, u) => { const l = Number(r.km_litros) || 0; return u === 'GL' ? l * GL_L : l; };
+const fuelUnit = () => S.fuelUnit || lsGet('fuel_unit') || 'L';
+const uLabel = u => u === 'GL' ? 'km/GL' : 'km/L';
+const fuelRows = () => DB.t.Consumo_Combustible.slice().sort((a, b) => dtKey(a.Fecha).localeCompare(dtKey(b.Fecha)) || (Number(a.Horometro_Km) - Number(b.Horometro_Km)));
 const lastFuelPrice = () => { const r = fuelRows().filter(x => Number(x.Precio_Litro) > 0).pop(); return r ? Number(r.Precio_Litro) : (Number(lsGet('precio_litro')) || ''); };
 /** Recorrido desde el llenado anterior, litros, km/L y costo de un registro (nuevo o existente) */
 function fuelCalc(o) {
   const litros = Math.round((o.UM === 'GL' ? Number(o.Cantidad) * 3.78541 : Number(o.Cantidad) || 0) * 1000) / 1000;
-  const prev = fuelRows().filter(r => String(r.ID) !== String(o.ID) && Number(r.Horometro_Km) < Number(o.Horometro_Km) && String(r.Fecha).slice(0, 10) <= String(o.Fecha).slice(0, 10)).pop();
+  const when = dtKey(o.Fecha);
+  const prev = fuelRows().filter(r => String(r.ID) !== String(o.ID) && Number(r.Horometro_Km) < Number(o.Horometro_Km) && dtKey(r.Fecha) <= when).pop();
   const km = prev ? Math.round(Number(o.Horometro_Km) - Number(prev.Horometro_Km)) : 0;
   let precio = Number(o.Precio_Litro) || 0, costo = Number(o.Costo) || 0;
   // Manda el último campo de dinero que se tocó: el total pagado o el precio por litro
   const byTotal = costo && (!precio || (FORM && FORM.lastMoney === 'Costo'));
   if (litros && byTotal) precio = Math.round(costo / litros * 100) / 100;
   else if (litros && precio) costo = precio * litros;
-  return {litros, km, kml: litros && km ? km / litros : 0, precio, costo: r2(costo), prev, costoKm: km && costo ? costo / km : 0};
+  const galones = Math.round(litros / GL_L * 1000) / 1000, kml = litros && km ? km / litros : 0;
+  return {litros, galones, km, kml, kmg: kml * GL_L, precio, costo: r2(costo), prev, costoKm: km && costo ? costo / km : 0};
 }
-const fuelAvg = (excludeId, n = 10) => { const v = fuelRows().filter(r => Number(r.km_litros) > 0 && String(r.ID) !== String(excludeId)).slice(-n); return v.length ? v.reduce((a, r) => a + Number(r.km_litros), 0) / v.length : 0; };
+const fuelAvg = (excludeId, n = 10, u = 'L') => { const v = fuelRows().filter(r => Number(r.km_litros) > 0 && String(r.ID) !== String(excludeId)).slice(-n); return v.length ? v.reduce((a, r) => a + perf(r, u), 0) / v.length : 0; };
 /** Medidor original: aguja según el rendimiento comparado con el historial */
-function fuelGauge(kml) {
-  const hist = fuelRows().map(r => Number(r.km_litros)).filter(v => v > 0).slice(-30);
+function fuelGauge(kml, u = 'L') {
+  const hist = fuelRows().filter(r => Number(r.km_litros) > 0).map(r => perf(r, u)).slice(-30);
   const lo = Math.floor(Math.min(...hist, kml) * 0.95 * 2) / 2, hi = Math.ceil(Math.max(...hist, kml) * 1.05 * 2) / 2;
-  const avg = fuelAvg(null), t = Math.max(0, Math.min(1, (kml - lo) / ((hi - lo) || 1)));
+  const avg = fuelAvg(null, 10, u), t = Math.max(0, Math.min(1, (kml - lo) / ((hi - lo) || 1)));
   const ang = a => Math.PI * (1 - a), cx = 120, cy = 118, R = 92;
   const pt = (a, r) => [cx + r * Math.cos(ang(a)), cy - r * Math.sin(ang(a))];
   let ticks = ''; for (let i = 0; i <= 10; i++) { const [x1, y1] = pt(i / 10, R - (i % 5 ? 8 : 14)), [x2, y2] = pt(i / 10, R); ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--ink2)" stroke-width="${i % 5 ? 1.5 : 2.5}" stroke-linecap="round"/>`; }
   const arc = (a0, a1, col) => { const [x0, y0] = pt(a0, R + 9), [x1, y1] = pt(a1, R + 9); return `<path d="M${x0} ${y0} A${R + 9} ${R + 9} 0 0 1 ${x1} ${y1}" fill="none" stroke="${col}" stroke-width="7" stroke-linecap="round"/>`; };
   const ta = avg ? Math.max(0, Math.min(1, (avg - lo) / ((hi - lo) || 1))) : null;
   const [nx, ny] = pt(t, R - 22), [ax, ay] = ta !== null ? pt(ta, R + 18) : [0, 0];
-  return `<svg viewBox="0 0 240 150" class="gauge" role="img" aria-label="Rendimiento ${kml.toFixed(2)} km por litro">
+  return `<svg viewBox="0 0 240 150" class="gauge" role="img" aria-label="Rendimiento ${kml.toFixed(2)} ${uLabel(u)}">
     ${arc(0, 0.33, 'var(--over)')}${arc(0.36, 0.64, 'var(--sun)')}${arc(0.67, 1, 'var(--teal)')}${ticks}
-    ${ta !== null ? `<circle cx="${ax}" cy="${ay}" r="4" fill="var(--ink)"><title>Promedio ${avg.toFixed(2)} km/L</title></circle>` : ''}
+    ${ta !== null ? `<circle cx="${ax}" cy="${ay}" r="4" fill="var(--ink)"><title>Promedio ${avg.toFixed(2)} ${uLabel(u)}</title></circle>` : ''}
     <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="var(--over)" stroke-width="5" stroke-linecap="round"/>
     <circle cx="${cx}" cy="${cy}" r="11" fill="var(--ink)"/>
     <text x="${pt(0, R - 30)[0]}" y="${cy + 2}" text-anchor="middle" class="gl">${lo}</text><text x="${pt(1, R - 30)[0]}" y="${cy + 2}" text-anchor="middle" class="gl">${hi}</text>
   </svg>`;
 }
 function showFuelResult(r, fromList) {
-  const c = {km: Number(r.Km_Recorrido) || 0, litros: Number(r.Litro) || 0, kml: Number(r.km_litros) || 0, costo: Number(r.Costo) || 0, precio: Number(r.Precio_Litro) || 0};
-  const avg = fuelAvg(r.ID), diff = avg && c.kml ? (c.kml - avg) / avg * 100 : 0;
+  const u = fuelUnit();
+  const c = {km: Number(r.Km_Recorrido) || 0, litros: Number(r.Litro) || 0, galones: Number(r.Galon) || (Number(r.Litro) || 0) / GL_L, kml: perf(r, 'L'), kmg: perf(r, 'GL'), costo: Number(r.Costo) || 0, precio: Number(r.Precio_Litro) || 0};
+  const main = u === 'GL' ? c.kmg : c.kml, other = u === 'GL' ? c.kml : c.kmg;
+  const avg = fuelAvg(r.ID, 10, u), diff = avg && main ? (main - avg) / avg * 100 : 0;
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><div class="sheet fuelres" role="dialog" aria-modal="true" aria-label="Cálculo de rendimiento">
-    <h4>Rendimiento del llenado <span class="pill">${fdate(r.Fecha)}</span><button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
-    ${c.km > 0 ? `<p class="fuel-say">Manejaste <b>${NF0.format(c.km)} kilómetros</b>.<br>Usaste <b>${c.litros.toFixed(3)} litros</b>.</p>
-      <div class="fuel-kml num">${c.kml.toFixed(2)}<span>km/L</span></div>${fuelGauge(c.kml)}
-      ${avg ? `<p class="fuel-cmp ${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff).toFixed(1)}% ${diff >= 0 ? 'mejor' : 'menos'} que tu promedio de los últimos 10 llenados (${avg.toFixed(2)} km/L)</p>` : ''}`
+    <h4>Rendimiento del llenado <span class="pill">${fdatetime(r.Fecha)}</span><button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
+    ${c.km > 0 ? `<p class="fuel-say">Manejaste <b>${NF0.format(c.km)} kilómetros</b>.<br>Usaste <b>${c.litros.toFixed(3)} litros</b> (${c.galones.toFixed(3)} galones).</p>
+      <div class="tabs" style="justify-content:center;margin:6px 0 10px">${['L', 'GL'].map(x => `<button type="button" class="tab" data-funit="${x}" data-fres="1" aria-pressed="${u === x}">${uLabel(x)}</button>`).join('')}</div>
+      <div class="fuel-kml num">${main.toFixed(2)}<span>${uLabel(u)}</span></div>
+      <p class="muted" style="margin:6px 0 0;font-size:15px">${other.toFixed(2)} ${uLabel(u === 'GL' ? 'L' : 'GL')}</p>${fuelGauge(main, u)}
+      ${avg ? `<p class="fuel-cmp ${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff).toFixed(1)}% ${diff >= 0 ? 'mejor' : 'menos'} que tu promedio de los últimos 10 llenados (${avg.toFixed(2)} ${uLabel(u)})</p>` : ''}`
     : '<p class="fuel-say">Es el primer llenado registrado: el rendimiento se calcula a partir del siguiente.</p>'}
     <div class="figs three" style="margin-top:14px"><div class="fig"><small>Costo</small><b class="num">${c.costo ? money(c.costo) : '—'}</b></div>
       <div class="fig"><small>Precio por litro</small><b class="num">${c.precio ? money(c.precio) : '—'}</b></div>
@@ -1088,13 +1153,13 @@ function showFuelResult(r, fromList) {
     <p class="muted" style="font-size:12.5px;margin:10px 0 0">Odómetro ${NF0.format(r.Horometro_Km)} km. ${truthy(r.Full) ? 'Tanque lleno.' : 'Llenado parcial: el rendimiento puede variar.'} El costo no se registra en Gastos.</p>
     <div class="actions"><span class="spacer"></span>${fromList && can('combustible.editar') && !isTmp(r.ID) ? `<button type="button" class="btn" data-act="fuel-edit" data-fid="${r.ID}">Editar</button>` : ''}<button type="button" class="btn primary" data-close="1">Listo</button></div>
   </div></div>`;
+  S.fuelShown = {r, fromList};
 }
 const monthKey = d => String(d).slice(0, 7);
 
 V.combustible = () => {
-  const rows = fuelRows();
-  const last30 = rows.slice(-30), kml = last30.map(r => Number(r.km_litros) || 0);
-  const avg = fuelAvg(null);
+  const u = fuelUnit(), rows = fuelRows();
+  const last30 = rows.slice(-30), serie = last30.map(r => perf(r, u));
   const lastR = rows[rows.length - 1];
   const mk = monthKey(todayISO()), mRows = rows.filter(r => monthKey(r.Fecha) === mk);
   const withCost = rows.filter(r => Number(r.Costo) > 0 && Number(r.Km_Recorrido) > 0).slice(-10);
@@ -1102,23 +1167,27 @@ V.combustible = () => {
   const months = []; for (let i = 11; i >= 0; i--) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); months.push(d.getFullYear() + '-' + pad(d.getMonth() + 1)); }
   const mCost = months.map(m => sum(rows.filter(r => monthKey(r.Fecha) === m), 'Costo'));
   const hasCost = mCost.some(v => v > 0);
+  const lastOk = rows.filter(r => Number(r.km_litros) > 0).pop();
+  const two = fn => `${fn('L')}<span class="sub">${fn('GL')}</span>`;
   return `
-  <div class="figs three">
-    <div class="fig"><small>Último rendimiento</small><b class="num">${lastR && lastR.km_litros ? Number(lastR.km_litros).toFixed(2) : '—'} km/L</b></div>
-    <div class="fig"><small>Promedio últimos 10</small><b class="num">${avg.toFixed(2)} km/L</b></div>
-    <div class="fig"><small>Odómetro actual</small><b class="num">${lastR ? NF0.format(lastR.Horometro_Km) : '—'}</b></div>
+  <div class="figs three fuelfigs">
+    <div class="fig"><small>Último rendimiento</small><b class="num">${lastOk ? two(x => perf(lastOk, x).toFixed(2) + ' ' + uLabel(x)) : '—'}</b></div>
+    <div class="fig"><small>Promedio últimos 10</small><b class="num">${two(x => fuelAvg(null, 10, x).toFixed(2) + ' ' + uLabel(x))}</b></div>
+    <div class="fig"><small>Odómetro actual</small><b class="num">${lastR ? NF0.format(lastR.Horometro_Km) + ' km' : '—'}</b></div>
     <div class="fig"><small>Gasto en ${MESES[new Date().getMonth()].toLowerCase()}</small><b class="num">${money(sum(mRows, 'Costo'))}</b></div>
-    <div class="fig"><small>Litros en el mes</small><b class="num">${NF.format(sum(mRows, 'Litro'))}</b></div>
+    <div class="fig"><small>Cargado en el mes</small><b class="num">${NF.format(sum(mRows, 'Litro'))} L<span class="sub">${NF.format(sum(mRows, 'Litro') / GL_L)} GL</span></b></div>
     <div class="fig"><small>Costo por km</small><b class="num">${cpk ? money(cpk) : '—'}</b></div>
   </div>
   <p class="muted" style="font-size:12.5px;margin:8px 2px 0">El costo del combustible se lleva aparte y no se suma a Gastos, porque se paga con tarjeta de crédito.</p>
-  <section class="section"><h3>Rendimiento <small>últimos 30 llenados, km por litro</small></h3><div class="panel">${lineChart(last30.map(r => fdate(r.Fecha, {day: 'numeric', month: 'short'})), kml, {name: 'km/L'})}</div></section>
+  <section class="section"><h3>Rendimiento <small>últimos 30 llenados</small>
+    <span class="tabs" style="margin:0 0 0 auto">${['L', 'GL'].map(x => `<button type="button" class="tab" data-funit="${x}" aria-pressed="${u === x}">${uLabel(x)}</button>`).join('')}</span></h3>
+    <div class="panel">${lineChart(last30.map(r => fdate(r.Fecha, {day: 'numeric', month: 'short'})), serie, {name: uLabel(u)})}</div></section>
   ${hasCost ? `<section class="section"><h3>Gasto en combustible <small>por mes</small></h3><div class="panel">${barChart(months.map(m => cap(MESES[+m.slice(5) - 1].slice(0, 3))), [{name: 'Costo', values: mCost, color: 'var(--sun)'}])}</div></section>` : ''}
   <div class="toolbar"><span class="muted">${rows.length} llenados</span><span class="spacer"></span>${can('combustible.editar') ? '<button class="btn primary desk-only" data-new="Consumo_Combustible">Registrar llenado</button>' : ''}</div>
   <div class="list">${rows.slice().reverse().slice(0, 300).map(r => `<button class="item ${r._pending ? 'pending' : ''}" data-fuel="${r.ID}">
-    <span class="tx"><b>${fdate(r.Fecha)}<span class="muted" style="font-weight:500">, ${NF0.format(r.Horometro_Km)} km</span></b>
-      <small>${Number(r.Litro).toFixed(3)} L${Number(r.Km_Recorrido) > 0 ? ', ' + r.Km_Recorrido + ' km recorridos' : ''}${truthy(r.Full) ? '' : ', parcial'}</small>${Number(r.Costo) ? `<small>Costo: ${money(r.Costo)} (${money(r.Precio_Litro)} por litro)</small>` : ''}</span>
-    <span class="amt num">${r.km_litros ? Number(r.km_litros).toFixed(2) : '—'}<small>km/L</small></span></button>`).join('')}</div>`;
+    <span class="tx"><b>${fdatetime(r.Fecha)}</b>
+      <small>Odómetro ${NF0.format(r.Horometro_Km)} km, ${Number(r.Litro).toFixed(3)} L (${(Number(r.Galon) || Number(r.Litro) / GL_L).toFixed(3)} GL)${truthy(r.Full) ? '' : ', parcial'}</small>${Number(r.Km_Recorrido) > 0 ? `<small>${r.Km_Recorrido} km recorridos</small>` : ''}${Number(r.Costo) ? `<small>Costo: ${money(r.Costo)} (${money(r.Precio_Litro)} por litro)</small>` : ''}</span>
+    <span class="amt num">${Number(r.km_litros) > 0 ? perf(r, 'L').toFixed(2) : '—'}<small>km/L</small>${Number(r.km_litros) > 0 ? `<small class="g">${perf(r, 'GL').toFixed(2)} km/GL</small>` : ''}</span></button>`).join('')}</div>`;
 };
 
 V.tarjetas = () => {
@@ -1164,11 +1233,15 @@ V.periodos = () => {
   const ps = periodos(); const years = [...new Set(ps.map(p => p.Anio))].sort((a, b) => b - a);
   if (!S.anio || !years.map(String).includes(String(S.anio))) S.anio = String(years[0]);
   const flags = [['Abierta', 'Abierto'], ['Ingresos', 'Ingresos'], ['Presupuesto', 'Presupuesto'], ['Gastos', 'Gastos'], ['Retiros', 'Retiros'], ['Guardar_Resumen', 'Corte']];
-  return `<p class="muted">Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
+  const D = diaInicio(), hoyP = periodForDate(todayISO());
+  return `<p class="muted">Cada período va del día ${D} de su mes al ${D - 1 || 'último'} del mes siguiente (cobras el ${D}). Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
+  ${can('periodos.gestionar') ? `<div class="row" style="margin:0 0 12px;gap:10px"><label for="diaIni" style="font-weight:600;font-size:14px">El período empieza el día</label>
+    <select class="input" id="diaIni" style="width:auto">${Array.from({length: 28}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === D ? 'selected' : ''}>${n}</option>`).join('')}</select>
+    <span class="muted" style="font-size:13px">Hoy corresponde a <b>${esc(mesLabel(hoyP))}</b>.</span></div>` : ''}
   ${Backend.online && can('periodos.gestionar') ? '<div class="notice info"><span>Si un período aparece como fecha (por ejemplo 2026 09) o con datos en cero, revisa la hoja.</span><button class="btn small" data-act="repair">Revisar y reparar períodos</button></div>' : ''}
   <div class="toolbar"><div class="tabs" style="margin:0">${years.map(y => `<button class="tab" data-anio="${y}" aria-pressed="${String(y) === String(S.anio)}">${y}</button>`).join('')}</div><span class="spacer"></span>${can('periodos.gestionar') ? `<button class="btn" data-act="add-year">Crear año ${Math.max(...years) + 1}</button>` : ''}</div>
-  <div class="tablewrap"><table class="t"><thead><tr><th>Mes</th>${flags.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead>
-  <tbody>${ps.filter(p => String(p.Anio) === String(S.anio)).map(p => `<tr style="cursor:default"><td>${cap(p.Mes)}</td>${flags.map(([f, l]) => `<td><label class="toggle" aria-label="${l} ${cap(p.Mes)}"><input type="checkbox" data-flag="${f}" data-pid="${p.ID}" ${truthy(p[f]) ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></label></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  <div class="tablewrap"><table class="t"><thead><tr><th>Mes</th><th>Fechas</th>${flags.map(f => `<th>${f[1]}</th>`).join('')}<th></th></tr></thead>
+  <tbody>${ps.filter(p => String(p.Anio) === String(S.anio)).map(p => `<tr style="cursor:default" ${p.Mes_Anio === hoyP ? 'class="cur"' : ''}><td><b>${cap(p.Mes)}</b>${p.Mes_Anio === hoyP ? ' <span class="pill open">actual</span>' : ''}</td><td class="muted">${rangeLabel(p.Mes_Anio)}</td>${flags.map(([f, l]) => `<td><label class="toggle" aria-label="${l} ${cap(p.Mes)}"><input type="checkbox" data-flag="${f}" data-pid="${p.ID}" ${truthy(p[f]) ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></label></td>`).join('')}<td><button class="btn small" data-goto-mes="${p.Mes_Anio}">Ver</button></td></tr>`).join('')}</tbody></table></div>`;
 };
 
 const loadUsers = () => Backend.call('listUsers').then(r => { S.users = r.users; S.roles = r.roles; S.permisos = r.permisos; if (S.view === 'conexion') render(); }).catch(e => toast(e.message, true));
@@ -1211,14 +1284,24 @@ function histDesc(table, field, filterFn, limit = 80) {
 }
 const FORMS = {
   Gastos_Detalle: {t: 'gasto', mod: 'Gastos', fields: [
-    {k: 'Fecha', l: 'Fecha de compra', ty: 'date', req: 1, def: todayISO},
+    {k: 'Fecha', l: 'Fecha y hora de la compra', ty: 'datetime', req: 1, def: nowDT},
     {k: 'Cuenta_Gastos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(true), req: 1, def: () => S.cuenta || 'C014'},
     {k: 'Descripcion_Gasto', l: 'Descripción', ty: 'text', req: 1, list: o => [...DB.t.Items.filter(i => i.Cuenta === o.Cuenta_Gastos).map(i => i.Descripcion), ...histDesc('Gastos_Detalle', 'Descripcion_Gasto', r => r.Cuenta_Gastos === o.Cuenta_Gastos)], dep: 'Cuenta_Gastos'},
     {k: 'Cantidad', l: 'Cantidad', ty: 'number', half: 1, def: 1, step: 'any'},
     {k: 'UM', l: 'Unidad', ty: 'select', half: 1, opts: optsUM, def: 'Unidad'},
-    {k: 'Total', l: 'Total (C$)', ty: 'number', req: 1, step: '0.01'},
+    {k: 'ID_Banco', l: 'Forma de pago', ty: 'select', opts: () => [['', 'Efectivo'], ...bancos().map(b => [b.ID_Banco, 'Tarjeta de débito ' + b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')])], def: () => lsGet('pago_gasto') ?? ''},
+    {k: 'Monto_Moneda', l: 'Monto debitado (US$)', ty: 'number', req: 1, step: '0.01', half: 1, show: o => curOf(o.ID_Banco) === 'USD' && o.ID_Banco !== ''},
+    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: lastTC, show: o => curOf(o.ID_Banco) === 'USD' && o.ID_Banco !== ''},
+    {k: 'Total', l: 'Total (C$)', ty: 'number', req: 1, step: '0.01', show: o => !(curOf(o.ID_Banco) === 'USD' && o.ID_Banco !== '')},
     {k: 'Descripcion_Adicional', l: 'Nota', ty: 'text'}],
-    before: o => { o.Precio_Unitario = Number(o.Cantidad) ? r2(o.Total / o.Cantidad * 10000) / 10000 : o.Total; }},
+    preview: o => { if (o.ID_Banco === '' || o.ID_Banco === undefined) return '';
+      const b = banco(o.ID_Banco); if (!b) return '';
+      if (b.Moneda === 'USD') { const c = r2(Number(o.Monto_Moneda) * Number(o.Tipo_Cambio)); return Number(o.Monto_Moneda) ? `Se registra el gasto de <b>${money(c)}</b> y, al mismo tiempo, un retiro de <b>${usd(o.Monto_Moneda)}</b> desde ${esc(b.Nombre)} a T/C ${o.Tipo_Cambio}. La conversión entra como ingreso automático del período.` : ''; }
+      return Number(o.Total) ? `Se registra el gasto y, al mismo tiempo, un retiro de <b>${money(o.Total)}</b> desde ${esc(b.Nombre)}. Tu efectivo en mano no cambia.` : ''; },
+    before: o => {
+      if (curOf(o.ID_Banco) === 'USD' && o.ID_Banco !== '') o.Total = r2(Number(o.Monto_Moneda) * Number(o.Tipo_Cambio)); else { o.Monto_Moneda = ''; o.Tipo_Cambio = ''; }
+      o.Precio_Unitario = Number(o.Cantidad) ? r2(o.Total / o.Cantidad * 10000) / 10000 : o.Total; },
+    after: o => { lsSet('pago_gasto', String(o.ID_Banco ?? '')); if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); }},
   Presupuesto_Detalle: {t: 'partida', g: 'a', mod: 'Presupuesto', fields: [
     {k: 'Cuenta_Gastos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(true), req: 1, def: 'C014'},
     {k: 'Descripcion', l: 'Descripción', ty: 'text', req: 1, list: o => [...DB.t.Items.filter(i => i.Cuenta === o.Cuenta_Gastos).map(i => i.Descripcion), ...histDesc('Presupuesto_Detalle', 'Descripcion', r => r.Cuenta_Gastos === o.Cuenta_Gastos)], dep: 'Cuenta_Gastos'},
@@ -1230,12 +1313,12 @@ const FORMS = {
     {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01', half: 1},
     {k: 'ID_Banco', l: 'Depositado en', ty: 'select', half: 1, opts: () => [...bancos().filter(b => b.Moneda === 'NIO').map(b => [b.ID_Banco, b.Nombre]), ['', 'Efectivo, sin banco']], def: () => lsGet('bank_ing') ?? (bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? ''},
     {k: 'Cuenta_Ingresos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(false), def: 'C001', half: 1},
-    {k: 'Fecha_Registro', l: 'Fecha', ty: 'date', def: todayISO, half: 1},
+    {k: 'Fecha_Registro', l: 'Fecha y hora', ty: 'datetime', def: nowDT},
     {k: 'Observaciones', l: 'Observaciones', ty: 'text'}],
     after: o => lsSet('bank_ing', String(o.ID_Banco))},
   Retiros_Detalle: {t: 'retiro', mod: 'Retiros', fields: [
-    {k: 'Fecha_Retiro', l: 'Fecha del retiro', ty: 'date', req: 1, def: todayISO, half: 1},
-    {k: 'ID_Banco', l: 'Desde la cuenta', ty: 'select', half: 1, opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), ['', 'Sin banco']], def: () => lsGet('bank_ret') ?? (bancos()[0] || {}).ID_Banco ?? ''},
+    {k: 'Fecha_Retiro', l: 'Fecha y hora del retiro', ty: 'datetime', req: 1, def: nowDT},
+    {k: 'ID_Banco', l: 'Desde la cuenta', ty: 'select', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), ['', 'Sin banco']], def: () => lsGet('bank_ret') ?? (bancos()[0] || {}).ID_Banco ?? ''},
     {k: 'Movimiento', l: 'Movimiento', ty: 'text', req: 1, list: () => [...DB.t.Obs_Retiros.filter(o => truthy(o.Mostrar)).map(o => o.Observaciones_Retiro), ...histDesc('Retiros_Detalle', 'Movimiento')], def: 'Retiro de Cajero Automatico'},
     {k: 'Monto_Moneda', l: 'Monto (US$)', ty: 'number', req: 1, step: '0.01', half: 1, show: o => curOf(o.ID_Banco) === 'USD'},
     {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: lastTC, show: o => curOf(o.ID_Banco) === 'USD'},
@@ -1288,21 +1371,21 @@ const FORMS = {
     before: o => { o.Descuento = r2(o.Valor * (o.Porcentaje_Desc || 0) * 10000) / 10000; o.Pagar = r2(o.Valor - o.Descuento); o.Diferencia = r2(o.Pagar - (o.Monto_Pagado || 0));
       const d = toDate(o.Fecha); if (d) { o.Mes = d.getMonth() + 1; o.Anio = d.getFullYear(); o.Mes_Letra = (DB.t.Meses.find(m => m.ID === o.Mes) || {}).Mes || ''; } }},
   Consumo_Combustible: {t: 'llenado de combustible', perm: 'combustible.editar', fields: [
-    {k: 'Fecha', l: 'Fecha', ty: 'date', req: 1, def: todayISO, half: 1},
-    {k: 'Horometro_Km', l: 'Odómetro (km)', ty: 'number', req: 1, step: 'any', half: 1},
+    {k: 'Fecha', l: 'Fecha y hora del llenado', ty: 'datetime', req: 1, def: nowDT},
+    {k: 'Horometro_Km', l: 'Odómetro (km)', ty: 'number', req: 1, step: 'any'},
     {k: 'Cantidad', l: 'Cantidad cargada', ty: 'number', req: 1, step: 'any', half: 1},
     {k: 'UM', l: 'Unidad', ty: 'select', opts: () => [['LT', 'Litros'], ['GL', 'Galones']], def: 'LT', half: 1},
     {k: 'Precio_Litro', l: 'Precio por litro (C$)', ty: 'number', step: 'any', half: 1, def: () => lastFuelPrice()},
     {k: 'Costo', l: 'Total pagado (C$)', ty: 'number', step: '0.01', half: 1, hint: 'Opcional: si lo escribes, se calcula el precio por litro'},
     {k: 'Full', l: 'Tanque lleno', ty: 'bool', def: true}],
     preview: o => { const c = fuelCalc(o); if (!Number(o.Cantidad)) return '';
-      return (c.km > 0 ? `Recorriste ${NF.format(c.km).replace('.00', '')} km con ${c.litros.toFixed(3)} litros: <b>${c.kml.toFixed(2)} km/L</b>.` : 'Primer llenado registrado: el rendimiento se calcula desde el próximo.') +
+      return (c.km > 0 ? `Recorriste ${NF0.format(c.km)} km con ${c.litros.toFixed(3)} litros (${c.galones.toFixed(3)} galones): <b>${c.kml.toFixed(2)} km/L</b> y <b>${c.kmg.toFixed(2)} km/GL</b>.` : 'Primer llenado registrado: el rendimiento se calcula desde el próximo.') +
         (c.costo ? ` Costo ${money(c.costo)} (${money(c.precio)} por litro).` : '') + ' No se registra como gasto.'; },
     before: o => { const c = fuelCalc(o);
       const FG = 3.78541, FM = 1.60934; o.Factor_GL = FG; o.Factor_Milla = FM; o.Horometro_Millas = o.Horometro_Km;
-      o.Litro = c.litros; o.Galon = Math.round(c.litros / FG * 1000) / 1000;
+      o.Litro = c.litros; o.Galon = c.galones;
       o.Km_Recorrido = c.km; o.Millas_Recorrido = c.km;
-      o.km_galon = o.Galon && c.km ? c.km / o.Galon : ''; o.km_litros = c.litros && c.km ? c.km / c.litros : '';
+      o.km_galon = c.kmg || ''; o.km_litros = c.kml || '';
       o.Precio_Litro = c.precio || ''; o.Costo = c.costo || '';
       if (!o.No) o.No = (c.prev ? Number(c.prev.No) || 0 : 0) + 1; },
     after: o => { if (Number(o.Precio_Litro)) lsSet('precio_litro', String(o.Precio_Litro)); },
@@ -1333,7 +1416,7 @@ function openForm(table, id) {
   const F = FORMS[table]; if (!F) return;
   const k = DB.key(table);
   const rec = id !== undefined && id !== null ? DB.t[table].find(r => String(r[k]) === String(id)) : null;
-  const auto = table === 'Ingresos_Detalle' && rec && rec.Origen;
+  const auto = (table === 'Ingresos_Detalle' || table === 'Retiros_Detalle') && rec && rec.Origen;
   const ro = (F.mod && !canEdit(F.mod)) || (F.perm && !can(F.perm)) || !!auto;
   const o = rec ? Object.assign({}, rec) : {};
   if (!rec) F.fields.forEach(f => { if (f.def !== undefined) o[f.k] = typeof f.def === 'function' ? f.def() : f.def; });
@@ -1344,13 +1427,15 @@ function openForm(table, id) {
     if (f.ty === 'select') inp = `<select class="input" id="${idf}" name="${f.k}" ${dis} ${f.req ? 'required' : ''}>${f.opts().map(([a, b]) => `<option value="${esc(a)}" ${String(a) === String(v) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
     else if (f.ty === 'bool') return `<div class="field check"><label for="${idf}">${f.l}</label><label class="toggle"><input type="checkbox" id="${idf}" name="${f.k}" ${truthy(v) ? 'checked' : ''} ${dis}><span></span></label></div>`;
     else if (f.ty === 'pct') inp = `<input class="input" id="${idf}" name="${f.k}" type="number" step="any" inputmode="decimal" value="${v === '' ? '' : r2(Number(v) * 100)}" ${dis}>`;
+    else if (f.ty === 'datetime') inp = `<div class="dtrow"><input class="input" id="${idf}" name="${f.k}" type="datetime-local" value="${esc(toDTL(v))}" ${dis} ${f.req ? 'required' : ''}>${dis ? '' : `<button type="button" class="btn small" data-act="dt-now" data-for="${idf}">Ahora</button>`}</div>`;
     else inp = `<input class="input" id="${idf}" name="${f.k}" type="${f.ty === 'number' ? 'number' : f.ty}" ${f.ty === 'number' ? `inputmode="decimal" step="${f.step || 'any'}"` : ''} value="${esc(f.ty === 'date' ? String(v).slice(0, 10) : v)}" ${f.list ? `list="dl_${f.k}" autocomplete="off"` : ''} ${dis} ${f.req ? 'required' : ''}>${f.list ? `<datalist id="dl_${f.k}"></datalist>` : ''}`;
     return `<div class="field ${f.half ? 'half' : ''}" data-fk="${f.k}"><label for="${idf}">${f.l}</label>${inp}${f.hint ? `<span class="hint">${f.hint}</span>` : ''}</div>`;
   };
   const title = (rec ? (ro ? 'Ver ' : 'Editar ') : (F.g === 'a' ? 'Nueva ' : 'Nuevo ')) + F.t;
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="frm" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <h4>${esc(title)}${REL[table] ? ` <span class="pill">${esc(mesLabel(S.mes))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
-    ${auto ? '<div class="notice info" style="margin-top:0">Ingreso automático por una conversión de dólares. Se cambia desde el retiro o la transferencia que lo generó.</div>' : ro ? '<div class="notice" style="margin-top:0">Solo lectura: período cerrado o sin permiso.</div>' : ''}
+    ${auto ? (table === 'Retiros_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Retiro automático por un gasto pagado con tarjeta de débito. Se cambia desde el gasto.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el gasto</button></div>`
+      : `<div class="notice info" style="margin-top:0"><span>Ingreso automático por una conversión de dólares. Se cambia desde el movimiento que lo generó.</span>${/^(RET|MOV):/.test(rec.Origen) ? `<button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el origen</button>` : ''}</div>`) : ro ? '<div class="notice" style="margin-top:0">Solo lectura: período cerrado o sin permiso.</div>' : ''}
     <div class="fgrid">${F.fields.map(fieldHtml).join('')}<div class="fpreview" id="fpreview"></div></div>
     <div class="actions">${rec && !ro ? '<button type="button" class="btn danger" data-act="del">Eliminar</button>' : ''}<span class="spacer"></span><button type="button" class="btn" data-close="1">Cancelar</button>${ro ? '' : `<button type="submit" class="btn primary">${rec ? 'Guardar cambios' : F.t.length > 14 ? 'Guardar' : 'Guardar ' + F.t}</button>`}</div>
   </form></div>`;
@@ -1363,7 +1448,13 @@ function formDynamics() {
   const o = readForm(), F = FORM.F;
   F.fields.forEach(f => { const w = $(`#frm [data-fk="${f.k}"]`); if (w && f.show) w.hidden = !f.show(o); });
   if (F.label) Object.entries(F.label(o)).forEach(([k, l]) => { const lb = $(`#frm [data-fk="${k}"] > label`); if (lb) lb.textContent = l; });
-  const pv = $('#fpreview'); if (pv) pv.innerHTML = F.preview ? F.preview(o) : '';
+  let warn = '';
+  const df = DATE_FIELD[FORM.table];
+  if (df && o[df] && REL[FORM.table]) {
+    const pm = periodForDate(o[df]), cur = FORM.rec ? (Object.entries(DB.idx().headerByMes[REL[FORM.table].header]).find(([, h]) => String(h[REL[FORM.table].hkey]) === String(FORM.rec[REL[FORM.table].fk])) || [S.mes])[0] : S.mes;
+    if (pm && pm !== cur) warn = `<div class="fwarn">Esta fecha corresponde al período <b>${esc(mesLabel(pm))}</b> (${rangeLabel(pm)}), pero se registrará en <b>${esc(mesLabel(cur))}</b>.${FORM.rec ? '' : truthy((DB.idx().periodo[pm] || {})[REL[FORM.table].mod]) ? ` <button type="button" class="btn small" data-act="to-period" data-mes="${pm}">Cambiar a ${esc(mesLabel(pm))}</button>` : ''}</div>`;
+  }
+  const pv = $('#fpreview'); if (pv) pv.innerHTML = (F.preview ? F.preview(o) : '') + warn;
 }
 const fieldVisible = f => { const w = $(`#frm [data-fk="${f.k}"]`); return !w || !w.hidden; };
 function readForm() {
@@ -1374,6 +1465,7 @@ function readForm() {
     else if (f.ty === 'pct') o[f.k] = el.value === '' ? 0 : Number(el.value) / 100;
     else if (f.ty === 'select' && f.num) o[f.k] = el.value === '' ? '' : Number(el.value);
     else if (f.ty === 'select' && f.k === 'ID_Banco') o[f.k] = el.value === '' ? '' : Number(el.value);
+    else if (f.ty === 'datetime') o[f.k] = el.value ? el.value.replace('T', ' ').slice(0, 16) : '';
     else o[f.k] = el.value.trim(); });
   return o;
 }
@@ -1432,7 +1524,7 @@ async function submitForm() {
 function fillFormValues(o) {
   if (!FORM) return;
   FORM.F.fields.forEach(f => { const el = $('#f_' + f.k); if (!el || o[f.k] === undefined || el.disabled) return;
-    if (f.ty === 'bool') el.checked = truthy(o[f.k]); else if (f.ty === 'pct') el.value = o[f.k] === '' ? '' : r2(Number(o[f.k]) * 100); else el.value = f.ty === 'date' ? String(o[f.k]).slice(0, 10) : o[f.k]; });
+    if (f.ty === 'bool') el.checked = truthy(o[f.k]); else if (f.ty === 'pct') el.value = o[f.k] === '' ? '' : r2(Number(o[f.k]) * 100); else el.value = f.ty === 'date' ? String(o[f.k]).slice(0, 10) : f.ty === 'datetime' ? toDTL(o[f.k]) : o[f.k]; });
   formDynamics();
 }
 async function deleteRecord() {
@@ -1593,12 +1685,14 @@ function toast(msg, err) { clearTimeout(toastT); let el = $('.toast'); if (!el) 
 
 /* ---------- Eventos ---------- */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
+  const t = e.target.closest('[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
   if (!t) return;
   const d = t.dataset;
   if (d.close !== undefined) { if (e.target === t) closeModal(); return; }
   if (d.user) { openUserForm(d.user); return; }
   if (d.banco) { S.banco = d.banco; render(); return; }
+  if (d.gotoMes) { S.mes = d.gotoMes; go('inicio'); toast('Trabajando en ' + mesLabel(d.gotoMes)); return; }
+  if (d.funit) { S.fuelUnit = d.funit; lsSet('fuel_unit', d.funit); if (d.fres && S.fuelShown) showFuelResult(S.fuelShown.r, S.fuelShown.fromList); else render(); return; }
   if (d.fuel) { const r = DB.t.Consumo_Combustible.find(x => String(x.ID) === d.fuel); if (r) showFuelResult(r, true); return; }
   if (d.go) { e.preventDefault(); go(d.go); return; }
   if (d.new) { const F = FORMS[d.new]; if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
@@ -1608,6 +1702,7 @@ document.addEventListener('click', async e => {
   if (d.tab) { S.tab = d.tab; render(); return; }
   if (d.rango !== undefined) { S.rango = Number(d.rango); render(); return; }
   if (d.pend !== undefined) { S.pend = d.pend === '1'; render(); return; }
+  if (t.dataset.act === 'to-period') { const o = readForm(); const tb = FORM.table; S.mes = d.mes; closeModal(); render(); openForm(tb); fillFormValues(o); toast('Período cambiado a ' + mesLabel(d.mes)); return; }
   if (d.mes) { S.mes = d.mes; go('inicio'); return; }
   if (d.buscar) { S.q = d.buscar; S.cuenta = S.cuentaSel; S.all = true; go('gastos'); return; }
   if (d.themeSet !== undefined) { lsSet('theme', d.themeSet || null); applyTheme(); render(); return; }
@@ -1635,6 +1730,8 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'open-src') { const [kind, id] = String(t.dataset.src).split(':'); const tb = {GAS: 'Gastos_Detalle', RET: 'Retiros_Detalle', MOV: 'Movimientos_Banco'}[kind]; closeModal(); if (tb) openForm(tb, id); return; }
+  if (a === 'dt-now') { const el = $('#' + t.dataset.for); if (el) { el.value = toDTL(nowDT()); el.dispatchEvent(new Event('input', {bubbles: true})); } return; }
   if (a === 'fuel-edit') { const id = t.dataset.fid; closeModal(); openForm('Consumo_Combustible', id); return; }
   if (a === 'mov-transfer' || a === 'mov-dep') { openForm('Movimientos_Banco'); if (a === 'mov-dep') { $('#f_Tipo').value = 'Depósito'; $('#f_ID_Banco_Destino').value = S.banco; } else if (S.banco) { $('#f_ID_Banco_Origen').value = S.banco; const o = bancos().find(b => String(b.ID_Banco) !== S.banco); if (o) $('#f_ID_Banco_Destino').value = o.ID_Banco; } formDynamics(); return; }
   if (a === 'repair') { t.disabled = true; try { const r = await Backend.call('repair'); toast((r.report || []).length ? r.report.length + ' correcciones aplicadas' : 'Todo estaba en orden'); await boot(); } catch (err) { toast(err.message, true); } t.disabled = false; return; }
@@ -1708,6 +1805,13 @@ document.addEventListener('input', e => {
 document.addEventListener('change', async e => {
   const el = e.target, b = el.dataset.bind;
   if (el.id === 'mesSel') { S.mes = el.value; render(); return; }
+  if (el.id === 'diaIni') {
+    const e0 = (DB.t.Empresa || [])[0]; if (!e0) return;
+    el.disabled = true;
+    try { const ch = await Q.run(() => Backend.call('save', {table: 'Empresa', row: {Empresa: e0.Empresa, Dia_Inicio_Periodo: Number(el.value)}})); commit(ch); render(); toast('Los períodos empiezan el día ' + el.value); }
+    catch (err) { toast(err.message, true); el.disabled = false; }
+    return;
+  }
   if (b === 'cuenta' || b === 'cuentaSel') { S[b] = el.value; render(); return; }
   if (b === 'all') { S.all = el.checked; render(); return; }
   if (el.id === 'ur' && $('#uperms')) { renderPerms(el.value, {}); return; }
@@ -1729,9 +1833,9 @@ function applyTheme() { const t = lsGet('theme'); if (t) document.documentElemen
 
 /* ---------- Inicio ---------- */
 function pickMes() {
+  const ms = mesesConDatos(), hoy = periodForDate(todayISO()), ph = DB.idx().periodo[hoy];
   const open = periodos().filter(p => truthy(p.Abierta)).pop();
-  const ms = mesesConDatos();
-  if (!S.mes || !ms.includes(S.mes)) S.mes = open ? open.Mes_Anio : ms[ms.length - 1];
+  if (!S.mes || !ms.includes(S.mes)) S.mes = ph && truthy(ph.Abierta) ? hoy : open ? open.Mes_Anio : ms[ms.length - 1];
   const h = (location.hash || '').slice(1); if (h && VIEWS[h] && S.view === 'inicio') S.view = h;
 }
 async function boot(force) {
