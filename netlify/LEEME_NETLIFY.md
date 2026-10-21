@@ -87,50 +87,9 @@ La APK de PWABuilder es una *Trusted Web Activity*. Android solo la abre a panta
 
 Guarda bien el archivo `signing.keystore` y su contraseña que vienen en el ZIP de PWABuilder: los necesitas para publicar actualizaciones con la misma huella.
 
-## Cuentas de banco y dólares
-
-La sección **Bancos** muestra el saldo de cada cuenta. Al conectar por primera vez se crean solas: *Avanz Córdobas*, *BAC Córdobas* y *BAC Dólares*.
-
-1. **Saldo inicial:** en *Bancos → Saldo inicial y datos* escribe lo que tiene cada cuenta hoy y la fecha. Solo cuentan los movimientos desde esa fecha, así el historial de Access no altera los saldos.
-2. **Ingresos:** al registrar un ingreso eliges en qué cuenta se depositó (o *Efectivo, sin banco*). Así la suma de ingresos en córdobas coincide con lo depositado en los bancos.
-3. **Retiros:** eliges desde qué cuenta sale. Si es la cuenta en dólares, escribes el monto en US$ y el tipo de cambio; la app calcula los córdobas, descuenta los dólares y registra un **ingreso automático** por la conversión.
-4. **Transferir entre cuentas:** botón en Bancos. Entre cuentas en córdobas solo mueve el saldo. De dólares a córdobas convierte con el tipo de cambio y registra el ingreso automático. De córdobas a dólares es compra de dólares: no cuenta como gasto ni como retiro de efectivo.
-5. **Depósito o ajuste:** un depósito en dólares entra solo a la cuenta en US$; un depósito en córdobas se registra también como ingreso. El ajuste corrige un saldo sin tocar ingresos ni retiros.
-
-Los ingresos automáticos se editan o eliminan desde el retiro o la transferencia que los generó. El tipo de cambio que uses queda como sugerencia para la próxima vez.
-
-## Dinero disponible e inicio de cada período
-
-En **Inicio**, la sección *Dinero disponible* muestra lo que tienes para gastar en el período: el saldo de cada cuenta en córdobas (ingresos depositados − retiros ± transferencias), el **efectivo en mano** (efectivo recibido + retiros − gastos) y el **total disponible** (ingresos − gastos, el mismo criterio de Access). La cuenta en dólares aparece aparte. Toca una cuenta para ver sus movimientos.
-
-**Al empezar un período** (por ejemplo Octubre), aparece el botón **Iniciar Octubre 2026**. Muestra el **disponible con que cerró el período anterior** y propone pasarlo como ingresos, con la fecha de inicio del período:
-- *Saldo de Mes Anterior (Cuenta)* por cada cuenta (Avanz, BAC) con su saldo al cierre;
-- *Saldo de Mes Anterior (Disp. En Mano)* con el efectivo al cierre.
-
-Si quedan montos de los registros de Access sin banco asignado, aparecen aparte y desactivados cuando ya hay saldos por cuenta (actívalos solo si no están incluidos). El **total a registrar** suma solo lo activado.
-
-Si algún registro quedó en el período equivocado, ábrelo: con el campo **Período** (si está abierto) o el botón **Mover a …** (si está cerrado) lo pasas al correcto.
-
-## Gastos en efectivo: solo con efectivo disponible
-
-Un gasto con forma de pago **Efectivo** solo se puede guardar si tienes ese efectivo en mano en el período (efectivo recibido + retiros − gastos en efectivo). Si no alcanza, el formulario lo indica y ofrece:
-- **Registrar retiro**: abre el retiro desde BAC o Avanz con el monto que falta; al guardarlo vuelves al gasto con todo lo que habías escrito.
-- **Pagar con débito**: cambia la forma de pago a tu tarjeta de débito.
-
-Los retiros y los pagos con débito avisan (sin bloquear) si el saldo de la cuenta en el período no alcanza, por si falta registrar un ingreso o una transferencia.
-
 ## Tipo de cambio por período
 
 En *Períodos*, la columna **T/C** guarda el tipo de cambio (C$ por US$) de cada mes. Al registrar un retiro, una compra con débito o una transferencia con la cuenta en dólares, se propone el T/C del período (puedes cambiarlo en el formulario). Si el período no tiene T/C, se usa el último que registraste. Se guarda en la hoja Mes_Anio, columna `Tipo_Cambio`.
-
-## Compras con tarjeta de débito
-
-En el formulario de gasto, **Forma de pago** puede ser *Efectivo* o *Tarjeta de débito* de cualquiera de las cuentas.
-
-- **Débito en córdobas (Avanz o BAC):** se registra el gasto y, al mismo tiempo, un retiro por el mismo monto desde esa cuenta, en el mismo período, fecha y hora. El efectivo en mano no cambia y el saldo del banco baja.
-- **Débito en dólares (BAC US$):** escribes los US$ debitados y el tipo de cambio. Se registran tres cosas: el gasto en córdobas, el retiro de US$ desde la cuenta en dólares y el ingreso automático por la conversión. Así los totales en córdobas cuadran.
-- El retiro (y el ingreso, en dólares) quedan ligados al gasto: si editas el gasto se actualizan, si lo cambias a *Efectivo* o lo eliminas, se eliminan. No se pueden editar sueltos; desde el retiro hay un botón *Abrir el gasto*.
-- En la hoja: `Gastos_Detalle` tiene las columnas nuevas `ID_Banco`, `Monto_Moneda`, `Tipo_Cambio`, `ID_Retiro_Auto`; `Retiros_Detalle` tiene `Origen` (`GAS:` y el número del gasto). Se agregan solas.
 
 ## Fecha y hora en cada movimiento
 
@@ -141,6 +100,23 @@ Aparte, el servidor guarda en `Fecha_Registro` el momento exacto en que lo anota
 ## Códigos de cuenta automáticos
 
 Al agregar una cuenta en *Catálogos → Cuentas* el código se asigna solo: el siguiente número libre (C033, C034…). El servidor lo calcula al guardar, así dos personas no pueden recibir el mismo código.
+
+## Cuentas, efectivo y dinero disponible
+
+El dinero se lleva como en la realidad, por **cuenta**: Avanz Córdobas, BAC Córdobas, BAC Dólares y **Efectivo en mano**. Los saldos no dependen del período.
+
+- **Saldos actuales:** la primera vez, en *Inicio* o *Bancos*, usa **Escribir saldos actuales**: lo que tienes ahora en cada cuenta (míralo en la app del banco) y el efectivo. Desde ese momento la app suma y resta sola. Puedes **Ajustar saldos actuales** cuando quieras, por ejemplo al conciliar con el banco. Los ingresos «Saldo de Mes Anterior» que se habían registrado ya no hacen falta: la misma ventana ofrece quitarlos.
+- **Qué mueve cada cuenta:**
+  - *Ingreso:* sube la cuenta donde se depositó (o el efectivo).
+  - *Retiro:* solo retiro de cajero o retiro sin tarjeta; baja la cuenta y sube el efectivo.
+  - *Gasto en efectivo:* baja el efectivo. Solo se puede si tienes ese efectivo; si no, la app ofrece registrar primero el retiro o pagar con débito.
+  - *Gasto con débito o pago directo* (tarjeta de débito, pago en línea, transferencia a terceros): baja la cuenta directamente. No es un retiro.
+  - *Transferencia entre tus cuentas* (también depositar efectivo o pasar de dólares a córdobas): baja una y sube la otra; no es ingreso ni gasto.
+- **Dinero disponible** = cuentas en córdobas + efectivo. La cuenta en dólares se muestra aparte, con su equivalente al T/C del período.
+
+## Qué controlan los períodos
+
+Los períodos (del 20 al 19) solo agrupan **gastos y presupuesto**: los sobres, lo gastado contra lo presupuestado y los cortes. **Ingresos y retiros** no se abren ni se cierran por período: cada uno se asigna solo al período que corresponde a su fecha, así el resumen de un período muestra los ingresos y retiros que hubo entre sus fechas.
 
 ## Importar el presupuesto desde Excel
 
