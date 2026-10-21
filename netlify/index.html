@@ -409,7 +409,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.21-1402';
+const APP_VERSION = '2026.10.21-1419';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -576,6 +576,12 @@ const curOf = id => (banco(id) || {}).Moneda || 'NIO';
 const isUsdBank = id => !!banco(id) && curOf(id) === 'USD';
 /** Compra de dólares: de córdobas o efectivo a la cuenta en dólares (se registra también como gasto) */
 const movAdj = () => FORM && FORM.rec && FORM.rec.Tipo === 'Transferencia' ? {ID_Banco: FORM.rec.ID_Banco_Origen, Total: FORM.rec.Monto, Monto_Moneda: FORM.rec.Monto} : null;
+/** Lo que se escribe es lo que ENTRA a la cuenta destino; lo que sale del origen se calcula con el tipo de cambio (C$ por US$) */
+const movOrigen = o => {
+  const dest = Number(o.Monto_Destino) || 0, tc = Number(o.Tipo_Cambio) || 0, co = curOf(o.ID_Banco_Origen), cd = curOf(o.ID_Banco_Destino);
+  if (o.Tipo !== 'Transferencia' || co === cd) return dest;
+  return co === 'NIO' ? r2(dest * tc) : (tc ? r2(dest / tc) : 0);
+};
 const isBuyUsd = o => o.Tipo === 'Transferencia' && curOf(o.ID_Banco_Origen) !== 'USD' && isUsdBank(o.ID_Banco_Destino);
 const defaultGastoCuenta = () => ((DB.t.Cuentas || []).find(c => /ahorr/i.test(c.Cuentas) && truthy(c.Cuenta_de_Gastos) && truthy(c.Activa)) || (DB.t.Cuentas || []).find(c => truthy(c.Cuenta_de_Gastos) && truthy(c.Activa)) || {}).Codigo || '';
 const usd = v => { v = r2(v); return (v < 0 ? '−' : '') + 'US$ ' + NF.format(Math.abs(v)); };
@@ -1544,30 +1550,32 @@ const FORMS = {
   Movimientos_Banco: {t: 'movimiento de banco', perm: 'bancos.editar', needsMes: 1, fields: [
     {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Transferencia', 'Transferencia entre cuentas'], ['Ajuste', 'Ajuste de saldo']], def: 'Transferencia'},
     {k: 'Fecha', l: 'Fecha y hora', ty: 'datetime', req: 1, def: nowDT},
-    {k: 'ID_Banco_Origen', l: 'Desde', ty: 'select', half: 1, num: 1, live: o => o.Tipo === 'Transferencia' ? saldoLine(o.ID_Banco_Origen, o.Monto, movAdj()) : '', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano']], def: () => (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Transferencia'},
+    {k: 'ID_Banco_Origen', l: 'Desde', ty: 'select', half: 1, num: 1, live: o => o.Tipo === 'Transferencia' ? saldoLine(o.ID_Banco_Origen, movOrigen(o), movAdj()) : '', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano']], def: () => (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Transferencia'},
     {k: 'ID_Banco_Destino', l: 'Hacia', ty: 'select', half: 1, num: 1, opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano']], def: () => (bancos()[1] || bancos()[0] || {}).ID_Banco},
-    {k: 'Monto', l: 'Monto', ty: 'number', req: 1, step: '0.01', half: 1},
+    {k: 'Monto_Destino', l: 'Monto que entra', ty: 'number', req: 1, step: '0.01', half: 1},
     {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: () => tcFor(S.mes), hint: tcHint, show: o => o.Tipo === 'Transferencia' && curOf(o.ID_Banco_Origen) !== curOf(o.ID_Banco_Destino)},
     {k: 'Cuenta_Gastos', l: 'Registrar el gasto en la cuenta', ty: 'select', opts: () => optsCuentas(true), def: () => defaultGastoCuenta(), fillEmpty: 1, show: isBuyUsd, hint: 'Los córdobas que pasan a dólares salen de lo que puedes gastar, por eso se registran como gasto.'},
     {k: 'Descripcion', l: 'Nota', ty: 'text'}],
-    label: o => ({Monto: 'Monto (' + (curOf(o.Tipo === 'Transferencia' ? o.ID_Banco_Origen : o.ID_Banco_Destino) === 'USD' ? 'US$' : 'C$') + ')' + (o.Tipo === 'Ajuste' ? ', negativo para restar' : ''), ID_Banco_Destino: o.Tipo === 'Transferencia' ? 'Hacia' : 'Cuenta'}),
-    preview: o => { const m = Number(o.Monto) || 0; if (!m) return '';
-      if (o.Tipo === 'Ajuste') return `El saldo de ${esc(bankName(o.ID_Banco_Destino))} cambia en ${fcur(m, curOf(o.ID_Banco_Destino))}. No afecta ingresos ni retiros.`;
-      if (o.Tipo === 'Depósito') return curOf(o.ID_Banco_Destino) === 'NIO' ? `Entran ${money(m)} a ${esc(bankName(o.ID_Banco_Destino))} y se registra como ingreso del mes.` : `Entran ${usd(m)} a ${esc(bankName(o.ID_Banco_Destino))}. Los dólares cuentan como ingreso cuando los conviertes a córdobas.`;
-      const co = curOf(o.ID_Banco_Origen), cd = curOf(o.ID_Banco_Destino), tc = Number(o.Tipo_Cambio) || 0;
-      const dest = co === cd ? m : co === 'USD' ? m * tc : (tc ? m / tc : 0);
-      return `Sale ${fcur(m, co)} de ${esc(bankName(o.ID_Banco_Origen))} y entra ${fcur(dest, cd)} a ${esc(bankName(o.ID_Banco_Destino))}.`
+    label: o => ({Monto_Destino: o.Tipo === 'Transferencia' ? 'Monto que entra a ' + bankName(o.ID_Banco_Destino) + ' (' + (curOf(o.ID_Banco_Destino) === 'USD' ? 'US$' : 'C$') + ')' : 'Monto (' + (curOf(o.ID_Banco_Destino) === 'USD' ? 'US$' : 'C$') + '), negativo para restar', ID_Banco_Destino: o.Tipo === 'Transferencia' ? 'Hacia' : 'Cuenta'}),
+    preview: o => { const dest = Number(o.Monto_Destino) || 0; if (!dest) return '';
+      const cd = curOf(o.ID_Banco_Destino);
+      if (o.Tipo === 'Ajuste') return `El saldo de ${esc(bankName(o.ID_Banco_Destino))} cambia en ${fcur(dest, cd)}. No afecta ingresos ni retiros.`;
+      const co = curOf(o.ID_Banco_Origen), m = movOrigen(o), tc = Number(o.Tipo_Cambio) || 0;
+      if (co !== cd && !tc) return 'Escribe el tipo de cambio para calcular cuánto sale de la cuenta de origen.';
+      return `Entran <b>${fcur(dest, cd)}</b> a ${esc(bankName(o.ID_Banco_Destino))} y se descuentan <b>${fcur(m, co)}</b> de ${esc(bankName(o.ID_Banco_Origen))}${co !== cd ? ` (${fcur(dest, cd)} × T/C ${tc})` : ''}.`
         + (isBuyUsd(o) ? ` Se registra también como <b>gasto de ${money(m)}</b> en ${esc(cuentaNombre(o.Cuenta_Gastos))}.` : co === 'USD' && cd !== 'USD' ? ' Es un cambio de dólares a córdobas entre tus cuentas: no se registra como ingreso.' : ''); },
     validate: o => {
       if (o.Tipo === 'Transferencia' && String(o.ID_Banco_Origen) === String(o.ID_Banco_Destino)) return 'Elige dos cuentas distintas';
-      if (o.Tipo !== 'Ajuste' && Number(o.Monto) <= 0) return 'El monto debe ser mayor que cero';
-      if (o.Tipo === 'Transferencia' && saldosConfigurados()) { const a = availOf(o.ID_Banco_Origen, movAdj()); if (Number(o.Monto) > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)} y la transferencia es de ${fcur(Number(o.Monto), a.cur)}`; }
+      if (o.Tipo !== 'Ajuste' && Number(o.Monto_Destino) <= 0) return 'El monto debe ser mayor que cero';
+      if (o.Tipo === 'Transferencia' && saldosConfigurados()) { const a = availOf(o.ID_Banco_Origen, movAdj()), m = movOrigen(o); if (m > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)} y se necesitan ${fcur(m, a.cur)}`; }
       return ''; },
-    before: o => { const co = o.Tipo === 'Transferencia' ? curOf(o.ID_Banco_Origen) : curOf(o.ID_Banco_Destino), cd = curOf(o.ID_Banco_Destino), m = Number(o.Monto) || 0, tc = Number(o.Tipo_Cambio) || 0;
+    before: o => { const co = o.Tipo === 'Transferencia' ? curOf(o.ID_Banco_Origen) : curOf(o.ID_Banco_Destino), cd = curOf(o.ID_Banco_Destino), tc = Number(o.Tipo_Cambio) || 0;
+      o.Monto_Destino = r2(Number(o.Monto_Destino) || 0);
       if (o.Tipo !== 'Transferencia') o.ID_Banco_Origen = '';
       if (!(o.Tipo === 'Transferencia' && co !== cd)) o.Tipo_Cambio = '';
       if (!isBuyUsd(o)) o.Cuenta_Gastos = ''; else if (!o.Cuenta_Gastos) o.Cuenta_Gastos = defaultGastoCuenta();
-      o.Moneda = co; o.Monto_Destino = r2(co === cd ? m : co === 'USD' ? m * tc : m / tc); o.Monto_C = r2(co === 'USD' ? m * (tc || lastTC()) : m); },
+      o.Monto = movOrigen(o);
+      o.Moneda = co; o.Monto_C = r2(co === 'USD' ? o.Monto * (tc || lastTC()) : o.Monto); },
     after: o => { if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); }},
   Bancos: {t: 'cuenta de banco', g: 'a', perm: 'catalogos.editar', fields: [
     {k: 'Banco', l: 'Banco', ty: 'text', req: 1, half: 1, list: () => histDesc('Bancos', 'Banco')},
