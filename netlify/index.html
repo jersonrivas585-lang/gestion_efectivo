@@ -283,6 +283,15 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .fpreview{grid-column:1 / -1;font-size:13.5px;background:var(--teal-soft);border-radius:9px;padding:9px 12px}
 .fpreview:empty{display:none}
 .imp-err{color:var(--over);font-size:13px;margin:4px 0}
+.fuelres{text-align:center}
+.fuelres h4{text-align:left}
+.fuel-say{font-size:17px;margin:4px 0 8px;line-height:1.5}
+.fuel-kml{font-size:46px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.fuel-kml span{font-size:16px;font-weight:600;color:var(--muted);margin-left:6px}
+.gauge{width:100%;max-width:280px;margin:6px auto 0;display:block}
+.gauge .gl{font-family:var(--font);font-size:11px;fill:var(--muted)}
+.fuel-cmp{font-size:14px;font-weight:600;margin:4px 0 0}
+.fuelres .figs{text-align:left}
 .perms{display:grid;grid-template-columns:1fr;gap:2px;border:1px solid var(--line);border-radius:10px;padding:6px}
 .perm{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:14px}
 .field label.perm{font-weight:400;color:var(--ink)}
@@ -367,6 +376,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
 const NF = new Intl.NumberFormat('es-NI', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const NF0 = new Intl.NumberFormat('es-NI', {maximumFractionDigits: 0});
 const money = v => { v = r2(v); return (v < 0 ? '−' : '') + 'C$ ' + NF.format(Math.abs(v)); };
 const kfmt = v => { const a = Math.abs(v); return a >= 1000 ? (v/1000).toFixed(a >= 10000 ? 0 : 1) + 'k' : String(Math.round(v)); };
 const pad = n => String(n).padStart(2, '0');
@@ -1028,24 +1038,87 @@ V.cuenta = () => {
   ${top.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Descripción</th><th class="n">Veces</th><th class="n">Total</th><th class="n">Promedio</th></tr></thead><tbody>${top.map(([k, v]) => `<tr data-buscar="${esc(k)}"><td>${esc(k)}</td><td class="n">${v.n}</td><td class="n">${money(v.t)}</td><td class="n">${money(v.t / v.n)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>Sin gastos en este período</b></div>'}</section>`;
 };
 
+/* ---------- Combustible ---------- */
+const fuelRows = () => DB.t.Consumo_Combustible.slice().sort((a, b) => String(a.Fecha).localeCompare(String(b.Fecha)) || (Number(a.Horometro_Km) - Number(b.Horometro_Km)));
+const lastFuelPrice = () => { const r = fuelRows().filter(x => Number(x.Precio_Litro) > 0).pop(); return r ? Number(r.Precio_Litro) : (Number(lsGet('precio_litro')) || ''); };
+/** Recorrido desde el llenado anterior, litros, km/L y costo de un registro (nuevo o existente) */
+function fuelCalc(o) {
+  const litros = Math.round((o.UM === 'GL' ? Number(o.Cantidad) * 3.78541 : Number(o.Cantidad) || 0) * 1000) / 1000;
+  const prev = fuelRows().filter(r => String(r.ID) !== String(o.ID) && Number(r.Horometro_Km) < Number(o.Horometro_Km) && String(r.Fecha).slice(0, 10) <= String(o.Fecha).slice(0, 10)).pop();
+  const km = prev ? Math.round(Number(o.Horometro_Km) - Number(prev.Horometro_Km)) : 0;
+  let precio = Number(o.Precio_Litro) || 0, costo = Number(o.Costo) || 0;
+  // Manda el último campo de dinero que se tocó: el total pagado o el precio por litro
+  const byTotal = costo && (!precio || (FORM && FORM.lastMoney === 'Costo'));
+  if (litros && byTotal) precio = Math.round(costo / litros * 100) / 100;
+  else if (litros && precio) costo = precio * litros;
+  return {litros, km, kml: litros && km ? km / litros : 0, precio, costo: r2(costo), prev, costoKm: km && costo ? costo / km : 0};
+}
+const fuelAvg = (excludeId, n = 10) => { const v = fuelRows().filter(r => Number(r.km_litros) > 0 && String(r.ID) !== String(excludeId)).slice(-n); return v.length ? v.reduce((a, r) => a + Number(r.km_litros), 0) / v.length : 0; };
+/** Medidor original: aguja según el rendimiento comparado con el historial */
+function fuelGauge(kml) {
+  const hist = fuelRows().map(r => Number(r.km_litros)).filter(v => v > 0).slice(-30);
+  const lo = Math.floor(Math.min(...hist, kml) * 0.95 * 2) / 2, hi = Math.ceil(Math.max(...hist, kml) * 1.05 * 2) / 2;
+  const avg = fuelAvg(null), t = Math.max(0, Math.min(1, (kml - lo) / ((hi - lo) || 1)));
+  const ang = a => Math.PI * (1 - a), cx = 120, cy = 118, R = 92;
+  const pt = (a, r) => [cx + r * Math.cos(ang(a)), cy - r * Math.sin(ang(a))];
+  let ticks = ''; for (let i = 0; i <= 10; i++) { const [x1, y1] = pt(i / 10, R - (i % 5 ? 8 : 14)), [x2, y2] = pt(i / 10, R); ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--ink2)" stroke-width="${i % 5 ? 1.5 : 2.5}" stroke-linecap="round"/>`; }
+  const arc = (a0, a1, col) => { const [x0, y0] = pt(a0, R + 9), [x1, y1] = pt(a1, R + 9); return `<path d="M${x0} ${y0} A${R + 9} ${R + 9} 0 0 1 ${x1} ${y1}" fill="none" stroke="${col}" stroke-width="7" stroke-linecap="round"/>`; };
+  const ta = avg ? Math.max(0, Math.min(1, (avg - lo) / ((hi - lo) || 1))) : null;
+  const [nx, ny] = pt(t, R - 22), [ax, ay] = ta !== null ? pt(ta, R + 18) : [0, 0];
+  return `<svg viewBox="0 0 240 150" class="gauge" role="img" aria-label="Rendimiento ${kml.toFixed(2)} km por litro">
+    ${arc(0, 0.33, 'var(--over)')}${arc(0.36, 0.64, 'var(--sun)')}${arc(0.67, 1, 'var(--teal)')}${ticks}
+    ${ta !== null ? `<circle cx="${ax}" cy="${ay}" r="4" fill="var(--ink)"><title>Promedio ${avg.toFixed(2)} km/L</title></circle>` : ''}
+    <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="var(--over)" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="11" fill="var(--ink)"/>
+    <text x="${pt(0, R - 30)[0]}" y="${cy + 2}" text-anchor="middle" class="gl">${lo}</text><text x="${pt(1, R - 30)[0]}" y="${cy + 2}" text-anchor="middle" class="gl">${hi}</text>
+  </svg>`;
+}
+function showFuelResult(r, fromList) {
+  const c = {km: Number(r.Km_Recorrido) || 0, litros: Number(r.Litro) || 0, kml: Number(r.km_litros) || 0, costo: Number(r.Costo) || 0, precio: Number(r.Precio_Litro) || 0};
+  const avg = fuelAvg(r.ID), diff = avg && c.kml ? (c.kml - avg) / avg * 100 : 0;
+  $('#modal').innerHTML = `<div class="scrim" data-close="1"><div class="sheet fuelres" role="dialog" aria-modal="true" aria-label="Cálculo de rendimiento">
+    <h4>Rendimiento del llenado <span class="pill">${fdate(r.Fecha)}</span><button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
+    ${c.km > 0 ? `<p class="fuel-say">Manejaste <b>${NF0.format(c.km)} kilómetros</b>.<br>Usaste <b>${c.litros.toFixed(3)} litros</b>.</p>
+      <div class="fuel-kml num">${c.kml.toFixed(2)}<span>km/L</span></div>${fuelGauge(c.kml)}
+      ${avg ? `<p class="fuel-cmp ${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff).toFixed(1)}% ${diff >= 0 ? 'mejor' : 'menos'} que tu promedio de los últimos 10 llenados (${avg.toFixed(2)} km/L)</p>` : ''}`
+    : '<p class="fuel-say">Es el primer llenado registrado: el rendimiento se calcula a partir del siguiente.</p>'}
+    <div class="figs three" style="margin-top:14px"><div class="fig"><small>Costo</small><b class="num">${c.costo ? money(c.costo) : '—'}</b></div>
+      <div class="fig"><small>Precio por litro</small><b class="num">${c.precio ? money(c.precio) : '—'}</b></div>
+      <div class="fig"><small>Costo por km</small><b class="num">${c.costo && c.km ? money(c.costo / c.km) : '—'}</b></div></div>
+    <p class="muted" style="font-size:12.5px;margin:10px 0 0">Odómetro ${NF0.format(r.Horometro_Km)} km. ${truthy(r.Full) ? 'Tanque lleno.' : 'Llenado parcial: el rendimiento puede variar.'} El costo no se registra en Gastos.</p>
+    <div class="actions"><span class="spacer"></span>${fromList && can('combustible.editar') && !isTmp(r.ID) ? `<button type="button" class="btn" data-act="fuel-edit" data-fid="${r.ID}">Editar</button>` : ''}<button type="button" class="btn primary" data-close="1">Listo</button></div>
+  </div></div>`;
+}
+const monthKey = d => String(d).slice(0, 7);
+
 V.combustible = () => {
-  const rows = DB.t.Consumo_Combustible.slice().sort((a, b) => String(a.Fecha).localeCompare(String(b.Fecha)) || a.ID - b.ID);
+  const rows = fuelRows();
   const last30 = rows.slice(-30), kml = last30.map(r => Number(r.km_litros) || 0);
-  const valid = rows.filter(r => Number(r.km_litros) > 0), last10 = valid.slice(-10);
-  const avg = last10.length ? last10.reduce((a, r) => a + Number(r.km_litros), 0) / last10.length : 0;
-  const yr = String(new Date().getFullYear()); const yRows = rows.filter(r => String(r.Fecha).startsWith(yr));
+  const avg = fuelAvg(null);
   const lastR = rows[rows.length - 1];
+  const mk = monthKey(todayISO()), mRows = rows.filter(r => monthKey(r.Fecha) === mk);
+  const withCost = rows.filter(r => Number(r.Costo) > 0 && Number(r.Km_Recorrido) > 0).slice(-10);
+  const cpk = withCost.length ? withCost.reduce((a, r) => a + Number(r.Costo), 0) / withCost.reduce((a, r) => a + Number(r.Km_Recorrido), 0) : 0;
+  const months = []; for (let i = 11; i >= 0; i--) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); months.push(d.getFullYear() + '-' + pad(d.getMonth() + 1)); }
+  const mCost = months.map(m => sum(rows.filter(r => monthKey(r.Fecha) === m), 'Costo'));
+  const hasCost = mCost.some(v => v > 0);
   return `
-  <div class="figs two">
+  <div class="figs three">
     <div class="fig"><small>Último rendimiento</small><b class="num">${lastR && lastR.km_litros ? Number(lastR.km_litros).toFixed(2) : '—'} km/L</b></div>
     <div class="fig"><small>Promedio últimos 10</small><b class="num">${avg.toFixed(2)} km/L</b></div>
-    <div class="fig"><small>Litros en ${yr}</small><b class="num">${NF.format(yRows.reduce((a, r) => a + (Number(r.Litro) || 0), 0))}</b></div>
-    <div class="fig"><small>Odómetro actual</small><b class="num">${lastR ? NF.format(lastR.Horometro_Km).replace('.00', '') : '—'} km</b></div>
+    <div class="fig"><small>Odómetro actual</small><b class="num">${lastR ? NF0.format(lastR.Horometro_Km) : '—'}</b></div>
+    <div class="fig"><small>Gasto en ${MESES[new Date().getMonth()].toLowerCase()}</small><b class="num">${money(sum(mRows, 'Costo'))}</b></div>
+    <div class="fig"><small>Litros en el mes</small><b class="num">${NF.format(sum(mRows, 'Litro'))}</b></div>
+    <div class="fig"><small>Costo por km</small><b class="num">${cpk ? money(cpk) : '—'}</b></div>
   </div>
+  <p class="muted" style="font-size:12.5px;margin:8px 2px 0">El costo del combustible se lleva aparte y no se suma a Gastos, porque se paga con tarjeta de crédito.</p>
   <section class="section"><h3>Rendimiento <small>últimos 30 llenados, km por litro</small></h3><div class="panel">${lineChart(last30.map(r => fdate(r.Fecha, {day: 'numeric', month: 'short'})), kml, {name: 'km/L'})}</div></section>
-  <div class="toolbar"><span class="spacer"></span>${can('combustible.editar') ? '<button class="btn primary desk-only" data-new="Consumo_Combustible">Registrar llenado</button>' : ''}</div>
-  <div class="tablewrap"><table class="t"><thead><tr><th>Fecha</th><th class="n">Odómetro</th><th class="n">Recorrido</th><th class="n">Cantidad</th><th class="n">Litros</th><th class="n">km/L</th><th>Tanque lleno</th></tr></thead>
-  <tbody>${rows.slice().reverse().map(r => `<tr data-edit="Consumo_Combustible" data-id="${r.ID}"><td>${fdate(r.Fecha)}</td><td class="n">${NF.format(r.Horometro_Km)}</td><td class="n">${r.Km_Recorrido} km</td><td class="n">${r.Cantidad} ${esc(r.UM)}</td><td class="n">${NF.format(r.Litro)}</td><td class="n">${r.km_litros ? Number(r.km_litros).toFixed(2) : '—'}</td><td>${truthy(r.Full) ? 'Sí' : 'No'}</td></tr>`).join('')}</tbody></table></div>`;
+  ${hasCost ? `<section class="section"><h3>Gasto en combustible <small>por mes</small></h3><div class="panel">${barChart(months.map(m => cap(MESES[+m.slice(5) - 1].slice(0, 3))), [{name: 'Costo', values: mCost, color: 'var(--sun)'}])}</div></section>` : ''}
+  <div class="toolbar"><span class="muted">${rows.length} llenados</span><span class="spacer"></span>${can('combustible.editar') ? '<button class="btn primary desk-only" data-new="Consumo_Combustible">Registrar llenado</button>' : ''}</div>
+  <div class="list">${rows.slice().reverse().slice(0, 300).map(r => `<button class="item ${r._pending ? 'pending' : ''}" data-fuel="${r.ID}">
+    <span class="tx"><b>${fdate(r.Fecha)}<span class="muted" style="font-weight:500">, ${NF0.format(r.Horometro_Km)} km</span></b>
+      <small>${Number(r.Litro).toFixed(3)} L${Number(r.Km_Recorrido) > 0 ? ', ' + r.Km_Recorrido + ' km recorridos' : ''}${truthy(r.Full) ? '' : ', parcial'}</small>${Number(r.Costo) ? `<small>Costo: ${money(r.Costo)} (${money(r.Precio_Litro)} por litro)</small>` : ''}</span>
+    <span class="amt num">${r.km_litros ? Number(r.km_litros).toFixed(2) : '—'}<small>km/L</small></span></button>`).join('')}</div>`;
 };
 
 V.tarjetas = () => {
@@ -1215,19 +1288,25 @@ const FORMS = {
     before: o => { o.Descuento = r2(o.Valor * (o.Porcentaje_Desc || 0) * 10000) / 10000; o.Pagar = r2(o.Valor - o.Descuento); o.Diferencia = r2(o.Pagar - (o.Monto_Pagado || 0));
       const d = toDate(o.Fecha); if (d) { o.Mes = d.getMonth() + 1; o.Anio = d.getFullYear(); o.Mes_Letra = (DB.t.Meses.find(m => m.ID === o.Mes) || {}).Mes || ''; } }},
   Consumo_Combustible: {t: 'llenado de combustible', perm: 'combustible.editar', fields: [
-    {k: 'Fecha', l: 'Fecha', ty: 'date', req: 1, def: todayISO},
-    {k: 'Horometro_Km', l: 'Odómetro (km)', ty: 'number', req: 1, step: 'any'},
+    {k: 'Fecha', l: 'Fecha', ty: 'date', req: 1, def: todayISO, half: 1},
+    {k: 'Horometro_Km', l: 'Odómetro (km)', ty: 'number', req: 1, step: 'any', half: 1},
     {k: 'Cantidad', l: 'Cantidad cargada', ty: 'number', req: 1, step: 'any', half: 1},
     {k: 'UM', l: 'Unidad', ty: 'select', opts: () => [['LT', 'Litros'], ['GL', 'Galones']], def: 'LT', half: 1},
+    {k: 'Precio_Litro', l: 'Precio por litro (C$)', ty: 'number', step: 'any', half: 1, def: () => lastFuelPrice()},
+    {k: 'Costo', l: 'Total pagado (C$)', ty: 'number', step: '0.01', half: 1, hint: 'Opcional: si lo escribes, se calcula el precio por litro'},
     {k: 'Full', l: 'Tanque lleno', ty: 'bool', def: true}],
-    before: o => {
-      const rows = DB.t.Consumo_Combustible.filter(r => r.ID !== o.ID).sort((a, b) => String(a.Fecha).localeCompare(String(b.Fecha)) || a.ID - b.ID);
-      const prev = rows.filter(r => String(r.Fecha) <= String(o.Fecha) && Number(r.Horometro_Km) < Number(o.Horometro_Km)).pop();
+    preview: o => { const c = fuelCalc(o); if (!Number(o.Cantidad)) return '';
+      return (c.km > 0 ? `Recorriste ${NF.format(c.km).replace('.00', '')} km con ${c.litros.toFixed(3)} litros: <b>${c.kml.toFixed(2)} km/L</b>.` : 'Primer llenado registrado: el rendimiento se calcula desde el próximo.') +
+        (c.costo ? ` Costo ${money(c.costo)} (${money(c.precio)} por litro).` : '') + ' No se registra como gasto.'; },
+    before: o => { const c = fuelCalc(o);
       const FG = 3.78541, FM = 1.60934; o.Factor_GL = FG; o.Factor_Milla = FM; o.Horometro_Millas = o.Horometro_Km;
-      o.Galon = r2(o.UM === 'GL' ? o.Cantidad : o.Cantidad / FG); o.Litro = r2(o.UM === 'LT' ? o.Cantidad : o.Cantidad * FG);
-      o.Km_Recorrido = prev ? Math.round(o.Horometro_Km - prev.Horometro_Km) : 0; o.Millas_Recorrido = o.Km_Recorrido;
-      o.km_galon = o.Galon && o.Km_Recorrido ? o.Km_Recorrido / o.Galon : ''; o.km_litros = o.Litro && o.Km_Recorrido ? o.Km_Recorrido / o.Litro : '';
-      if (!o.No) o.No = (prev ? Number(prev.No) || 0 : 0) + 1; }},
+      o.Litro = c.litros; o.Galon = Math.round(c.litros / FG * 1000) / 1000;
+      o.Km_Recorrido = c.km; o.Millas_Recorrido = c.km;
+      o.km_galon = o.Galon && c.km ? c.km / o.Galon : ''; o.km_litros = c.litros && c.km ? c.km / c.litros : '';
+      o.Precio_Litro = c.precio || ''; o.Costo = c.costo || '';
+      if (!o.No) o.No = (c.prev ? Number(c.prev.No) || 0 : 0) + 1; },
+    after: o => { if (Number(o.Precio_Litro)) lsSet('precio_litro', String(o.Precio_Litro)); },
+    done: o => { if (Number(o.Km_Recorrido) > 0) showFuelResult(o); }},
   Cuentas: {t: 'cuenta', g: 'a', perm: 'catalogos.editar', fields: [
     {k: 'Codigo', l: 'Código', ty: 'text', req: 1, keyEdit: 1, hint: 'Ejemplo: C033'},
     {k: 'Cuentas', l: 'Nombre', ty: 'text', req: 1},
@@ -1273,7 +1352,7 @@ function openForm(table, id) {
     <h4>${esc(title)}${REL[table] ? ` <span class="pill">${esc(mesLabel(S.mes))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
     ${auto ? '<div class="notice info" style="margin-top:0">Ingreso automático por una conversión de dólares. Se cambia desde el retiro o la transferencia que lo generó.</div>' : ro ? '<div class="notice" style="margin-top:0">Solo lectura: período cerrado o sin permiso.</div>' : ''}
     <div class="fgrid">${F.fields.map(fieldHtml).join('')}<div class="fpreview" id="fpreview"></div></div>
-    <div class="actions">${rec && !ro ? '<button type="button" class="btn danger" data-act="del">Eliminar</button>' : ''}<span class="spacer"></span><button type="button" class="btn" data-close="1">Cancelar</button>${ro ? '' : `<button type="submit" class="btn primary">${rec ? 'Guardar cambios' : 'Guardar ' + F.t}</button>`}</div>
+    <div class="actions">${rec && !ro ? '<button type="button" class="btn danger" data-act="del">Eliminar</button>' : ''}<span class="spacer"></span><button type="button" class="btn" data-close="1">Cancelar</button>${ro ? '' : `<button type="submit" class="btn primary">${rec ? 'Guardar cambios' : F.t.length > 14 ? 'Guardar' : 'Guardar ' + F.t}</button>`}</div>
   </form></div>`;
   fillLists(); formDynamics();
   const first = $('#frm input:not([disabled]), #frm select:not([disabled])'); if (first && !rec) setTimeout(() => first.focus(), 30);
@@ -1330,6 +1409,7 @@ async function submitForm() {
     else { const tmp = Object.assign({}, o, {[k]: 'tmp' + (++TMP), _pending: true}); if (rel) tmp[rel.fk] = h[rel.hkey]; if (F.needsMes) tmp.Mes_Anio = S.mes; DB.apply({upserts: {[table]: [tmp]}}); undo = () => DB.apply({deletes: {[table]: [tmp[k]]}}); o.__tmp = tmp[k]; }
     if (F.after) F.after(o);
     closeModal(); render();
+    if (F.done) F.done(Object.assign({}, o, {ID: rec ? rec[k] : 'tmp'}));
     Q.run(() => Backend.call('save', {table, row, mes})).then(ch => {
       if (o.__tmp) DB.apply({deletes: {[table]: [o.__tmp]}});
       commit(ch); if (!FORM) render();
@@ -1338,14 +1418,14 @@ async function submitForm() {
       toast(label + ' no se guardó: ' + e.message, true);
       if (!FORM && e.code !== 'AUTH') { openForm(table, rec ? rec[k] : undefined); fillFormValues(o); }
     });
-    toast(label + (rec ? ' actualizad' : ' registrad') + (F.g || 'o'));
+    if (!F.done) toast(label + (rec ? ' actualizad' : ' registrad') + (F.g || 'o'));
     return;
   }
   const btn = $('#frm button[type=submit]'); btn.disabled = true; btn.textContent = 'Guardando…';
   try {
     const ch = await Q.run(() => Backend.call('save', {table, row, mes}));
     if (F.after) F.after(o);
-    commit(ch); closeModal(); render(); toast(label + ' guardad' + (F.g || 'o'));
+    commit(ch); closeModal(); render(); if (F.done) F.done(o); else toast(label + ' guardad' + (F.g || 'o'));
   } catch (e) { if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Guardar'; } toast('No se pudo guardar: ' + e.message, true); }
 }
 /** Vuelve a poner en el formulario lo que la persona había escrito (si el envío falló) */
@@ -1513,12 +1593,13 @@ function toast(msg, err) { clearTimeout(toastT); let el = $('.toast'); if (!el) 
 
 /* ---------- Eventos ---------- */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
+  const t = e.target.closest('[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
   if (!t) return;
   const d = t.dataset;
   if (d.close !== undefined) { if (e.target === t) closeModal(); return; }
   if (d.user) { openUserForm(d.user); return; }
   if (d.banco) { S.banco = d.banco; render(); return; }
+  if (d.fuel) { const r = DB.t.Consumo_Combustible.find(x => String(x.ID) === d.fuel); if (r) showFuelResult(r, true); return; }
   if (d.go) { e.preventDefault(); go(d.go); return; }
   if (d.new) { const F = FORMS[d.new]; if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
   if (d.edit) { if (isTmp(d.id)) { toast('Se está guardando, espera un momento'); return; } openForm(d.edit, d.id); return; }
@@ -1554,6 +1635,7 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'fuel-edit') { const id = t.dataset.fid; closeModal(); openForm('Consumo_Combustible', id); return; }
   if (a === 'mov-transfer' || a === 'mov-dep') { openForm('Movimientos_Banco'); if (a === 'mov-dep') { $('#f_Tipo').value = 'Depósito'; $('#f_ID_Banco_Destino').value = S.banco; } else if (S.banco) { $('#f_ID_Banco_Origen').value = S.banco; const o = bancos().find(b => String(b.ID_Banco) !== S.banco); if (o) $('#f_ID_Banco_Destino').value = o.ID_Banco; } formDynamics(); return; }
   if (a === 'repair') { t.disabled = true; try { const r = await Backend.call('repair'); toast((r.report || []).length ? r.report.length + ' correcciones aplicadas' : 'Todo estaba en orden'); await boot(); } catch (err) { toast(err.message, true); } t.disabled = false; return; }
   if (a === 'imp-ppto') return pickBudgetFile();
@@ -1619,6 +1701,7 @@ let qT;
 document.addEventListener('input', e => {
   const b = e.target.dataset.bind;
   if (b === 'q') { S.q = e.target.value; clearTimeout(qT); qT = setTimeout(() => { const pos = e.target.selectionStart; render(); const el = $('[data-bind=q]'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 220); }
+  if (FORM && (e.target.id === 'f_Costo' || e.target.id === 'f_Precio_Litro')) FORM.lastMoney = e.target.name;
   if (FORM && e.target.closest('#frm')) formDynamics();
   if (FORM && e.target.name === 'Descripcion_Gasto' && e.inputType === 'insertReplacementText') autofillFromHistory(e.target);
 });
