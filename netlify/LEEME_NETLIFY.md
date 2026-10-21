@@ -99,6 +99,29 @@ La sección **Bancos** muestra el saldo de cada cuenta. Al conectar por primera 
 
 Los ingresos automáticos se editan o eliminan desde el retiro o la transferencia que los generó. El tipo de cambio que uses queda como sugerencia para la próxima vez.
 
+## Dinero disponible e inicio de cada período
+
+En **Inicio**, la sección *Dinero disponible* muestra lo que tienes para gastar en el período: el saldo de cada cuenta en córdobas (ingresos depositados − retiros ± transferencias), el **efectivo en mano** (efectivo recibido + retiros − gastos) y el **total disponible** (ingresos − gastos, el mismo criterio de Access). La cuenta en dólares aparece aparte. Toca una cuenta para ver sus movimientos.
+
+**Al empezar un período** (por ejemplo Octubre), si aún no tiene ingresos aparece el botón **Iniciar Octubre 2026**. Propone, con la fecha de inicio del período:
+- *Saldo de Mes Anterior (Cuenta)* por cada cuenta, con lo que quedó del período anterior (si ese período no tenía bancos asignados, eliges la cuenta);
+- *Saldo de Mes Anterior (Disp. En Mano)* con el efectivo que quedó;
+- *Salario Mensual* con el monto del último salario.
+
+Revisas montos y cuentas, desmarcas lo que no aplique y se registran todos juntos como ingresos.
+
+## Gastos en efectivo: solo con efectivo disponible
+
+Un gasto con forma de pago **Efectivo** solo se puede guardar si tienes ese efectivo en mano en el período (efectivo recibido + retiros − gastos en efectivo). Si no alcanza, el formulario lo indica y ofrece:
+- **Registrar retiro**: abre el retiro desde BAC o Avanz con el monto que falta; al guardarlo vuelves al gasto con todo lo que habías escrito.
+- **Pagar con débito**: cambia la forma de pago a tu tarjeta de débito.
+
+Los retiros y los pagos con débito avisan (sin bloquear) si el saldo de la cuenta en el período no alcanza, por si falta registrar un ingreso o una transferencia.
+
+## Tipo de cambio por período
+
+En *Períodos*, la columna **T/C** guarda el tipo de cambio (C$ por US$) de cada mes. Al registrar un retiro, una compra con débito o una transferencia con la cuenta en dólares, se propone el T/C del período (puedes cambiarlo en el formulario). Si el período no tiene T/C, se usa el último que registraste. Se guarda en la hoja Mes_Anio, columna `Tipo_Cambio`.
+
 ## Compras con tarjeta de débito
 
 En el formulario de gasto, **Forma de pago** puede ser *Efectivo* o *Tarjeta de débito* de cualquiera de las cuentas.
