@@ -114,6 +114,8 @@ El dinero se lleva como en la realidad, por **cuenta**: Avanz Córdobas, BAC Có
   - *Transferencia entre tus cuentas* (también depositar efectivo o pasar de dólares a córdobas): baja una y sube la otra; no es ingreso ni gasto.
 - **Dinero disponible** = cuentas en córdobas + efectivo. La cuenta en dólares se muestra aparte, con su equivalente al T/C del período.
 
+**Movimientos por período:** la lista de movimientos de *Bancos* (de cada cuenta y del efectivo) muestra solo los del **período elegido arriba** (del 20 al 19), y dice cuántos son. Cambia el período con el selector del encabezado, o activa **Mostrar todos los meses** para ver también los anteriores (hasta los 250 más recientes). El saldo que aparece en cada movimiento es siempre el acumulado real de la cuenta, no solo del período.
+
 **Movimientos anteriores a los saldos:** en *Bancos*, cada cuenta muestra también los movimientos (depósitos, transferencias, ingresos, retiros, gastos con débito) que se hicieron **antes** de la fecha y hora de los saldos actuales. Salen atenuados con la nota «Anterior a los saldos» y no cambian el saldo, porque el saldo que escribiste ya los incluye. Los depósitos de versiones anteriores se pueden abrir, corregir o eliminar.
 
 **Presupuesto del período en curso:** además de los *Ingresos del período* (lo depositado entre las fechas del período), muestra el **Dinero para el período** = lo que tienes hoy en cuentas en córdobas y efectivo + lo que ya gastaste en el período. Ese dinero incluye los saldos con que empezaste, y es con el que se calcula **Sin asignar** (dinero − presupuestado).
@@ -159,6 +161,18 @@ Los retiros desde cuentas en córdobas son siempre en córdobas.
 ## Qué controlan los períodos
 
 Los períodos (del 20 al 19) solo agrupan **gastos y presupuesto**: los sobres, lo gastado contra lo presupuestado y los cortes. **Ingresos y retiros** no se abren ni se cierran por período: cada uno se asigna solo al período que corresponde a su fecha, así el resumen de un período muestra los ingresos y retiros que hubo entre sus fechas.
+
+## Gastos vinculados a las partidas del presupuesto
+
+Al registrar un gasto, debajo de *Cuenta* aparece **Partida del presupuesto**, con las partidas de esa cuenta en el período y lo que queda de cada una (por ejemplo, *Mercado · queda C$ 3,000.00*). Así la relación entre lo presupuestado y lo gastado no depende de que las descripciones coincidan.
+
+- **Elegir una partida:** si la descripción está vacía, se llena con la de la partida. Debajo del formulario se ve cuánto está presupuestado y gastado, y cómo queda la partida con este gasto (o cuánto se excede; solo avisa, no bloquea).
+- **Si no eliges:** el gasto se vincula solo a la partida con la misma descripción, si existe.
+- **Sin partida:** esa opción deja el gasto fuera de toda partida aunque la descripción coincida.
+- **Presupuesto:** la columna *Gastado* de cada partida suma los gastos vinculados y muestra cuántos son. Al tocar el monto se abre la lista de esos gastos (que se pueden abrir para corregir). Lo que no está vinculado aparece como *Otros gastos sin partida*. Los gastos anteriores sin vínculo siguen contando por descripción igual.
+- **En Gastos:** cada gasto vinculado muestra «partida …».
+- **Al cambiar de período** un gasto, se quita el vínculo (la partida pertenece al otro período) y se vuelve a vincular por descripción si coincide. Si **reemplazas el presupuesto** al importar desde Excel, los gastos vinculados se vuelven a ligar por cuenta y descripción.
+- El vínculo se guarda en la columna `ID_Partida` de Gastos_Detalle (se agrega sola; `0` = sin partida a propósito).
 
 ## Importar el presupuesto desde Excel
 

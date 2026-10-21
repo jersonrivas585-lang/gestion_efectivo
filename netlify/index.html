@@ -297,6 +297,9 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .dtrow .input{flex:1.4;min-width:0}
 .dtrow .dt-time{flex:1}
 .item.pre{opacity:.62}
+.lnk{text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
+.pgrow{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;cursor:pointer}
+.pgrow small{color:var(--muted);font-size:12.5px}
 .saldo{font-size:13.5px;margin-top:5px;padding:7px 10px;background:var(--sunk);border-radius:8px}
 .saldo:empty{display:none}
 .saldo b{font-weight:700}
@@ -420,7 +423,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.21-2159';
+const APP_VERSION = '2026.10.21-2228';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -528,6 +531,23 @@ const DB = {
 const header = (det, mes) => DB.idx().headerByMes[REL[det].header][mes];
 const detail = (det, mes) => { const h = header(det, mes); return h ? (DB.idx().det[det].get(String(h[REL[det].hkey])) || []) : []; };
 const sum = (rows, f = 'Total') => r2(rows.reduce((a, r) => a + (Number(r[f]) || 0), 0));
+/* Gasto ↔ partida del presupuesto: por vínculo (ID_Partida) o, en gastos anteriores sin vínculo, por descripción igual */
+const hasId = v => v !== '' && v !== undefined && v !== null;
+function partidaOfGasto(g, pr) {
+  if (hasId(g.ID_Partida)) {
+    if (Number(g.ID_Partida) === 0) return null;   // «Sin partida», elegido a propósito
+    const p = pr.find(x => String(x.ID_DetPresupuesto) === String(g.ID_Partida)); if (p) return p;
+  }
+  return pr.find(p => nrm(p.Descripcion) === nrm(g.Descripcion_Gasto)) || null;
+}
+const partidasOf = (mes, cuenta) => detail('Presupuesto_Detalle', mes).filter(p => p.Cuenta_Gastos === cuenta);
+/** Lo gastado en cada partida de una cuenta (sin contar el gasto que se está editando) */
+function partidaSpent(mes, cuenta, excludeId) {
+  const pr = partidasOf(mes, cuenta), m = new Map(pr.map(p => [String(p.ID_DetPresupuesto), 0]));
+  detail('Gastos_Detalle', mes).filter(g => g.Cuenta_Gastos === cuenta && (excludeId === undefined || String(g.ID_Detalle_Gastos) !== String(excludeId)))
+    .forEach(g => { const p = partidaOfGasto(g, pr); if (p) { const k = String(p.ID_DetPresupuesto); m.set(k, r2(m.get(k) + (Number(g.Total) || 0))); } });
+  return {pr, m};
+}
 const cuentaNombre = c => (DB.idx().cuentas[c] || {}).Cuentas || c || 'Sin cuenta';
 /* Desde que se usa la app (Empresa → Inicio_App), los períodos solo agrupan gastos y presupuesto.
    Ingresos y retiros van por fecha: el resumen de un período suma los que caen entre sus fechas.
@@ -1200,7 +1220,7 @@ V.gastos = () => {
   if (S.cuenta) rows = rows.filter(r => r.Cuenta_Gastos === S.cuenta);
   if (q) rows = rows.filter(r => (String(r.Descripcion_Gasto) + ' ' + String(r.Descripcion_Adicional || '')).toLowerCase().includes(q));
   const total = sum(rows), n = rows.length; const shown = rows.slice().sort((a, b) => dtKey(b.Fecha).localeCompare(dtKey(a.Fecha)) || b.ID_Detalle_Gastos - a.ID_Detalle_Gastos).slice(0, 400);
-  const ctas = DB.t.Cuentas.filter(c => truthy(c.Cuenta_de_Gastos));
+  const ctas = DB.t.Cuentas.filter(c => truthy(c.Cuenta_de_Gastos)), PD = new Map(DB.t.Presupuesto_Detalle.map(p => [String(p.ID_DetPresupuesto), p.Descripcion]));
   return `${S.all ? '' : lockNote('Gastos')}
   <div class="toolbar">
     <input class="input" type="search" placeholder="Buscar descripción" value="${esc(S.q)}" data-bind="q" aria-label="Buscar">
@@ -1212,7 +1232,7 @@ V.gastos = () => {
   ${S.all && !q && !S.cuenta ? '<div class="panel empty"><b>Busca en todo el historial</b>Escribe una descripción o elige una cuenta para buscar desde 2018.</div>' :
     n ? `<div class="list">${listGrouped(shown, 'Fecha', r => `
       <button class="item ${r._pending ? 'pending' : ''}" data-edit="Gastos_Detalle" data-id="${r.ID_Detalle_Gastos}">
-        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${hasTime(r.Fecha) ? ftime(r.Fecha) + ', ' : ''}${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.ID_Banco !== '' && r.ID_Banco !== undefined && banco(r.ID_Banco) ? (r.Origen ? ', compra de dólares desde ' : ', débito ') + esc(bankName(r.ID_Banco)) + (Number(r.Monto_Moneda) ? ' ' + usd(r.Monto_Moneda) : '') : truthy(r.Efectivo_USD) ? ', efectivo en dólares ' + usd(r.Monto_Moneda) : ''}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
+        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${hasTime(r.Fecha) ? ftime(r.Fecha) + ', ' : ''}${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.ID_Banco !== '' && r.ID_Banco !== undefined && banco(r.ID_Banco) ? (r.Origen ? ', compra de dólares desde ' : ', débito ') + esc(bankName(r.ID_Banco)) + (Number(r.Monto_Moneda) ? ' ' + usd(r.Monto_Moneda) : '') : truthy(r.Efectivo_USD) ? ', efectivo en dólares ' + usd(r.Monto_Moneda) : ''}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${hasId(r.ID_Partida) && Number(r.ID_Partida) && PD.get(String(r.ID_Partida)) ? ', partida ' + esc(PD.get(String(r.ID_Partida))) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
         <span class="amt num">${money(r.Total)}${Number(r.Cantidad) > 1 ? `<small>${money(r.Precio_Unitario)} c/u</small>` : ''}</span>
       </button>`)}</div>` : `<div class="panel empty"><b>No hay gastos${q || S.cuenta ? ' con ese filtro' : ' en este mes'}</b>${canEdit('Gastos') ? 'Usa Registrar gasto para agregar el primero.' : ''}</div>`}`;
 };
@@ -1260,7 +1280,9 @@ V.bancos = () => {
   const D = disponible(), L = {}; bs.forEach(b => L[b.ID_Banco] = ledger(b.ID_Banco));
   const C = cashLedger(), CU = cashUsdLedger(), ef = S.banco === 'ef', efd = S.banco === 'efd', showUsd = hasUsdCash();
   const cur = efd ? {Nombre: 'Efectivo en dólares', Moneda: 'USD'} : ef ? {Nombre: 'Efectivo en mano', Moneda: 'NIO'} : banco(S.banco), led = efd ? CU : ef ? C : L[S.banco];
-  const ed = can('bancos.editar'), shown = led.rows.slice().reverse().slice(0, 250);
+  // la lista sigue el período elegido arriba (o todos los meses si se activa); el saldo de cada fila es el acumulado real
+  const inPer = S.bankAll ? led.rows : led.rows.filter(r => periodForDate(r.fecha) === S.mes), previosVista = inPer.filter(r => r.pre).length;
+  const ed = can('bancos.editar'), shown = inPer.slice().reverse().slice(0, 250);
   const card = (id, top, name, v, curr, sub) => `<button class="bankcard ${String(id) === S.banco ? 'on' : ''}" data-banco="${id}"><small>${esc(top)}</small><b>${esc(name)}</b><span class="num bal ${v < 0 ? 'neg' : ''}" style="--n:${fcur(v, curr).length}">${fcur(v, curr)}</span><small>${sub || '&nbsp;'}</small></button>`;
   return `
   ${!D.configurado ? `<div class="notice info" style="margin-top:12px"><span>Escribe una vez cuánto tienes hoy en cada cuenta y en efectivo; desde ahí los saldos se calculan solos.</span>${can('catalogos.editar') || !Backend.online ? '<button class="btn small primary" data-act="saldos">Escribir saldos actuales</button>' : ''}</div>` : ''}
@@ -1271,14 +1293,16 @@ V.bancos = () => {
   </div>
   <div class="sumline" style="margin-top:12px"><span>Disponible para gastar (cuentas en córdobas + efectivo)</span><b class="num">${money(D.total)}</b></div>
   ${bancos(true).length > bs.length ? `<p class="muted" style="font-size:12.5px;margin:4px 2px 0">${bancos(true).length - bs.length} cuentas desactivadas. <a href="#" data-act="bank-inactive">Verlas</a></p>` : ''}</section>
-  <section class="section"><h3>Movimientos de ${esc(cur.Nombre)} <small>${led.start ? 'desde ' + fdatetime(led.start) + ', saldo inicial ' + fcur(led.inicial, cur.Moneda) : ''}</small></h3>
+  <section class="section"><h3>Movimientos de ${esc(cur.Nombre)} <small>${S.bankAll ? 'todos los meses' : esc(mesLabel(S.mes)) + ', ' + rangeLabel(S.mes)}</small></h3>
+    <p class="muted" style="font-size:12.5px;margin:-4px 0 8px">${inPer.length} ${inPer.length === 1 ? 'movimiento' : 'movimientos'}${S.bankAll ? '' : ' en este período'}${inPer.length > 250 ? ' (se muestran los 250 más recientes)' : ''}${led.start ? ' · saldo inicial ' + fcur(led.inicial, cur.Moneda) + ' (' + fdatetime(led.start) + ')' : ''}</p>
+    <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="bankAll" ${S.bankAll ? 'checked' : ''}><span></span></span>Mostrar todos los meses</label>
     <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir entre cuentas</button><button class="btn" data-act="mov-dep">Depósito de efectivo</button>' : ''}${!ef && !efd && cur.Moneda === 'USD' ? `${ed ? '<button class="btn" data-act="usd-buy">Comprar dólares</button>' : ''}` : ''}${efd && ed ? '<button class="btn" data-act="efd-bank">Depositar en la cuenta en dólares</button><button class="btn" data-act="efd-cash">Cambiar a córdobas</button>' : ''}${ef && ed && hasUsdCash() ? '<button class="btn" data-act="ef-buy">Cambiar a dólares</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `${!ef && !efd ? '<button class="btn small" data-act="bank-edit">Editar esta cuenta</button>' : ''}<button class="btn small" data-act="bank-new">Agregar cuenta</button>` : ''}</div>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">${efd ? 'Sube con los retiros hechos en dólares, los depósitos y lo que cambias o transfieres hacia aquí; baja con los gastos pagados con «Efectivo en dólares» y con lo que depositas en la cuenta en dólares o cambias a córdobas. No cuenta en el dinero disponible en córdobas.' : ef ? 'Sube con los retiros de cajero y los ingresos en efectivo; baja con los gastos pagados en efectivo.' : 'Sube con los ingresos depositados y las transferencias que recibes; baja con los retiros de cajero, los gastos con débito o pago directo y las transferencias que haces.'}</p>
-    ${led.previos ? `<p class="muted" style="font-size:12.5px;margin:0 0 10px">${led.previos} movimientos son anteriores a los saldos actuales (${fdatetime(led.start)}): se muestran atenuados y no cambian el saldo.</p>` : ''}
+    ${previosVista ? `<p class="muted" style="font-size:12.5px;margin:0 0 10px">${previosVista} ${previosVista === 1 ? 'movimiento es anterior' : 'movimientos son anteriores'} a los saldos actuales (${fdatetime(led.start)}): se muestran atenuados y no cambian el saldo.</p>` : ''}
     ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.pre ? 'var(--muted)' : r.amt >= 0 ? 'var(--good)' : 'var(--sun)'}"></span>
       <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)}${r.alt ? ', ' + r.alt + ' en córdobas' : ''}</small></span>
       <span class="amt num ${r.amt >= 0 && !r.pre ? 'pos' : ''}">${r.amt >= 0 ? '+' : ''}${fcur(r.amt, cur.Moneda)}<small>${r.pre ? 'Anterior a los saldos' : 'Saldo ' + fcur(r.bal, cur.Moneda)}</small></span></button>`).join('')}</div>`
-      : `<div class="panel empty"><b>Sin movimientos ${led.start ? 'desde ' + fdatetime(led.start) : ''}</b>Los movimientos que hagas con esta cuenta aparecerán aquí.</div>`}</section>`;
+      : `<div class="panel empty"><b>Sin movimientos ${S.bankAll ? '' : 'en ' + esc(mesLabel(S.mes))}</b>${!S.bankAll && led.rows.length ? 'Esta cuenta tiene movimientos en otros meses: cambia el período arriba o activa «Todos los meses».' : 'Los movimientos que hagas con esta cuenta aparecerán aquí.'}</div>`}</section>`;
 };
 
 V.presupuesto = () => {
@@ -1288,11 +1312,10 @@ V.presupuesto = () => {
   // Período nuevo y en curso: el dinero con el que cuentas es lo que tienes hoy más lo que ya gastaste en el período
   const enCurso = isNewPeriod(S.mes) && S.mes === periodForDate(todayISO()), gastado = sum(G), dinero = enCurso ? r2(disponible().total + gastado) : ing;
   const accs = [...new Set([...P.map(p => p.Cuenta_Gastos), ...G.map(g => g.Cuenta_Gastos)])].sort();
-  const norm = s => String(s || '').trim().toLowerCase();
   const groups = accs.map(a => {
     const pr = P.filter(p => p.Cuenta_Gastos === a), gr = G.filter(g => g.Cuenta_Gastos === a);
     const used = new Set();
-    const lines = pr.map(p => { const m = gr.filter(g => norm(g.Descripcion_Gasto) === norm(p.Descripcion)); m.forEach(x => used.add(x)); return {p, g: sum(m)}; });
+    const lines = pr.map(p => { const m = gr.filter(g => partidaOfGasto(g, pr) === p); m.forEach(x => used.add(x)); return {p, g: sum(m), n: m.length}; });
     const otros = sum(gr.filter(g => !used.has(g)));
     return {a, pr, lines, otros, tp: sum(pr), tg: sum(gr)};
   }).sort((x, y) => y.tp - x.tp);
@@ -1316,7 +1339,7 @@ ${groups.length ? `    <button class="btn" data-act="tpl-ppto">Descargar plantil
       <div class="bhead"><span class="t">${esc(cuentaNombre(g.a))}</span><span class="num ${g.tp - g.tg < 0 ? 'neg' : ''}" style="font-weight:700">${money(g.tp - g.tg)}</span>
         ${track(g.tp, g.tg)}<span class="meta">Gastado ${money(g.tg)} de ${money(g.tp)}</span></div>
       <div class="bcols"><span>Partida</span><span>Presupuesto</span><span>Gastado</span></div>
-      ${g.lines.map(l => `<button class="bline" data-edit="Presupuesto_Detalle" data-id="${l.p.ID_DetPresupuesto}"><span>${esc(l.p.Descripcion)}${Number(l.p.Cantidad) > 1 ? ` <span class="muted">(${l.p.Cantidad} ${esc(l.p.UM)})</span>` : ''}</span><span class="num">${money(l.p.Total)}</span><span class="num ${l.g > l.p.Total ? 'neg' : ''}">${money(l.g)}</span></button>`).join('')}
+      ${g.lines.map(l => `<button class="bline" data-edit="Presupuesto_Detalle" data-id="${l.p.ID_DetPresupuesto}"><span>${esc(l.p.Descripcion)}${Number(l.p.Cantidad) > 1 ? ` <span class="muted">(${l.p.Cantidad} ${esc(l.p.UM)})</span>` : ''}</span><span class="num">${money(l.p.Total)}</span><span class="num lnk ${l.g > l.p.Total ? 'neg' : ''}" data-pgastos="${l.p.ID_DetPresupuesto}" title="Ver los gastos de esta partida">${money(l.g)}${l.n ? ` <small class="muted">(${l.n})</small>` : ''}</span></button>`).join('')}
       ${g.otros ? `<div class="bline ghost"><span>Otros gastos sin partida</span><span class="num">—</span><span class="num">${money(g.otros)}</span></div>` : ''}
     </div>`).join('')}</div>`
     : `<div class="panel empty"><b>${esc(mesLabel(S.mes))} todavía no tiene presupuesto</b>Período ${rangeLabel(S.mes)}. ${ed ? 'Elige cómo cargarlo:' : 'El período está cerrado o no tienes permiso para editar el presupuesto.'}
@@ -1624,6 +1647,31 @@ V.conexion = () => {
 };
 
 /* ---------- Formularios ---------- */
+/** Período donde queda el gasto que se está registrando o editando */
+const gastoMes = () => FORM && FORM.rec ? (($('#f__periodo') || {}).value || recPeriod('Gastos_Detalle', FORM.rec)) : S.mes;
+/** Partidas de la cuenta elegida, con lo que queda de cada una */
+function partidaOpts(o) {
+  const mes = gastoMes(), {pr, m} = partidaSpent(mes, o.Cuenta_Gastos, FORM && FORM.rec ? FORM.rec.ID_Detalle_Gastos : undefined);
+  if (!pr.length) return [['', 'Esta cuenta no tiene partidas en ' + mesLabel(mes)]];
+  return [['', 'Elegir partida…'], ['0', 'Sin partida'], ...pr.map(p => [p.ID_DetPresupuesto, p.Descripcion + ' · queda ' + money(r2((Number(p.Total) || 0) - (m.get(String(p.ID_DetPresupuesto)) || 0)))])];
+}
+/** Debajo del formulario: lo presupuestado, lo gastado y cómo queda la partida con este gasto */
+function partidaLine(o) {
+  if (!hasId(o.ID_Partida) || Number(o.ID_Partida) === 0) return '';
+  const mes = gastoMes(), {pr, m} = partidaSpent(mes, o.Cuenta_Gastos, FORM && FORM.rec ? FORM.rec.ID_Detalle_Gastos : undefined);
+  const p = pr.find(x => String(x.ID_DetPresupuesto) === String(o.ID_Partida)); if (!p) return '';
+  const tot = isUsdPay(o.ID_Banco) ? (Number(o.Monto_Moneda) || 0) * (Number(o.Tipo_Cambio) || 0) : Number(o.Total) || 0;
+  const gast = m.get(String(o.ID_Partida)) || 0, rest = r2((Number(p.Total) || 0) - gast - tot);
+  return `<div style="margin-top:6px">Partida «${esc(p.Descripcion)}»: presupuestado <b>${money(p.Total)}</b>, gastado <b>${money(gast)}</b>${tot ? `; con este gasto ${rest >= 0 ? `queda <b>${money(rest)}</b>` : `se excede por <b class="neg">${money(-rest)}</b>`}` : `; queda <b>${money(r2((Number(p.Total) || 0) - gast))}</b>`}.</div>`;
+}
+/** Al elegir una partida, si la descripción está vacía se llena con la de la partida */
+function prefillFromPartida(el) {
+  if (!FORM || FORM.table !== 'Gastos_Detalle' || !el.value || Number(el.value) === 0) return;
+  const p = DB.t.Presupuesto_Detalle.find(x => String(x.ID_DetPresupuesto) === String(el.value)); if (!p) return;
+  const d = $('#f_Descripcion_Gasto');
+  if (d && !d.value.trim()) { d.value = p.Descripcion; const um = $('#f_UM'); if (um && p.UM && !FORM.rec && [...um.options].some(o => o.value === p.UM)) um.value = p.UM; }
+  formDynamics();
+}
 const optsCuentas = (gasto = true) => DB.t.Cuentas.filter(c => truthy(gasto ? c.Cuenta_de_Gastos : c.Cuenta_de_Ingresos) && truthy(c.Activa)).map(c => [c.Codigo, c.Cuentas]);
 const nextCodigo = () => { let m = 0; (DB.t.Cuentas || []).forEach(c => { const x = String(c.Codigo).match(/^C(\d+)$/i); if (x) m = Math.max(m, +x[1]); }); return 'C' + String(m + 1).padStart(3, '0'); };
 const optsUM = () => DB.t.UM.map(u => [u.UM, u.UM]);
@@ -1635,6 +1683,7 @@ const FORMS = {
   Gastos_Detalle: {t: 'gasto', mod: 'Gastos', fields: [
     {k: 'Fecha', l: 'Fecha y hora de la compra', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo compraste, no cuándo lo anotas. Cámbialo si lo registras después.'},
     {k: 'Cuenta_Gastos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(true), req: 1, def: () => S.cuenta || 'C014'},
+    {k: 'ID_Partida', l: 'Partida del presupuesto', ty: 'select', num: 1, opts: () => [], dynOpts: o => partidaOpts(o), fillFrom: rec => { const m = partidaOfGasto(rec, partidasOf(recPeriod('Gastos_Detalle', rec), rec.Cuenta_Gastos)); return m ? Number(m.ID_DetPresupuesto) : ''; }, hint: 'Vincula el gasto con lo presupuestado. Si no eliges, se asigna a la partida con la misma descripción, si existe.'},
     {k: 'Descripcion_Gasto', l: 'Descripción', ty: 'text', req: 1, list: o => [...DB.t.Items.filter(i => i.Cuenta === o.Cuenta_Gastos).map(i => i.Descripcion), ...histDesc('Gastos_Detalle', 'Descripcion_Gasto', r => r.Cuenta_Gastos === o.Cuenta_Gastos)], dep: 'Cuenta_Gastos'},
     {k: 'Cantidad', l: 'Cantidad', ty: 'number', half: 1, def: 1, step: 'any'},
     {k: 'UM', l: 'Unidad', ty: 'select', half: 1, opts: optsUM, def: 'Unidad'},
@@ -1660,7 +1709,11 @@ const FORMS = {
       if (b.Moneda === 'USD') { const c = r2(Number(o.Monto_Moneda) * Number(o.Tipo_Cambio)); return Number(o.Monto_Moneda) ? `Gasto de <b>${money(c)}</b>: se descuentan <b>${usd(o.Monto_Moneda)}</b> de ${esc(b.Nombre)} (T/C ${o.Tipo_Cambio}).` : ''; }
       return Number(o.Total) ? `Se descuentan <b>${money(o.Total)}</b> de ${esc(b.Nombre)}. Tu efectivo no cambia.` : ''; },
     validate: o => o.ID_Banco === EFUSD ? (saldosConfigurados() && Number(o.Monto_Moneda) > availOf(EFUSD, FORM.rec).v + 0.005 ? 'No tienes suficientes dólares en efectivo: registra primero un retiro en dólares' : '') : (o.ID_Banco === '' || o.ID_Banco === undefined) && Number(o.Total) > cashFor(S.mes, FORM.rec) + 0.005 ? 'No tienes suficiente efectivo en mano: registra primero el retiro o elige tarjeta de débito' : '',
+    extra: o => partidaLine(o),
     before: o => {
+      const per = gastoMes();
+      if (FORM.rec && per !== recPeriod('Gastos_Detalle', FORM.rec)) o.ID_Partida = '';
+      if (!hasId(o.ID_Partida)) { const m = partidaOfGasto(Object.assign({}, o, {ID_Partida: ''}), partidasOf(per, o.Cuenta_Gastos)); o.ID_Partida = m ? Number(m.ID_DetPresupuesto) : ''; }
       if (isUsdPay(o.ID_Banco)) o.Total = r2(Number(o.Monto_Moneda) * Number(o.Tipo_Cambio)); else { o.Monto_Moneda = ''; o.Tipo_Cambio = ''; }
       o.Efectivo_USD = o.ID_Banco === EFUSD; if (o.Efectivo_USD) o.ID_Banco = '';
       o.Precio_Unitario = Number(o.Cantidad) ? r2(o.Total / o.Cantidad * 10000) / 10000 : o.Total; },
@@ -1849,7 +1902,7 @@ function openForm(table, id) {
   const fieldHtml = f => {
     const v = o[f.k] ?? '', dis = ro || (rec && f.keyEdit) || f.auto ? 'disabled' : '', idf = 'f_' + f.k;
     let inp;
-    if (f.ty === 'select') inp = `<select class="input" id="${idf}" name="${f.k}" ${dis} ${f.req ? 'required' : ''}>${optsWithCurrent(f, v).map(([a, b]) => `<option value="${esc(a)}" ${String(a) === String(v) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
+    if (f.ty === 'select') inp = `<select class="input" id="${idf}" name="${f.k}" ${dis} ${f.req ? 'required' : ''}>${(f.dynOpts ? f.dynOpts(o) : optsWithCurrent(f, v)).map(([a, b]) => `<option value="${esc(a)}" ${String(a) === String(v) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
     else if (f.ty === 'bool') return `<div class="field" data-fk="${f.k}"><div class="field check" style="padding:0"><label for="${idf}">${f.l}</label><label class="toggle"><input type="checkbox" id="${idf}" name="${f.k}" ${truthy(v) ? 'checked' : ''} ${dis}><span></span></label></div>${f.hint ? `<span class="hint">${f.hint}</span>` : ''}</div>`;
     else if (f.ty === 'pct') inp = `<input class="input" id="${idf}" name="${f.k}" type="number" step="any" inputmode="decimal" value="${v === '' ? '' : r2(Number(v) * 100)}" ${dis}>`;
     else if (f.ty === 'datetime') { const dv = toDTL(v); inp = `<div class="dtrow"><input class="input" id="${idf}" name="${f.k}" type="date" aria-label="Fecha" value="${esc(dv.slice(0, 10))}" ${dis} ${f.req ? 'required' : ''}><input class="input dt-time" id="${idf}_t" type="time" aria-label="Hora" value="${esc(dv.slice(11, 16))}" ${dis}></div>
@@ -1877,6 +1930,9 @@ function openForm(table, id) {
 function formDynamics() {
   if (!FORM) return;
   const o = readForm(), F = FORM.F;
+  F.fields.forEach(f => { if (!f.dynOpts) return; const el = $('#f_' + f.k); if (!el) return;
+    const list = f.dynOpts(o), html = list.map(([a, b]) => `<option value="${esc(a)}">${esc(b)}</option>`).join('');
+    if (el._sig !== html) { const cur = el.value; el.innerHTML = html; el._sig = html; el.value = list.some(([a]) => String(a) === String(cur)) ? cur : ''; } });
   F.fields.forEach(f => { const w = $(`#frm [data-fk="${f.k}"]`); if (w && f.show) w.hidden = !f.show(o); if (f.live) { const el = $(`#frm [data-live="${f.k}"]`); if (el) el.innerHTML = f.live(o); } });
   if (F.label) Object.entries(F.label(o)).forEach(([k, l]) => { const lb = $(`#frm [data-fk="${k}"] > label`); if (lb) lb.textContent = l; });
   let warn = '';
@@ -1888,7 +1944,7 @@ function formDynamics() {
     if (pm && pm !== cur) warn += `<div class="fwarn">Esta fecha corresponde al período <b>${esc(mesLabel(pm))}</b> (${rangeLabel(pm)}), pero se registrará en <b>${esc(mesLabel(cur))}</b>.${FORM.rec ? '' : truthy((DB.idx().periodo[pm] || {})[REL[FORM.table].mod]) ? ` <button type="button" class="btn small" data-act="to-period" data-mes="${pm}">Cambiar a ${esc(mesLabel(pm))}</button>` : ''}</div>`;
   }
   if (FORM.table === 'Bancos' && !FORM.rec && !FORM.nameTouched && o.Banco) { const nm = $('#f_Nombre'); if (nm) nm.value = o.Banco + (o.Moneda === 'USD' ? ' Dólares' : ' Córdobas'); }
-  const pv = $('#fpreview'); if (pv) pv.innerHTML = (F.preview ? F.preview(o) : '') + warn;
+  const pv = $('#fpreview'); if (pv) pv.innerHTML = (F.preview ? F.preview(o) : '') + (F.extra ? F.extra(o) : '') + warn;
 }
 const fieldVisible = f => { const w = $(`#frm [data-fk="${f.k}"]`); return !w || !w.hidden; };
 function readForm() {
@@ -1985,6 +2041,19 @@ function openDeposito(bid) {
     if (want !== '' && [...d.options].some(o => o.value === want)) d.value = want; else { const n = bancos().find(b => b.Moneda === 'NIO'); if (n) d.value = n.ID_Banco; }
   }
   formDynamics();
+}
+/** Gastos vinculados a una partida del presupuesto: trazabilidad entre lo presupuestado y lo gastado */
+function openPartidaGastos(pid) {
+  const p = DB.t.Presupuesto_Detalle.find(x => String(x.ID_DetPresupuesto) === String(pid)); if (!p) return;
+  const pr = partidasOf(S.mes, p.Cuenta_Gastos);
+  const gs = detail('Gastos_Detalle', S.mes).filter(g => g.Cuenta_Gastos === p.Cuenta_Gastos && partidaOfGasto(g, pr) === p).sort((a, b) => dtKey(b.Fecha).localeCompare(dtKey(a.Fecha)));
+  const gast = sum(gs), rest = r2((Number(p.Total) || 0) - gast);
+  $('#modal').innerHTML = `<div class="scrim" data-close="1"><div class="sheet" role="dialog" aria-modal="true" aria-label="Gastos de la partida">
+    <h4>${esc(p.Descripcion)} <span class="pill">${esc(cuentaNombre(p.Cuenta_Gastos))}</span><button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
+    <div class="figs three" style="margin:0 0 6px"><div class="fig"><small>Presupuestado</small><b class="num">${money(p.Total)}</b></div><div class="fig"><small>Gastado</small><b class="num">${money(gast)}</b></div><div class="fig"><small>${rest >= 0 ? 'Queda' : 'Excedido'}</small><b class="num ${rest < 0 ? 'neg' : ''}">${money(Math.abs(rest))}</b></div></div>
+    ${gs.length ? gs.map(g => `<button type="button" class="pgrow" data-edit="Gastos_Detalle" data-id="${g.ID_Detalle_Gastos}"><span><b>${esc(g.Descripcion_Gasto)}</b><br><small>${fdatetime(g.Fecha)}${hasId(g.ID_Partida) && Number(g.ID_Partida) ? '' : ', por descripción'}</small></span><b class="num">${money(g.Total)}</b></button>`).join('')
+      : '<p class="muted" style="margin:14px 0">Todavía no hay gastos vinculados a esta partida.</p>'}
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn primary" data-close="1">Cerrar</button></div></div></div>`;
 }
 function closeModal() { $('#modal').innerHTML = ''; FORM = null; }
 function cancelModal() { if (S.pendingGasto && FORM && FORM.table === 'Retiros_Detalle') { const P = S.pendingGasto; S.pendingGasto = null; closeModal(); openForm('Gastos_Detalle', P.rec ? P.rec.ID_Detalle_Gastos : undefined); fillFormValues(P.o); return; } closeModal(); }
@@ -2139,13 +2208,14 @@ function toast(msg, err) { clearTimeout(toastT); let el = $('.toast'); if (!el) 
 /* ---------- Eventos ---------- */
 document.addEventListener('click', async e => {
   if (e.target.closest && e.target.closest('#fab')) return;  // el botón + tiene su propio manejador
-  const t = e.target.closest('[data-fveh],[data-frange],[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
+  const t = e.target.closest('[data-pgastos],[data-fveh],[data-frange],[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
   if (!t) return;
   const d = t.dataset;
   if (d.close !== undefined) { if (e.target === t) cancelModal(); return; }
   if (d.user) { openUserForm(d.user); return; }
   if (d.banco) { S.banco = d.banco; render(); return; }
   if (d.gotoMes) { S.mes = d.gotoMes; if (d.stay) render(); else go('inicio'); toast('Trabajando en ' + mesLabel(d.gotoMes)); return; }
+  if (d.pgastos) { e.preventDefault(); openPartidaGastos(d.pgastos); return; }
   if (d.fveh) { S.fuelVeh = d.fveh; lsSet('fuel_veh', d.fveh); S.fuelRange = 'all'; render(); return; }
   if (d.frange) { S.fuelRange = d.frange; render(); return; }
   if (d.funit) { S.fuelUnit = d.funit; lsSet('fuel_unit', d.funit); if (d.fres && S.fuelShown) showFuelResult(S.fuelShown.r, S.fuelShown.fromList); else render(); return; }
@@ -2198,7 +2268,7 @@ document.addEventListener('click', async e => {
     const tb = FORM.table, rec = FORM.rec, to = t.dataset.to, rel = REL[tb], k = DB.key(tb);
     if (!confirm(`¿Mover este registro a ${mesLabel(to)}?`)) return;
     t.disabled = true;
-    try { const ch = await Q.run(() => Backend.call('save', {table: tb, row: Object.assign({}, rec), mes: to})); commit(ch); closeModal(); render(); toast('Movido a ' + mesLabel(to)); }
+    try { const ch = await Q.run(() => Backend.call('save', {table: tb, row: Object.assign({}, rec, tb === 'Gastos_Detalle' ? {ID_Partida: ''} : {}), mes: to})); commit(ch); closeModal(); render(); toast('Movido a ' + mesLabel(to)); }
     catch (err) { t.disabled = false; toast(err.message, true); }
     return;
   }
@@ -2310,9 +2380,15 @@ document.addEventListener('submit', e => {
   if (e.target.id === 'frmImp') (async () => {
     const I = S.imp; if (!I || !I.rows.length) { closeModal(); return; }
     const rep = $('#impRep') ? $('#impRep').checked : false;
+    const oldP = detail('Presupuesto_Detalle', S.mes).slice(), linked = rep ? detail('Gastos_Detalle', S.mes).filter(g => hasId(g.ID_Partida) && Number(g.ID_Partida) > 0 && !isTmp(g.ID_Detalle_Gastos)) : [];
     const b = e.target.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Importando…';
     try { const ch = await Backend.call(rep ? 'replaceMany' : 'saveMany', {table: 'Presupuesto_Detalle', mes: S.mes, rows: I.rows.map(({_cta, ...r}) => r)});
-      commit(ch); S.imp = null; closeModal(); render(); toast(I.rows.length + ' partidas importadas'); }
+      commit(ch);
+      // al reemplazar las partidas cambian sus números: los gastos vinculados se vuelven a ligar por cuenta y descripción
+      let relig = 0; const newP = detail('Presupuesto_Detalle', S.mes);
+      for (const g of linked.slice(0, 120)) { const op = oldP.find(x => String(x.ID_DetPresupuesto) === String(g.ID_Partida)), np = op && newP.find(x => x.Cuenta_Gastos === op.Cuenta_Gastos && nrm(x.Descripcion) === nrm(op.Descripcion));
+        if (np && String(np.ID_DetPresupuesto) !== String(g.ID_Partida)) { try { commit(await Q.run(() => Backend.call('save', {table: 'Gastos_Detalle', row: Object.assign({}, g, {ID_Partida: Number(np.ID_DetPresupuesto)})}))); relig++; } catch (er) {} } }
+      S.imp = null; closeModal(); render(); toast(I.rows.length + ' partidas importadas' + (relig ? ' y ' + relig + (relig === 1 ? ' gasto vinculado de nuevo' : ' gastos vinculados de nuevo') : '')); }
     catch (err) { b.disabled = false; b.textContent = 'Importar'; toast('No se pudo importar: ' + err.message, true); }
   })();
   if (e.target.id === 'frmPwd') (async () => {
@@ -2378,10 +2454,11 @@ document.addEventListener('change', async e => {
   }
   if (b === 'cuenta' || b === 'cuentaSel') { S[b] = el.value; render(); return; }
   if (b === 'all') { S.all = el.checked; render(); return; }
+  if (b === 'bankAll') { S.bankAll = el.checked; render(); return; }
   if (el.id === 'ur' && $('#uperms')) { renderPerms(el.value, {}); return; }
   if (el.dataset.perm) { const def = roleDefaults($('#ur').value); el.closest('.perm').classList.toggle('custom', el.checked !== def[el.dataset.perm]); return; }
   if (FORM) { formDynamics(); if (FORM.F.fields.some(f => f.dep === el.name)) fillLists();
-    if (el.id === 'f__periodo') return; if (el.name === 'Descripcion_Gasto') autofillFromHistory(el); return; }
+    if (el.id === 'f__periodo') return; if (el.name === 'ID_Partida') prefillFromPartida(el); if (el.name === 'Descripcion_Gasto') autofillFromHistory(el); return; }
   if (el.dataset.flag) {
     const p = DB.t.Mes_Anio.find(x => String(x.ID) === el.dataset.pid); const row = {ID: p.ID}; row[el.dataset.flag] = el.checked;
     el.disabled = true;
