@@ -128,6 +128,25 @@ En *Bancos* hay dos botones: **Agregar cuenta** y **Editar esta cuenta** (para a
 - **Editar:** cambia el nombre, el número, el saldo inicial o el orden.
 - **Quitar:** una cuenta con movimientos **no se elimina**, se **desactiva** (interruptor *Activa*). Antes de desactivarla, su saldo debe estar en cero: transfiérelo a otra cuenta. La cuenta desactivada desaparece de las listas, sus movimientos se conservan y se puede reactivar desde el enlace *cuentas desactivadas* de Bancos (*Catálogos → Cuentas de banco*). Solo una cuenta sin ningún movimiento se puede eliminar del todo.
 
+## Retirar de la cuenta en dólares: en córdobas o en dólares
+
+Al registrar un retiro desde la cuenta en dólares aparece **Recibo el efectivo en**:
+
+- **Córdobas** (lo habitual): escribes los **córdobas que recibes** y el tipo de cambio. Se descuenta de la cuenta su equivalente en dólares: C$ 730 ÷ T/C 36.5 = **US$ 20**. El efectivo en córdobas sube C$ 730.
+- **Dólares**: escribes los US$ y **no hay conversión**. Se descuentan de la cuenta y suben el **Efectivo en dólares**, un bolsillo aparte del efectivo en córdobas (no cuenta en el dinero disponible en córdobas, igual que la cuenta en dólares).
+
+Los retiros desde cuentas en córdobas son siempre en córdobas.
+
+**Efectivo en dólares:** aparece como una tarjeta en *Bancos* (con sus movimientos y su saldo) y como una línea aparte en el *Inicio*. Su saldo inicial se escribe en *Escribir saldos actuales* (campo *Efectivo en dólares*).
+
+**Mover el efectivo en dólares:** el efectivo en dólares también aparece como opción en *Transferir entre cuentas* (campos *Desde* y *Hacia*) y en *Depósito de efectivo*. En *Bancos → Efectivo en dólares* hay atajos:
+- **Depositar en la cuenta en dólares:** pasa dólares en efectivo a *BAC Dólares*. Es la misma moneda, así que no hay tipo de cambio.
+- **Cambiar a córdobas:** escribes los córdobas que recibes (en el efectivo en córdobas o en una cuenta en córdobas) y el tipo de cambio; se descuentan los dólares equivalentes (C$ 365 ÷ T/C 36.5 = US$ 10). No se registra como ingreso.
+- **Cambiar a dólares** (desde *Efectivo en mano*): con córdobas compras dólares en efectivo. Como esos córdobas salen de lo que puedes gastar, se registra también como **gasto** (por defecto en *Ahorros*), igual que cuando compras dólares para la cuenta en dólares. Lo mismo pasa si los compras desde una cuenta en córdobas.
+- **Recibir dólares en efectivo** (por ejemplo, te pagan en dólares): *Depósito de efectivo* con destino *Efectivo en dólares*; cuenta como ingreso por su equivalente en córdobas (pide el tipo de cambio).
+
+**Gastos en dólares:** en *Forma de pago* hay dos formas de efectivo: **Efectivo en córdobas** (la de siempre) y **Efectivo en dólares (US$)**. Con la segunda escribes el monto en US$ y el tipo de cambio; el gasto cuenta en córdobas para el presupuesto (US$ 10 × 36.5 = C$ 365) y se descuenta de tu efectivo en dólares. Si no tienes suficientes dólares, la app avisa y no deja guardar.
+
 ## Cuenta en dólares: comprar y depositar
 
 - **Comprar dólares** (transferir de una cuenta en córdobas, o del efectivo, a *BAC Dólares*): en *Bancos → BAC Dólares → Comprar dólares* (o *Transferir entre cuentas*) eliges la cuenta de origen, escribes **cuánto entra a la cuenta destino** (por ejemplo US$ 20) y el tipo de cambio; la app calcula lo que sale del origen (US$ 20 × 36.5 = C$ 730). En todas las transferencias el monto que escribes es el que **entra al destino**. Baja la cuenta de córdobas, suben los dólares y, como ese dinero sale de lo que puedes gastar, se registra **también como gasto** en la cuenta que elijas (por defecto *Ahorros*), en el período activo. Ese gasto queda ligado a la transferencia: se edita o se elimina desde ella.
