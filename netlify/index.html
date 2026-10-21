@@ -14,7 +14,7 @@
 <title>Gestión de Efectivo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
 :root{
   --paper:#F3F6F5; --surface:#FFFFFF; --sunk:#E8EEEC; --line:#D6DFDC;
@@ -294,6 +294,12 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .sideuser{margin-top:auto;padding:14px 10px 4px;border-top:1px solid var(--line);font-size:13.5px}
 .sideuser b{display:block}
 .sideuser button{border:0;background:none;padding:4px 0;color:var(--teal);cursor:pointer;font-weight:600}
+.sync{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.sync::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--teal);animation:pulse 1.2s ease-in-out infinite}
+.sync.err::before{background:var(--over);animation:none}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion: reduce){.sync::before{animation:none}}
+.item.pending{opacity:.6}
 .demo-banner{font-size:13px;background:var(--sun-soft);color:var(--ink);padding:7px 12px;border-radius:9px;margin-top:10px}
 @media (max-width:560px){
   .figs.three .fig{padding:9px 8px}
@@ -332,6 +338,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
   <div class="main"><div class="wrap">
     <header class="top" id="top">
       <h2 id="ttl">Inicio</h2>
+      <span class="sync" id="sync" hidden role="status" aria-live="polite"></span>
       <div class="monthpick" id="mp">
         <button type="button" data-act="mes-prev" aria-label="Mes anterior"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>
         <select id="mesSel" aria-label="Período"></select>
@@ -522,7 +529,7 @@ const Backend = {
       .then(r => r.json(), () => { throw new Error('No hay conexión con el servidor. Revisa tu internet.'); });
     else pr = Promise.resolve(Demo[action] ? Demo[action](payload) : {error: 'Acción no disponible en la demostración'});
     return pr.then(r => { if (r && r.error) { const e = new Error(r.error); e.code = r.code; throw e; } return r; })
-      .catch(e => { if ((e.code === 'AUTH' || e.code === 'PWD') && action !== 'login' && action !== 'changePassword') { Auth.clear(); showLogin(e.code === 'PWD' ? 'Entra de nuevo para crear tu contraseña.' : 'Tu sesión terminó. Vuelve a entrar.'); e.code = 'AUTH'; } throw e; });
+      .catch(e => { if ((e.code === 'AUTH' || e.code === 'PWD') && action !== 'login' && action !== 'changePassword') { Auth.clear(); Store.clear(); showLogin(e.code === 'PWD' ? 'Entra de nuevo para crear tu contraseña.' : 'Tu sesión terminó. Vuelve a entrar.'); e.code = 'AUTH'; } throw e; });
   }
 };
 
@@ -599,6 +606,7 @@ const Demo = {
     return ch;
   },
   repair() { return {report: []}; },
+  sync() { return {seq: 0, changes: []}; },
   saveMany(p) {
     const ch = {upserts: {}, deletes: {}}; const rel = REL[p.table]; ch.upserts[p.table] = [];
     const hid = rel && p.mes ? this._header(rel, p.mes)[rel.hkey] : null;
@@ -609,7 +617,8 @@ const Demo = {
   remove(p) {
     try { this._guard(p.table, p.id); } catch (e) { return {error: e.message}; }
     const ch = {upserts: {}, deletes: {}};
-    const old = this._removeDet(p.table, p.id, ch);
+    let old = this._removeDet(p.table, p.id, ch);
+    if (!old[DB.key(p.table)] && p.prev) { old = p.prev; ch.deletes[p.table] = [p.id]; const rel = REL[p.table]; if (rel) this._add(ch, rel.header, this._recalc(p.table, old[rel.fk])); }
     if (old.ID_Ingreso_Auto) this._removeDet('Ingresos_Detalle', old.ID_Ingreso_Auto, ch);
     return ch;
   },
@@ -632,6 +641,68 @@ const Demo = {
     return {upserts: {Mes_Anio: out}, deletes: {}};
   }
 };
+
+/* ---------- Copia local y sincronización ----------
+   - Los datos se guardan en el equipo (IndexedDB): la app abre al instante con la última copia.
+   - Luego pide al servidor solo los cambios nuevos (acción sync), no toda la base.
+   - Al guardar, el cambio se ve de inmediato y se envía en segundo plano, en orden. */
+const Store = {
+  _db: null,
+  open() { if (this._db) return this._db; this._db = new Promise((res, rej) => { try { const r = indexedDB.open('efectivo', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); return this._db; },
+  async get(k) { try { const db = await this.open(); return await new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch (e) { return null; } },
+  async set(k, v) { try { const db = await this.open(); await new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); } catch (e) {} },
+  async clear() { try { const db = await this.open(); await new Promise(res => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').clear(); tx.oncomplete = res; tx.onerror = res; }); } catch (e) {} }
+};
+const gunzipB64 = async b64 => { const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const st = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip')); return JSON.parse(await new Response(st).text()); };
+const canGz = () => typeof DecompressionStream !== 'undefined';
+const unpack = async r => r && r.gz ? gunzipB64(r.gz) : r;
+const Sync = {
+  seq: 0, busy: false, timer: null, saveT: null,
+  status(msg, err) { const el = $('#sync'); if (!el) return; el.hidden = !msg; el.textContent = msg || ''; el.classList.toggle('err', !!err); },
+  refresh() { const n = Q.n; this.status(n ? (n === 1 ? 'Guardando…' : 'Guardando ' + n + '…') : this.busy ? 'Actualizando…' : '', false); },
+  persist() { if (!Backend.online || Q.n) return; clearTimeout(this.saveT); this.saveT = setTimeout(() => Store.set('db', {user: (Auth.user || {}).usuario, seq: this.seq, at: Date.now(), t: DB.t, cols: DB.cols}), 800); },
+  after(ch) { if (!ch || !Backend.online) return; if (ch.seq) { if (ch.seq === this.seq + 1) this.seq = ch.seq; else this.soon(); } this.persist(); },
+  async full(tables) {
+    const r = await unpack(await Backend.call('getAll', {gz: canGz(), tables}));
+    if (r.partial) { Object.entries(r.tables).forEach(([n, tb]) => { DB.cols[n] = tb.cols; DB.t[n] = tb.rows.map(x => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(x[i]) : x[i]); return o; }); }); DB.ver++; }
+    else DB.load(r);
+    this.seq = r.seq || 0; lsSet('full_at', String(Date.now())); this.persist(); return r;
+  },
+  run() {
+    if (!Backend.online || !DB.t.Cuentas) return Promise.resolve();
+    if (this.busy || Q.n) { this.again = true; return this.p || Promise.resolve(); }
+    this.p = this._run().then(() => { if (this.again && !Q.n) { this.again = false; return this.run(); } });
+    return this.p;
+  },
+  async _run() {
+    this.busy = true; this.again = false; this.refresh();
+    let err = null;
+    try {
+      const daily = Date.now() - Number(lsGet('full_at') || 0) > 864e5;
+      const r = daily ? {full: true} : await unpack(await Backend.call('sync', {since: this.seq, gz: canGz()}));
+      if (r.full) { await this.full(); if (!FORM) render(); }
+      else {
+        let n = 0; (r.changes || []).forEach(c => { DB.apply(c); n++; });
+        if (r.fullTables && r.fullTables.length) { await this.full(r.fullTables); n++; }
+        this.seq = r.seq;
+        if (n) { if (!FORM) render(); this.persist(); }
+      }
+    } catch (e) { err = e; }
+    finally { this.busy = false; }
+    if (err && err.code !== 'AUTH') this.status('Sin conexión', true); else this.refresh();
+  },
+  soon() { clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 400); },
+  start() { clearInterval(this.iv); this.iv = setInterval(() => { if (document.visibilityState === 'visible') this.run(); }, 60000); }
+};
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Sync.soon(); });
+window.addEventListener('online', () => Sync.soon());
+window.addEventListener('beforeunload', e => { if (Q.n) { e.preventDefault(); e.returnValue = ''; } });
+/* Cola de escritura: una petición a la vez, en el orden en que se hicieron */
+const Q = { n: 0, chain: Promise.resolve(),
+  run(fn) { this.n++; Sync.refresh(); const p = this.chain.then(fn); this.chain = p.catch(() => {}).then(() => { this.n--; Sync.refresh(); if (!this.n) { Sync.persist(); Sync.soon(); } }); return p; } };
+function commit(ch) { DB.apply(ch); Sync.after(ch); }
+let TMP = 0;
+const isTmp = id => String(id).startsWith('tmp');
 
 /* ---------- Estado y navegación ---------- */
 const S = {view: 'inicio', mes: null, q: '', cuenta: '', all: false, tab: '', anio: null, cuentaSel: 'C014', rango: 12, pend: false};
@@ -810,7 +881,7 @@ V.gastos = () => {
   <div class="sumline"><span>${n} ${n === 1 ? 'gasto' : 'gastos'}${S.all ? ' en todos los meses' : ''}${n > 400 ? ', se muestran los 400 más recientes' : ''}</span><b class="num">${money(total)}</b></div>
   ${S.all && !q && !S.cuenta ? '<div class="panel empty"><b>Busca en todo el historial</b>Escribe una descripción o elige una cuenta para buscar desde 2018.</div>' :
     n ? `<div class="list">${listGrouped(shown, 'Fecha', r => `
-      <button class="item" data-edit="Gastos_Detalle" data-id="${r.ID_Detalle_Gastos}">
+      <button class="item ${r._pending ? 'pending' : ''}" data-edit="Gastos_Detalle" data-id="${r.ID_Detalle_Gastos}">
         <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
         <span class="amt num">${money(r.Total)}${Number(r.Cantidad) > 1 ? `<small>${money(r.Precio_Unitario)} c/u</small>` : ''}</span>
       </button>`)}</div>` : `<div class="panel empty"><b>No hay gastos${q || S.cuenta ? ' con ese filtro' : ' en este mes'}</b>${canEdit('Gastos') ? 'Usa Registrar gasto para agregar el primero.' : ''}</div>`}`;
@@ -1239,24 +1310,57 @@ function autofillFromHistory(el) {
   const um = $('#f_UM'); if (um && last.UM) um.value = last.UM;
   const tot = $('#f_Total'); if (tot && !tot.value) { const q = Number($('#f_Cantidad').value) || 1; tot.value = r2(q * (Number(last.Precio_Unitario) || 0)) || ''; if (tot.value) tot.select(); }
 }
+const OPTIMISTIC = ['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Referencias_Tarjetas', 'Consumo_Combustible'];
 async function submitForm() {
   const o = readForm();
   for (const f of FORM.F.fields) if (f.req && fieldVisible(f) && (o[f.k] === '' || o[f.k] === undefined || (f.ty === 'number' && isNaN(o[f.k])))) { toast('Completa el campo ' + f.l.replace(/ \(.*\)/, '').toLowerCase(), true); const el = $('#f_' + f.k); el && el.focus(); return; }
   if (!FORM.rec && FORM.table === 'Cuentas' && DB.t.Cuentas.some(c => c.Codigo === o.Codigo)) { toast('Ya existe una cuenta con ese código', true); return; }
   const verr = FORM.F.validate ? FORM.F.validate(o) : ''; if (verr) { toast(verr, true); return; }
   if (FORM.F.before) FORM.F.before(o);
+  const F = FORM.F, table = FORM.table, rec = FORM.rec, k = DB.key(table), rel = REL[table];
+  const mes = (rel || F.needsMes) && !rec ? S.mes : undefined;
+  const row = Object.assign({}, o); if (!rec) delete row[k];
+  const label = cap(F.t.toUpperCase());
+  // Vista inmediata: se muestra el cambio y se envía en segundo plano
+  const h = rel ? header(table, S.mes) : null;
+  const optimistic = OPTIMISTIC.includes(table) && (rec || !rel || h);
+  if (optimistic) {
+    let undo;
+    if (rec) { const prev = Object.assign({}, rec); DB.apply({upserts: {[table]: [o]}}); undo = () => DB.apply({upserts: {[table]: [prev]}}); }
+    else { const tmp = Object.assign({}, o, {[k]: 'tmp' + (++TMP), _pending: true}); if (rel) tmp[rel.fk] = h[rel.hkey]; if (F.needsMes) tmp.Mes_Anio = S.mes; DB.apply({upserts: {[table]: [tmp]}}); undo = () => DB.apply({deletes: {[table]: [tmp[k]]}}); o.__tmp = tmp[k]; }
+    if (F.after) F.after(o);
+    closeModal(); render();
+    Q.run(() => Backend.call('save', {table, row, mes})).then(ch => {
+      if (o.__tmp) DB.apply({deletes: {[table]: [o.__tmp]}});
+      commit(ch); if (!FORM) render();
+    }).catch(e => {
+      undo(); render();
+      toast(label + ' no se guardó: ' + e.message, true);
+      if (!FORM && e.code !== 'AUTH') { openForm(table, rec ? rec[k] : undefined); fillFormValues(o); }
+    });
+    toast(label + (rec ? ' actualizad' : ' registrad') + (F.g || 'o'));
+    return;
+  }
   const btn = $('#frm button[type=submit]'); btn.disabled = true; btn.textContent = 'Guardando…';
   try {
-    const ch = await Backend.call('save', {table: FORM.table, row: o, mes: (REL[FORM.table] || FORM.F.needsMes) && !FORM.rec ? S.mes : undefined});
-    const F = FORM.F; if (F.after) F.after(o);
-    DB.apply(ch); closeModal(); render(); toast(cap(F.t.toUpperCase()) + ' guardad' + (F.g || 'o'));
-  } catch (e) { btn.disabled = false; btn.textContent = 'Guardar'; toast('No se pudo guardar: ' + e.message, true); }
+    const ch = await Q.run(() => Backend.call('save', {table, row, mes}));
+    if (F.after) F.after(o);
+    commit(ch); closeModal(); render(); toast(label + ' guardad' + (F.g || 'o'));
+  } catch (e) { if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Guardar'; } toast('No se pudo guardar: ' + e.message, true); }
+}
+/** Vuelve a poner en el formulario lo que la persona había escrito (si el envío falló) */
+function fillFormValues(o) {
+  if (!FORM) return;
+  FORM.F.fields.forEach(f => { const el = $('#f_' + f.k); if (!el || o[f.k] === undefined || el.disabled) return;
+    if (f.ty === 'bool') el.checked = truthy(o[f.k]); else if (f.ty === 'pct') el.value = o[f.k] === '' ? '' : r2(Number(o[f.k]) * 100); else el.value = f.ty === 'date' ? String(o[f.k]).slice(0, 10) : o[f.k]; });
+  formDynamics();
 }
 async function deleteRecord() {
   if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
-  const k = DB.key(FORM.table);
-  try { const ch = await Backend.call('remove', {table: FORM.table, id: FORM.rec[k]}); DB.apply(ch); const t = FORM.F.t, g = FORM.F.g || 'o'; closeModal(); render(); toast(cap(t.toUpperCase()) + ' eliminad' + g); }
-  catch (e) { toast('No se pudo eliminar: ' + e.message, true); }
+  const table = FORM.table, k = DB.key(table), prev = Object.assign({}, FORM.rec), F = FORM.F, label = cap(F.t.toUpperCase()), g = F.g || 'o';
+  DB.apply({deletes: {[table]: [prev[k]]}}); closeModal(); render(); toast(label + ' eliminad' + g);
+  Q.run(() => Backend.call('remove', Backend.online ? {table, id: prev[k]} : {table, id: prev[k], prev})).then(ch => { commit(ch); if (!FORM) render(); })
+    .catch(e => { DB.apply({upserts: {[table]: [prev]}}); render(); toast(label + ' no se eliminó: ' + e.message, true); });
 }
 function closeModal() { $('#modal').innerHTML = ''; FORM = null; }
 
@@ -1417,7 +1521,7 @@ document.addEventListener('click', async e => {
   if (d.banco) { S.banco = d.banco; render(); return; }
   if (d.go) { e.preventDefault(); go(d.go); return; }
   if (d.new) { const F = FORMS[d.new]; if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
-  if (d.edit) { openForm(d.edit, d.id); return; }
+  if (d.edit) { if (isTmp(d.id)) { toast('Se está guardando, espera un momento'); return; } openForm(d.edit, d.id); return; }
   if (d.cuenta) { S.cuenta = d.cuenta; S.q = ''; S.all = false; go('gastos'); return; }
   if (d.anio) { S.anio = d.anio; render(); return; }
   if (d.tab) { S.tab = d.tab; render(); return; }
@@ -1435,19 +1539,19 @@ document.addEventListener('click', async e => {
     const ya = detail('Presupuesto_Detalle', S.mes).length;
     if (!confirm(`Se agregarán ${rows.length} partidas de ${mesLabel(prev)} a ${mesLabel(S.mes)}${ya ? ` (ya hay ${ya}; podrían quedar duplicadas)` : ''}. ¿Continuar?`)) return;
     t.disabled = true;
-    try { const ch = await Backend.call('saveMany', {table: 'Presupuesto_Detalle', mes: S.mes, rows: rows.map(r => ({Cuenta_Gastos: r.Cuenta_Gastos, Total: r.Total, Cantidad: r.Cantidad, UM: r.UM, Descripcion: r.Descripcion}))}); DB.apply(ch); render(); toast(rows.length + ' partidas copiadas'); }
+    try { const ch = await Backend.call('saveMany', {table: 'Presupuesto_Detalle', mes: S.mes, rows: rows.map(r => ({Cuenta_Gastos: r.Cuenta_Gastos, Total: r.Total, Cantidad: r.Cantidad, UM: r.UM, Descripcion: r.Descripcion}))}); commit(ch); render(); toast(rows.length + ' partidas copiadas'); }
     catch (err) { t.disabled = false; toast('No se pudo copiar: ' + err.message, true); }
     return;
   }
   if (a === 'add-year') {
     const y = Math.max(...periodos().map(p => p.Anio)) + 1;
-    try { const ch = await Backend.call('addYear', {anio: y}); DB.apply(ch); S.anio = String(y); render(); toast('Períodos de ' + y + ' creados'); } catch (err) { toast(err.message, true); }
+    try { const ch = await Backend.call('addYear', {anio: y}); commit(ch); S.anio = String(y); render(); toast('Períodos de ' + y + ' creados'); } catch (err) { toast(err.message, true); }
     return;
   }
-  if (a === 'reload') { await boot(); if (DB.t.Cuentas) toast('Datos actualizados'); return; }
+  if (a === 'reload') { await boot(true); if (DB.t.Cuentas) toast('Datos actualizados desde Google Sheets'); return; }
   if (a === 'logout') {
     try { await Backend.call('logout'); } catch (err) {}
-    Auth.clear(); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
+    Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
   if (a === 'mov-transfer' || a === 'mov-dep') { openForm('Movimientos_Banco'); if (a === 'mov-dep') { $('#f_Tipo').value = 'Depósito'; $('#f_ID_Banco_Destino').value = S.banco; } else if (S.banco) { $('#f_ID_Banco_Origen').value = S.banco; const o = bancos().find(b => String(b.ID_Banco) !== S.banco); if (o) $('#f_ID_Banco_Destino').value = o.ID_Banco; } formDynamics(); return; }
@@ -1483,7 +1587,7 @@ document.addEventListener('submit', e => {
     const rep = $('#impRep') ? $('#impRep').checked : false;
     const b = e.target.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Importando…';
     try { const ch = await Backend.call(rep ? 'replaceMany' : 'saveMany', {table: 'Presupuesto_Detalle', mes: S.mes, rows: I.rows.map(({_cta, ...r}) => r)});
-      DB.apply(ch); S.imp = null; closeModal(); render(); toast(I.rows.length + ' partidas importadas'); }
+      commit(ch); S.imp = null; closeModal(); render(); toast(I.rows.length + ' partidas importadas'); }
     catch (err) { b.disabled = false; b.textContent = 'Importar'; toast('No se pudo importar: ' + err.message, true); }
   })();
   if (e.target.id === 'frmPwd') (async () => {
@@ -1507,7 +1611,7 @@ document.addEventListener('submit', e => {
   })();
   if (e.target.id === 'frmRes') (async () => {
     const b = e.target.querySelector('button[type=submit]'); b.disabled = true;
-    try { const ch = await Backend.call('saveResumen', {mes: S.mes, Disp_Jerson: $('#dj').value, Disp_Mariela: $('#dm').value}); DB.apply(ch); closeModal(); render(); toast('Corte guardado'); }
+    try { const ch = await Backend.call('saveResumen', {mes: S.mes, Disp_Jerson: $('#dj').value, Disp_Mariela: $('#dm').value}); commit(ch); closeModal(); render(); toast('Corte guardado'); }
     catch (err) { b.disabled = false; toast('No se pudo guardar: ' + err.message, true); }
   })();
 });
@@ -1529,7 +1633,7 @@ document.addEventListener('change', async e => {
   if (el.dataset.flag) {
     const p = DB.t.Mes_Anio.find(x => String(x.ID) === el.dataset.pid); const row = {ID: p.ID}; row[el.dataset.flag] = el.checked;
     el.disabled = true;
-    try { const ch = await Backend.call('save', {table: 'Mes_Anio', row}); DB.apply(ch); toast(`${el.closest('label').getAttribute('aria-label')}: ${el.checked ? 'activado' : 'desactivado'}`); }
+    try { const ch = await Backend.call('save', {table: 'Mes_Anio', row}); commit(ch); toast(`${el.closest('label').getAttribute('aria-label')}: ${el.checked ? 'activado' : 'desactivado'}`); }
     catch (err) { el.checked = !el.checked; toast(err.message, true); }
     el.disabled = false; renderMonthPicker();
   }
@@ -1541,18 +1645,28 @@ window.addEventListener('scroll', () => $('#top').classList.toggle('scrolled', w
 function applyTheme() { const t = lsGet('theme'); if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
 
 /* ---------- Inicio ---------- */
-async function boot() {
-  $('#loading').style.display = 'grid';
+function pickMes() {
+  const open = periodos().filter(p => truthy(p.Abierta)).pop();
+  const ms = mesesConDatos();
+  if (!S.mes || !ms.includes(S.mes)) S.mes = open ? open.Mes_Anio : ms[ms.length - 1];
+  const h = (location.hash || '').slice(1); if (h && VIEWS[h] && S.view === 'inicio') S.view = h;
+}
+async function boot(force) {
   try {
     if (Backend.mode === 'setup') throw new Error('setup');
-    if (Backend.online && !Auth.s) { showLogin(); return; }
-    const data = await Backend.call('getAll');
-    DB.load(data); hideLogin();
-    const open = periodos().filter(p => truthy(p.Abierta)).pop();
-    const ms = mesesConDatos();
-    if (!S.mes || !ms.includes(S.mes)) S.mes = open ? open.Mes_Anio : ms[ms.length - 1];
-    const h = (location.hash || '').slice(1); if (h && VIEWS[h] && S.view === 'inicio') S.view = h;
-    render();
+    if (Backend.online && !Auth.s) { $('#loading').style.display = 'none'; showLogin(); return; }
+    if (Backend.online && !force) {
+      const c = await Store.get('db');
+      if (c && c.t && c.user === (Auth.user || {}).usuario) {
+        DB.t = c.t; DB.cols = c.cols; DB.ver++; Sync.seq = c.seq || 0;
+        hideLogin(); pickMes(); render(); $('#loading').style.display = 'none';
+        Sync.start(); Sync.soon(); return;
+      }
+    }
+    $('#loading').style.display = 'grid';
+    if (Backend.online) await Sync.full(); else DB.load(await Backend.call('getAll'));
+    hideLogin(); pickMes(); render();
+    if (Backend.online) Sync.start();
   } catch (e) {
     if (e.code !== 'AUTH') {
       $('#mp').style.display = 'none';

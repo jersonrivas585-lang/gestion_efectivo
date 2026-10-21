@@ -1,6 +1,7 @@
-/* Service worker: guarda la app para abrirla rápido y sin señal.
-   Los datos siempre se piden en vivo a Google Sheets (no se guardan aquí). */
-const CACHE = 'efectivo-v2';
+/* Service worker: la app abre al instante desde la copia guardada en el equipo
+   y se actualiza en segundo plano (la versión nueva se ve la siguiente vez que se abre).
+   Los datos no pasan por aquí: se piden a Google Apps Script. */
+const CACHE = 'efectivo-v3';
 const SHELL = ['/', '/index.html', '/config.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
@@ -8,7 +9,12 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== self.location.origin) return; // Apps Script y fuentes van directo a la red
-  e.respondWith(fetch(e.request).then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return r; })
-    .catch(() => caches.match(e.request).then(r => r || caches.match('/index.html'))));
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/.well-known/')) return;
+  const key = e.request.mode === 'navigate' ? '/index.html' : e.request;
+  e.respondWith(caches.open(CACHE).then(async c => {
+    const hit = await c.match(key);
+    const net = fetch(e.request).then(r => { if (r.ok) c.put(key, r.clone()); return r; }).catch(() => hit);
+    if (hit) { e.waitUntil(net); return hit; }
+    return net;
+  }));
 });
