@@ -287,7 +287,11 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .fpreview > .fwarn:first-child{margin-top:0}
 .imp-err{color:var(--over);font-size:13px;margin:4px 0}
 .dtrow{display:flex;gap:8px;align-items:center}
-.dtrow .input{flex:1;min-width:0}
+.dtrow .input{flex:1.4;min-width:0}
+.dtrow .dt-time{flex:1}
+.dtchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink2)}
+.chip:hover{background:var(--sunk)}
 .fuelfigs .fig b .sub,.fig b .sub{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-top:1px}
 .item .amt small.g{font-weight:600;color:var(--ink2)}
 .section > h3 .tabs .tab{padding:3px 10px;font-size:12.5px}
@@ -547,6 +551,17 @@ const MOD_PERM = {Ingresos: 'ingresos.editar', Presupuesto: 'presupuesto.editar'
 const can = perm => !Backend.online || !!((Auth.user || {}).permisos || {})[perm];
 const periodOpen = mod => { const p = DB.idx().periodo[S.mes]; return !!p && truthy(p[mod]); };
 const canEdit = mod => periodOpen(mod) && can(MOD_PERM[mod]);
+/** Período activo: el último marcado como Abierto en Períodos. Es el predeterminado en toda la app. */
+const activePeriod = () => { const p = periodos().filter(x => truthy(x.Abierta)).pop(); return p ? p.Mes_Anio : null; };
+/** Dónde se registra algo nuevo: el período que estás viendo si está abierto para ese módulo; si no, el activo */
+const targetMes = mod => { if (periodOpen(mod)) return S.mes; const a = activePeriod(), p = a && DB.idx().periodo[a]; return p && truthy(p[mod]) ? a : null; };
+const canAdd = mod => !!targetMes(mod) && can(MOD_PERM[mod]);
+/** Antes de abrir un formulario nuevo, se cambia al período donde quedará registrado */
+function ensureTarget(mod) {
+  const t = targetMes(mod); if (!t) return false;
+  if (t !== S.mes) { S.mes = t; render(); toast('Se registrará en ' + mesLabel(t) + ', el período activo'); }
+  return true;
+}
 
 /* ---------- Conexión (Apps Script / HTTP / demo) ---------- */
 const Auth = {
@@ -603,7 +618,7 @@ const Demo = {
   _saveDet(table, row, mes, ch) {
     const rel = REL[table]; const k = DB.key(table);
     const prev = row[k] ? DB.t[table].find(x => String(x[k]) === String(row[k])) : null;
-    if (rel) { if (mes) row[rel.fk] = this._header(rel, mes)[rel.hkey]; if (!row.Fecha_Registro) row.Fecha_Registro = todayISO(); }
+    if (rel) { if (mes) row[rel.fk] = this._header(rel, mes)[rel.hkey]; if (!row.Fecha_Registro) row.Fecha_Registro = nowISO(); }
     const saved = this._upsert(table, row); this._add(ch, table, saved);
     if (rel) { this._add(ch, rel.header, this._recalc(table, saved[rel.fk])); if (prev && String(prev[rel.fk]) !== String(saved[rel.fk])) this._add(ch, rel.header, this._recalc(table, prev[rel.fk])); }
     return saved;
@@ -635,6 +650,7 @@ const Demo = {
   save(p) {
     try { this._guard(p.table, (p.row || {})[DB.key(p.table)]); } catch (e) { return {error: e.message}; }
     const ch = {upserts: {}, deletes: {}}; const row = Object.assign({}, p.row);
+    if (p.table === 'Cuentas' && !String(row.Codigo || '').trim()) { row.Codigo = nextCodigo(); row.Cuentas_Gastos = row.Codigo + '-' + (row.Cuentas || ''); }
     if (p.table === 'Movimientos_Banco') { row.Usuario = 'demo'; row.Fecha_Registro = row.Fecha_Registro || todayISO(); if (p.mes) row.Mes_Anio = p.mes; }
     const saved = this._saveDet(p.table, row, p.mes, ch);
     if (p.table === 'Retiros_Detalle' || p.table === 'Movimientos_Banco') this._sync(p.table, saved, ch);
@@ -739,6 +755,9 @@ const Sync = {
       if (r.full) { await this.full(); if (!FORM) render(); }
       else {
         let n = 0; (r.changes || []).forEach(c => { DB.apply(c); n++; });
+        if (r.periods) { const tb = r.periods, rows = tb.rows.map(x => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(x[i]) : x[i]); return o; });
+          if (JSON.stringify(rows) !== JSON.stringify(DB.t.Mes_Anio)) { const before = activePeriod(); DB.t.Mes_Anio = rows; DB.cols.Mes_Anio = tb.cols; DB.ver++; n++;
+            const now = activePeriod(); if (now && now !== before && !FORM) { S.mes = now; toast('Período activo: ' + mesLabel(now)); } } }
         if (r.fullTables && r.fullTables.length) { await this.full(r.fullTables); n++; }
         this.seq = r.seq;
         if (n) { if (!FORM) render(); this.persist(); }
@@ -796,7 +815,8 @@ function renderNav() {
 function renderMonthPicker() {
   const ms = mesesConDatos();
   if (S.mes && !ms.includes(S.mes)) ms.push(S.mes);
-  $('#mesSel').innerHTML = ms.slice().reverse().map(m => `<option value="${m}" ${m === S.mes ? 'selected' : ''}>${mesLabel(m)}</option>`).join('');
+  const act = activePeriod();
+  $('#mesSel').innerHTML = ms.slice().reverse().map(m => `<option value="${m}" ${m === S.mes ? 'selected' : ''}>${mesLabel(m)}${m === act ? ' (activo)' : ''}</option>`).join('');
   $('#mesSel').title = 'Período ' + rangeLabel(S.mes);
   $('#mp').style.display = VIEWS[S.view].mes ? '' : 'none';
 }
@@ -806,7 +826,7 @@ function render() {
   const fn = V[S.view] || V.inicio;
   $('#view').innerHTML = fn();
   const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Ingresos_Detalle', bancos: 'Movimientos_Banco', combustible: 'Consumo_Combustible', tarjetas: 'Referencias_Tarjetas'}[S.view];
-  const fabOk = fabFor && (REL[fabFor] ? canEdit(REL[fabFor].mod) : can(FORMS[fabFor].perm));
+  const fabOk = fabFor && (REL[fabFor] ? canAdd(REL[fabFor].mod) : can(FORMS[fabFor].perm));
   fab.hidden = !fabOk; fab.dataset.new = fabFor || '';
   $('#banner').innerHTML = Backend.mode === 'demo' ? `<div class="demo-banner">Modo demostración con los datos exportados de Access. Los cambios se guardan solo en esta pestaña.</div>` : '';
 }
@@ -847,7 +867,13 @@ function track(p, g) {
   const cls = p === 0 || g > p ? 'over' : (g > p * .85 ? 'hot' : '');
   return `<div class="track"><div class="fill ${cls}" style="width:${w}%"></div>${p > 0 ? `<div class="cap" style="left:calc(${capAt}% - 1px)"></div>` : ''}</div>`;
 }
-const lockNote = mod => canEdit(mod) ? '' : !can(MOD_PERM[mod]) ? `<div class="notice info"><span>Tu usuario puede consultar ${mod.toLowerCase()}, pero no registrar ni corregir.</span></div>` : `<div class="notice"><span>Este período está cerrado para ${mod.toLowerCase()}. Ábrelo para registrar o corregir movimientos.</span>${can('periodos.gestionar') ? '<button class="btn small" data-go="periodos">Abrir en Períodos</button>' : ''}</div>`;
+const lockNote = mod => {
+  if (canEdit(mod)) return '';
+  if (!can(MOD_PERM[mod])) return `<div class="notice info"><span>Tu usuario puede consultar ${mod.toLowerCase()}, pero no registrar ni corregir.</span></div>`;
+  const a = activePeriod(), t = targetMes(mod);
+  if (t && t !== S.mes) return `<div class="notice info"><span>Estás consultando <b>${esc(mesLabel(S.mes))}</b>, que está cerrado. Lo que registres quedará en <b>${esc(mesLabel(t))}</b>, el período activo.</span><button class="btn small" data-goto-mes="${t}" data-stay="1">Ir a ${esc(mesLabel(t))}</button></div>`;
+  return `<div class="notice"><span>Este período está cerrado para ${mod.toLowerCase()}${a ? '' : ' y no hay ningún período activo'}. Ábrelo para registrar o corregir movimientos.</span>${can('periodos.gestionar') ? '<button class="btn small" data-go="periodos">Abrir en Períodos</button>' : ''}</div>`;
+};
 
 /* ---------- Vistas ---------- */
 const V = {};
@@ -885,9 +911,9 @@ V.inicio = () => {
     </div>
   </section>
   <div class="row" style="margin-top:6px">
-    ${canEdit('Gastos') ? `<button class="btn primary" data-new="Gastos_Detalle">Registrar gasto</button>` : ''}
-    ${canEdit('Retiros') ? `<button class="btn" data-new="Retiros_Detalle">Registrar retiro</button>` : ''}
-    ${canEdit('Ingresos') ? `<button class="btn" data-new="Ingresos_Detalle">Registrar ingreso</button>` : ''}
+    ${canAdd('Gastos') ? `<button class="btn primary" data-new="Gastos_Detalle">Registrar gasto</button>` : ''}
+    ${canAdd('Retiros') ? `<button class="btn" data-new="Retiros_Detalle">Registrar retiro</button>` : ''}
+    ${canAdd('Ingresos') ? `<button class="btn" data-new="Ingresos_Detalle">Registrar ingreso</button>` : ''}
   </div>
   <section class="section">
     <h3>Sobres del mes <small>${cons.length} cuentas con movimiento${overN ? `, ${overN} excedidas` : ''}</small></h3>
@@ -934,7 +960,7 @@ V.gastos = () => {
     <input class="input" type="search" placeholder="Buscar descripción" value="${esc(S.q)}" data-bind="q" aria-label="Buscar">
     <select class="input" data-bind="cuenta" aria-label="Cuenta"><option value="">Todas las cuentas</option>${ctas.map(c => `<option value="${c.Codigo}" ${c.Codigo === S.cuenta ? 'selected' : ''}>${esc(c.Cuentas)}</option>`).join('')}</select>
     <label class="row" style="gap:8px;font-size:14px;cursor:pointer"><span class="toggle"><input type="checkbox" data-bind="all" ${S.all ? 'checked' : ''}><span></span></span>Todos los meses</label>
-    ${canEdit('Gastos') && !S.all ? '<button class="btn primary desk-only" data-new="Gastos_Detalle">Registrar gasto</button>' : ''}
+    ${canAdd('Gastos') && !S.all ? '<button class="btn primary desk-only" data-new="Gastos_Detalle">Registrar gasto</button>' : ''}
   </div>
   <div class="sumline"><span>${n} ${n === 1 ? 'gasto' : 'gastos'}${S.all ? ' en todos los meses' : ''}${n > 400 ? ', se muestran los 400 más recientes' : ''}</span><b class="num">${money(total)}</b></div>
   ${S.all && !q && !S.cuenta ? '<div class="panel empty"><b>Busca en todo el historial</b>Escribe una descripción o elige una cuenta para buscar desde 2018.</div>' :
@@ -958,7 +984,7 @@ V.retiros = () => {
   </div>
   ${rows.length && bancos().length ? `<section class="section"><h3>Por cuenta de banco</h3><div class="panel" style="padding:4px 12px">${Object.entries(byBank).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="env" style="cursor:default"><span class="nm">${esc(bankName(k))}</span><div class="track"><div class="fill" style="width:${t.R ? v / t.R * 100 : 0}%"></div></div><span class="rest"><b class="num">${money(v)}</b></span></div>`).join('')}</div></section>` : ''}
   ${top.length ? `<section class="section"><h3>Por tipo de movimiento</h3><div class="panel" style="padding:4px 12px">${top.map(([m, v]) => `<div class="env" style="cursor:default"><span class="nm">${esc(m)}</span><div class="track"><div class="fill" style="width:${t.R ? v / t.R * 100 : 0}%;background:var(--sun)"></div></div><span class="rest"><b class="num">${money(v)}</b></span></div>`).join('')}</div></section>` : ''}
-  <div class="toolbar"><span class="spacer"></span>${canEdit('Retiros') ? '<button class="btn primary desk-only" data-new="Retiros_Detalle">Registrar retiro</button>' : ''}</div>
+  <div class="toolbar"><span class="spacer"></span>${canAdd('Retiros') ? '<button class="btn primary desk-only" data-new="Retiros_Detalle">Registrar retiro</button>' : ''}</div>
   ${rows.length ? `<div class="list">${listGrouped(rows.slice().sort((a, b) => dtKey(b.Fecha_Retiro).localeCompare(dtKey(a.Fecha_Retiro)) || b.Id_DetRetiros - a.Id_DetRetiros), 'Fecha_Retiro', r => `
     <button class="item" data-edit="Retiros_Detalle" data-id="${r.Id_DetRetiros}"><span class="dot" style="background:var(--sun)"></span>
       <span class="tx"><b>${esc(r.Movimiento)}</b><small>${hasTime(r.Fecha_Retiro) ? ftime(r.Fecha_Retiro) + ', ' : ''}${esc(bankName(r.ID_Banco))}${Number(r.Monto_Moneda) ? ', ' + usd(r.Monto_Moneda) + ' a ' + r.Tipo_Cambio : ''}${r.Origen ? ', desde un gasto' : ''}</small></span><span class="amt num">${money(r.Total)}</span></button>`)}</div>`
@@ -974,7 +1000,7 @@ V.ingresos = () => {
     <div class="fig" data-go="bancos"><small>Depositado en bancos</small><b class="num">${money(enBancos)}</b></div>
     <div class="fig"><small>Efectivo o sin banco</small><b class="num">${money(byBank[''] || 0)}</b></div></div>
     <p class="muted" style="font-size:13px;margin:8px 2px 0">${Object.entries(byBank).filter(([k]) => k !== '').map(([k, v]) => esc(bankName(k)) + ': ' + money(v)).join('; ')}</p>` : ''}
-  <div class="toolbar"><div class="sumline" style="margin:0;flex:1"><span>${rows.length} ingresos</span><b class="num">${money(sum(rows))}</b></div>${canEdit('Ingresos') ? '<button class="btn primary desk-only" data-new="Ingresos_Detalle">Registrar ingreso</button>' : ''}</div>
+  <div class="toolbar"><div class="sumline" style="margin:0;flex:1"><span>${rows.length} ingresos</span><b class="num">${money(sum(rows))}</b></div>${canAdd('Ingresos') ? '<button class="btn primary desk-only" data-new="Ingresos_Detalle">Registrar ingreso</button>' : ''}</div>
   ${rows.length ? `<div class="list">${rows.map(r => `<button class="item" data-edit="Ingresos_Detalle" data-id="${r.ID_DetIngresos}"><span class="dot" style="background:${r.Origen ? 'var(--teal)' : 'var(--good)'}"></span>
     <span class="tx"><b>${esc(r.Descripcion)}</b><small>${esc(bankName(r.ID_Banco))}, ${fdatetime(r.Fecha_Registro)}${r.Origen ? ', automático' : r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num pos">${money(r.Total)}</span></button>`).join('')}</div>`
     : '<div class="panel empty"><b>No hay ingresos en este mes</b>Empieza por el salario y el saldo del mes anterior.</div>'}`;
@@ -1203,7 +1229,7 @@ V.tarjetas = () => {
   </div>
   <div class="toolbar"><div class="tabs" style="margin:0"><button class="tab" data-pend="0" aria-pressed="${!S.pend}">Todos</button><button class="tab" data-pend="1" aria-pressed="${S.pend}">Pendientes (${pend.length})</button></div><span class="spacer"></span>${can('tarjetas.editar') ? '<button class="btn primary desk-only" data-new="Referencias_Tarjetas">Registrar consumo</button>' : ''}</div>
   ${rows.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Concepto</th><th class="n">Valor</th><th class="n">Descuento</th><th class="n">A pagar</th><th>Estado</th><th>Referencia de pago</th></tr></thead>
-  <tbody>${rows.map(r => `<tr data-edit="Referencias_Tarjetas" data-id="${r.ID}"><td>${fdate(r.Fecha)}</td><td>${esc(r.Tarjeta_Credito)}</td><td>${esc(r.Observacion_Gastos)}</td><td class="n">${money(r.Valor)}</td><td class="n">${money(r.Descuento)}</td><td class="n">${money(r.Pagar)}</td><td>${truthy(r.Pagado) ? '<span class="pill open">Pagado</span>' : '<span class="pill bad">Pendiente</span>'}</td><td>${esc(r.Referencias_Pago)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>No hay consumos pendientes</b></div>'}`;
+  <tbody>${rows.map(r => `<tr data-edit="Referencias_Tarjetas" data-id="${r.ID}"><td>${fdatetime(r.Fecha)}</td><td>${esc(r.Tarjeta_Credito)}</td><td>${esc(r.Observacion_Gastos)}</td><td class="n">${money(r.Valor)}</td><td class="n">${money(r.Descuento)}</td><td class="n">${money(r.Pagar)}</td><td>${truthy(r.Pagado) ? '<span class="pill open">Pagado</span>' : '<span class="pill bad">Pendiente</span>'}</td><td>${esc(r.Referencias_Pago)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>No hay consumos pendientes</b></div>'}`;
 };
 
 V.cortes = () => {
@@ -1236,7 +1262,9 @@ V.periodos = () => {
   if (!S.anio || !years.map(String).includes(String(S.anio))) S.anio = String(years[0]);
   const flags = [['Abierta', 'Abierto'], ['Ingresos', 'Ingresos'], ['Presupuesto', 'Presupuesto'], ['Gastos', 'Gastos'], ['Retiros', 'Retiros'], ['Guardar_Resumen', 'Corte']];
   const D = diaInicio(), hoyP = periodForDate(todayISO());
-  return `<p class="muted">Cada período va del día ${D} de su mes al ${D - 1 || 'último'} del mes siguiente (cobras el ${D}). Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
+  const actP = activePeriod();
+  return `<div class="notice info" style="margin-top:4px"><span>${actP ? `Período activo: <b>${esc(mesLabel(actP))}</b> (${rangeLabel(actP)}). Es el que la app usa por defecto en Gastos, Retiros, Ingresos y Presupuesto.` : 'No hay ningún período activo: activa la columna Abierto del mes en curso.'}</span></div>
+  <p class="muted">Cada período va del día ${D} de su mes al ${D - 1 || 'último'} del mes siguiente (cobras el ${D}). Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
   ${can('periodos.gestionar') ? `<div class="row" style="margin:0 0 12px;gap:10px"><label for="diaIni" style="font-weight:600;font-size:14px">El período empieza el día</label>
     <select class="input" id="diaIni" style="width:auto">${Array.from({length: 28}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === D ? 'selected' : ''}>${n}</option>`).join('')}</select>
     <span class="muted" style="font-size:13px">Hoy corresponde a <b>${esc(mesLabel(hoyP))}</b>.</span></div>` : ''}
@@ -1279,6 +1307,7 @@ V.conexion = () => {
 
 /* ---------- Formularios ---------- */
 const optsCuentas = (gasto = true) => DB.t.Cuentas.filter(c => truthy(gasto ? c.Cuenta_de_Gastos : c.Cuenta_de_Ingresos) && truthy(c.Activa)).map(c => [c.Codigo, c.Cuentas]);
+const nextCodigo = () => { let m = 0; (DB.t.Cuentas || []).forEach(c => { const x = String(c.Codigo).match(/^C(\d+)$/i); if (x) m = Math.max(m, +x[1]); }); return 'C' + String(m + 1).padStart(3, '0'); };
 const optsUM = () => DB.t.UM.map(u => [u.UM, u.UM]);
 function histDesc(table, field, filterFn, limit = 80) {
   const f = {}; DB.t[table].forEach(r => { if (filterFn && !filterFn(r)) return; const k = String(r[field] || '').trim(); if (k) f[k] = (f[k] || 0) + 1; });
@@ -1286,7 +1315,7 @@ function histDesc(table, field, filterFn, limit = 80) {
 }
 const FORMS = {
   Gastos_Detalle: {t: 'gasto', mod: 'Gastos', fields: [
-    {k: 'Fecha', l: 'Fecha y hora de la compra', ty: 'datetime', req: 1, def: nowDT},
+    {k: 'Fecha', l: 'Fecha y hora de la compra', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo compraste, no cuándo lo anotas. Cámbialo si lo registras después.'},
     {k: 'Cuenta_Gastos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(true), req: 1, def: () => S.cuenta || 'C014'},
     {k: 'Descripcion_Gasto', l: 'Descripción', ty: 'text', req: 1, list: o => [...DB.t.Items.filter(i => i.Cuenta === o.Cuenta_Gastos).map(i => i.Descripcion), ...histDesc('Gastos_Detalle', 'Descripcion_Gasto', r => r.Cuenta_Gastos === o.Cuenta_Gastos)], dep: 'Cuenta_Gastos'},
     {k: 'Cantidad', l: 'Cantidad', ty: 'number', half: 1, def: 1, step: 'any'},
@@ -1315,11 +1344,11 @@ const FORMS = {
     {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01', half: 1},
     {k: 'ID_Banco', l: 'Depositado en', ty: 'select', half: 1, opts: () => [...bancos().filter(b => b.Moneda === 'NIO').map(b => [b.ID_Banco, b.Nombre]), ['', 'Efectivo, sin banco']], def: () => lsGet('bank_ing') ?? (bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? ''},
     {k: 'Cuenta_Ingresos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(false), def: 'C001', half: 1},
-    {k: 'Fecha_Registro', l: 'Fecha y hora', ty: 'datetime', def: nowDT},
+    {k: 'Fecha_Registro', l: 'Fecha y hora del ingreso', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo entró el dinero.'},
     {k: 'Observaciones', l: 'Observaciones', ty: 'text'}],
     after: o => lsSet('bank_ing', String(o.ID_Banco))},
   Retiros_Detalle: {t: 'retiro', mod: 'Retiros', fields: [
-    {k: 'Fecha_Retiro', l: 'Fecha y hora del retiro', ty: 'datetime', req: 1, def: nowDT},
+    {k: 'Fecha_Retiro', l: 'Fecha y hora del retiro', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo se hizo el retiro. Cámbialo si lo registras después.'},
     {k: 'ID_Banco', l: 'Desde la cuenta', ty: 'select', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), ['', 'Sin banco']], def: () => lsGet('bank_ret') ?? (bancos()[0] || {}).ID_Banco ?? ''},
     {k: 'Movimiento', l: 'Movimiento', ty: 'text', req: 1, list: () => [...DB.t.Obs_Retiros.filter(o => truthy(o.Mostrar)).map(o => o.Observaciones_Retiro), ...histDesc('Retiros_Detalle', 'Movimiento')], def: 'Retiro de Cajero Automatico'},
     {k: 'Monto_Moneda', l: 'Monto (US$)', ty: 'number', req: 1, step: '0.01', half: 1, show: o => curOf(o.ID_Banco) === 'USD'},
@@ -1330,7 +1359,7 @@ const FORMS = {
     after: o => { lsSet('bank_ret', String(o.ID_Banco)); if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); }},
   Movimientos_Banco: {t: 'movimiento de banco', perm: 'bancos.editar', needsMes: 1, fields: [
     {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Transferencia', 'Transferencia entre cuentas'], ['Depósito', 'Depósito en cuenta'], ['Ajuste', 'Ajuste de saldo']], def: 'Transferencia'},
-    {k: 'Fecha', l: 'Fecha', ty: 'date', req: 1, def: todayISO, half: 1},
+    {k: 'Fecha', l: 'Fecha y hora', ty: 'datetime', req: 1, def: nowDT},
     {k: 'ID_Banco_Origen', l: 'Desde', ty: 'select', half: 1, num: 1, opts: () => bancos().map(b => [b.ID_Banco, b.Nombre]), def: () => (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Transferencia'},
     {k: 'ID_Banco_Destino', l: 'Hacia', ty: 'select', half: 1, num: 1, opts: () => bancos().map(b => [b.ID_Banco, b.Nombre]), def: () => (bancos()[1] || bancos()[0] || {}).ID_Banco},
     {k: 'Monto', l: 'Monto', ty: 'number', req: 1, step: '0.01', half: 1},
@@ -1359,8 +1388,8 @@ const FORMS = {
     {k: 'Orden', l: 'Orden', ty: 'number', half: 1, def: () => bancos(true).length + 1},
     {k: 'Activa', l: 'Activa', ty: 'bool', def: true}]},
   Referencias_Tarjetas: {t: 'consumo con tarjeta', perm: 'tarjetas.editar', fields: [
-    {k: 'Fecha', l: 'Fecha', ty: 'date', req: 1, def: todayISO, half: 1},
-    {k: 'Moneda', l: 'Moneda', ty: 'select', opts: () => [['Córdoba', 'Córdoba'], ['Dólar', 'Dólar']], def: 'Córdoba', half: 1},
+    {k: 'Fecha', l: 'Fecha y hora del consumo', ty: 'datetime', req: 1, def: nowDT},
+    {k: 'Moneda', l: 'Moneda', ty: 'select', opts: () => [['Córdoba', 'Córdoba'], ['Dólar', 'Dólar']], def: 'Córdoba'},
     {k: 'Tarjeta_Credito', l: 'Tarjeta', ty: 'text', req: 1, list: () => histDesc('Referencias_Tarjetas', 'Tarjeta_Credito'), half: 1},
     {k: 'Banco', l: 'Banco', ty: 'text', list: () => histDesc('Referencias_Tarjetas', 'Banco'), half: 1},
     {k: 'Observacion_Gastos', l: 'Concepto', ty: 'text', list: () => histDesc('Referencias_Tarjetas', 'Observacion_Gastos')},
@@ -1373,7 +1402,7 @@ const FORMS = {
     before: o => { o.Descuento = r2(o.Valor * (o.Porcentaje_Desc || 0) * 10000) / 10000; o.Pagar = r2(o.Valor - o.Descuento); o.Diferencia = r2(o.Pagar - (o.Monto_Pagado || 0));
       const d = toDate(o.Fecha); if (d) { o.Mes = d.getMonth() + 1; o.Anio = d.getFullYear(); o.Mes_Letra = (DB.t.Meses.find(m => m.ID === o.Mes) || {}).Mes || ''; } }},
   Consumo_Combustible: {t: 'llenado de combustible', perm: 'combustible.editar', fields: [
-    {k: 'Fecha', l: 'Fecha y hora del llenado', ty: 'datetime', req: 1, def: nowDT},
+    {k: 'Fecha', l: 'Fecha y hora del llenado', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo cargaste combustible.'},
     {k: 'Horometro_Km', l: 'Odómetro (km)', ty: 'number', req: 1, step: 'any'},
     {k: 'Cantidad', l: 'Cantidad cargada', ty: 'number', req: 1, step: 'any', half: 1},
     {k: 'UM', l: 'Unidad', ty: 'select', opts: () => [['LT', 'Litros'], ['GL', 'Galones']], def: 'LT', half: 1},
@@ -1394,12 +1423,12 @@ const FORMS = {
     after: o => { if (Number(o.Precio_Litro)) lsSet('precio_litro', String(o.Precio_Litro)); },
     done: o => { if (Number(o.Km_Recorrido) > 0) showFuelResult(o); }},
   Cuentas: {t: 'cuenta', g: 'a', perm: 'catalogos.editar', fields: [
-    {k: 'Codigo', l: 'Código', ty: 'text', req: 1, keyEdit: 1, hint: 'Ejemplo: C033'},
+    {k: 'Codigo', l: 'Código', ty: 'text', keyEdit: 1, auto: 1, def: () => nextCodigo(), hint: 'Se numera solo. Si dos personas crean una cuenta a la vez, el servidor asigna el siguiente libre.'},
     {k: 'Cuentas', l: 'Nombre', ty: 'text', req: 1},
     {k: 'Cuenta_de_Gastos', l: 'Cuenta de gastos', ty: 'bool', def: true},
     {k: 'Cuenta_de_Ingresos', l: 'Cuenta de ingresos', ty: 'bool', def: false},
     {k: 'Activa', l: 'Activa', ty: 'bool', def: true}],
-    before: o => { o.Cuentas_Gastos = o.Codigo + '-' + o.Cuentas; }},
+    before: o => { if (!FORM.rec) o.Codigo = ''; o.Cuentas_Gastos = o.Codigo ? o.Codigo + '-' + o.Cuentas : ''; }},
   Items: {t: 'artículo', perm: 'catalogos.editar', fields: [
     {k: 'Descripcion', l: 'Descripción', ty: 'text', req: 1},
     {k: 'Cuenta', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(true), req: 1},
@@ -1425,12 +1454,13 @@ function openForm(table, id) {
   if (!rec) F.fields.forEach(f => { if (f.def !== undefined) o[f.k] = typeof f.def === 'function' ? f.def() : f.def; });
   FORM = {table, rec, o, F};
   const fieldHtml = f => {
-    const v = o[f.k] ?? '', dis = ro || (rec && f.keyEdit) ? 'disabled' : '', idf = 'f_' + f.k;
+    const v = o[f.k] ?? '', dis = ro || (rec && f.keyEdit) || f.auto ? 'disabled' : '', idf = 'f_' + f.k;
     let inp;
     if (f.ty === 'select') inp = `<select class="input" id="${idf}" name="${f.k}" ${dis} ${f.req ? 'required' : ''}>${f.opts().map(([a, b]) => `<option value="${esc(a)}" ${String(a) === String(v) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
     else if (f.ty === 'bool') return `<div class="field check"><label for="${idf}">${f.l}</label><label class="toggle"><input type="checkbox" id="${idf}" name="${f.k}" ${truthy(v) ? 'checked' : ''} ${dis}><span></span></label></div>`;
     else if (f.ty === 'pct') inp = `<input class="input" id="${idf}" name="${f.k}" type="number" step="any" inputmode="decimal" value="${v === '' ? '' : r2(Number(v) * 100)}" ${dis}>`;
-    else if (f.ty === 'datetime') inp = `<div class="dtrow"><input class="input" id="${idf}" name="${f.k}" type="datetime-local" value="${esc(toDTL(v))}" ${dis} ${f.req ? 'required' : ''}>${dis ? '' : `<button type="button" class="btn small" data-act="dt-now" data-for="${idf}">Ahora</button>`}</div>`;
+    else if (f.ty === 'datetime') { const dv = toDTL(v); inp = `<div class="dtrow"><input class="input" id="${idf}" name="${f.k}" type="date" aria-label="Fecha" value="${esc(dv.slice(0, 10))}" ${dis} ${f.req ? 'required' : ''}><input class="input dt-time" id="${idf}_t" type="time" aria-label="Hora" value="${esc(dv.slice(11, 16))}" ${dis}></div>
+      ${dis ? '' : `<div class="dtchips">${[['Ahora', 0], ['Hace 1 h', 60], ['Hace 3 h', 180], ['Ayer', 1440]].map(([l, m]) => `<button type="button" class="chip" data-act="dt-set" data-for="${idf}" data-min="${m}">${l}</button>`).join('')}</div>`}`; }
     else inp = `<input class="input" id="${idf}" name="${f.k}" type="${f.ty === 'number' ? 'number' : f.ty}" ${f.ty === 'number' ? `inputmode="decimal" step="${f.step || 'any'}"` : ''} value="${esc(f.ty === 'date' ? String(v).slice(0, 10) : v)}" ${f.list ? `list="dl_${f.k}" autocomplete="off"` : ''} ${dis} ${f.req ? 'required' : ''}>${f.list ? `<datalist id="dl_${f.k}"></datalist>` : ''}`;
     return `<div class="field ${f.half ? 'half' : ''}" data-fk="${f.k}"><label for="${idf}">${f.l}</label>${inp}${f.hint ? `<span class="hint">${f.hint}</span>` : ''}</div>`;
   };
@@ -1452,10 +1482,12 @@ function formDynamics() {
   F.fields.forEach(f => { const w = $(`#frm [data-fk="${f.k}"]`); if (w && f.show) w.hidden = !f.show(o); });
   if (F.label) Object.entries(F.label(o)).forEach(([k, l]) => { const lb = $(`#frm [data-fk="${k}"] > label`); if (lb) lb.textContent = l; });
   let warn = '';
+  const dtf = F.fields.find(x => x.ty === 'datetime');
+  if (dtf && o[dtf.k] && dtKey(o[dtf.k]) > dtKey(nowDT()) && new Date(String(o[dtf.k]).replace(' ', 'T')) - Date.now() > 10 * 60000) warn += '<div class="fwarn">La fecha y hora están en el futuro. Revisa si es correcto.</div>';
   const df = DATE_FIELD[FORM.table];
   if (df && o[df] && REL[FORM.table]) {
     const pm = periodForDate(o[df]), cur = FORM.rec ? (Object.entries(DB.idx().headerByMes[REL[FORM.table].header]).find(([, h]) => String(h[REL[FORM.table].hkey]) === String(FORM.rec[REL[FORM.table].fk])) || [S.mes])[0] : S.mes;
-    if (pm && pm !== cur) warn = `<div class="fwarn">Esta fecha corresponde al período <b>${esc(mesLabel(pm))}</b> (${rangeLabel(pm)}), pero se registrará en <b>${esc(mesLabel(cur))}</b>.${FORM.rec ? '' : truthy((DB.idx().periodo[pm] || {})[REL[FORM.table].mod]) ? ` <button type="button" class="btn small" data-act="to-period" data-mes="${pm}">Cambiar a ${esc(mesLabel(pm))}</button>` : ''}</div>`;
+    if (pm && pm !== cur) warn += `<div class="fwarn">Esta fecha corresponde al período <b>${esc(mesLabel(pm))}</b> (${rangeLabel(pm)}), pero se registrará en <b>${esc(mesLabel(cur))}</b>.${FORM.rec ? '' : truthy((DB.idx().periodo[pm] || {})[REL[FORM.table].mod]) ? ` <button type="button" class="btn small" data-act="to-period" data-mes="${pm}">Cambiar a ${esc(mesLabel(pm))}</button>` : ''}</div>`;
   }
   const pv = $('#fpreview'); if (pv) pv.innerHTML = (F.preview ? F.preview(o) : '') + warn;
 }
@@ -1468,7 +1500,7 @@ function readForm() {
     else if (f.ty === 'pct') o[f.k] = el.value === '' ? 0 : Number(el.value) / 100;
     else if (f.ty === 'select' && f.num) o[f.k] = el.value === '' ? '' : Number(el.value);
     else if (f.ty === 'select' && f.k === 'ID_Banco') o[f.k] = el.value === '' ? '' : Number(el.value);
-    else if (f.ty === 'datetime') o[f.k] = el.value ? el.value.replace('T', ' ').slice(0, 16) : '';
+    else if (f.ty === 'datetime') { const tm = ($('#f_' + f.k + '_t') || {}).value || '00:00'; o[f.k] = el.value ? el.value + ' ' + tm.slice(0, 5) : ''; }
     else o[f.k] = el.value.trim(); });
   return o;
 }
@@ -1488,7 +1520,7 @@ const OPTIMISTIC = ['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Pr
 async function submitForm() {
   const o = readForm();
   for (const f of FORM.F.fields) if (f.req && fieldVisible(f) && (o[f.k] === '' || o[f.k] === undefined || (f.ty === 'number' && isNaN(o[f.k])))) { toast('Completa el campo ' + f.l.replace(/ \(.*\)/, '').toLowerCase(), true); const el = $('#f_' + f.k); el && el.focus(); return; }
-  if (!FORM.rec && FORM.table === 'Cuentas' && DB.t.Cuentas.some(c => c.Codigo === o.Codigo)) { toast('Ya existe una cuenta con ese código', true); return; }
+  if (!FORM.rec && FORM.table === 'Cuentas' && DB.t.Cuentas.some(c => nrm(c.Cuentas) === nrm(o.Cuentas))) { toast('Ya existe una cuenta con ese nombre', true); return; }
   const verr = FORM.F.validate ? FORM.F.validate(o) : ''; if (verr) { toast(verr, true); return; }
   if (FORM.F.before) FORM.F.before(o);
   const F = FORM.F, table = FORM.table, rec = FORM.rec, k = DB.key(table), rel = REL[table];
@@ -1527,7 +1559,7 @@ async function submitForm() {
 function fillFormValues(o) {
   if (!FORM) return;
   FORM.F.fields.forEach(f => { const el = $('#f_' + f.k); if (!el || o[f.k] === undefined || el.disabled) return;
-    if (f.ty === 'bool') el.checked = truthy(o[f.k]); else if (f.ty === 'pct') el.value = o[f.k] === '' ? '' : r2(Number(o[f.k]) * 100); else el.value = f.ty === 'date' ? String(o[f.k]).slice(0, 10) : f.ty === 'datetime' ? toDTL(o[f.k]) : o[f.k]; });
+    if (f.ty === 'bool') el.checked = truthy(o[f.k]); else if (f.ty === 'pct') el.value = o[f.k] === '' ? '' : r2(Number(o[f.k]) * 100); else if (f.ty === 'datetime') { const dv = toDTL(o[f.k]); el.value = dv.slice(0, 10); const tt = $('#f_' + f.k + '_t'); if (tt) tt.value = dv.slice(11, 16); } else el.value = f.ty === 'date' ? String(o[f.k]).slice(0, 10) : o[f.k]; });
   formDynamics();
 }
 async function deleteRecord() {
@@ -1694,11 +1726,11 @@ document.addEventListener('click', async e => {
   if (d.close !== undefined) { if (e.target === t) closeModal(); return; }
   if (d.user) { openUserForm(d.user); return; }
   if (d.banco) { S.banco = d.banco; render(); return; }
-  if (d.gotoMes) { S.mes = d.gotoMes; go('inicio'); toast('Trabajando en ' + mesLabel(d.gotoMes)); return; }
+  if (d.gotoMes) { S.mes = d.gotoMes; if (d.stay) render(); else go('inicio'); toast('Trabajando en ' + mesLabel(d.gotoMes)); return; }
   if (d.funit) { S.fuelUnit = d.funit; lsSet('fuel_unit', d.funit); if (d.fres && S.fuelShown) showFuelResult(S.fuelShown.r, S.fuelShown.fromList); else render(); return; }
   if (d.fuel) { const r = DB.t.Consumo_Combustible.find(x => String(x.ID) === d.fuel); if (r) showFuelResult(r, true); return; }
   if (d.go) { e.preventDefault(); go(d.go); return; }
-  if (d.new) { const F = FORMS[d.new]; if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
+  if (d.new) { const F = FORMS[d.new]; if (F && F.mod && REL[d.new] && !canEdit(F.mod) && canAdd(F.mod) && F.mod !== 'Presupuesto') ensureTarget(F.mod); if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
   if (d.edit) { if (isTmp(d.id)) { toast('Se está guardando, espera un momento'); return; } openForm(d.edit, d.id); return; }
   if (d.cuenta) { S.cuenta = d.cuenta; S.q = ''; S.all = false; go('gastos'); return; }
   if (d.anio) { S.anio = d.anio; render(); return; }
@@ -1744,7 +1776,9 @@ document.addEventListener('click', async e => {
     $('#fpD').oninput = upd; $('#fpP').oninput = upd; upd(); return;
   }
   if (a === 'open-src') { const [kind, id] = String(t.dataset.src).split(':'); const tb = {GAS: 'Gastos_Detalle', RET: 'Retiros_Detalle', MOV: 'Movimientos_Banco'}[kind]; closeModal(); if (tb) openForm(tb, id); return; }
-  if (a === 'dt-now') { const el = $('#' + t.dataset.for); if (el) { el.value = toDTL(nowDT()); el.dispatchEvent(new Event('input', {bubbles: true})); } return; }
+  if (a === 'dt-set' || a === 'dt-now') { const el = $('#' + t.dataset.for), tt = $('#' + t.dataset.for + '_t'); if (!el) return;
+    const d = new Date(Date.now() - (Number(t.dataset.min) || 0) * 60000); const v = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    el.value = v; if (tt) tt.value = pad(d.getHours()) + ':' + pad(d.getMinutes()); el.dispatchEvent(new Event('input', {bubbles: true})); return; }
   if (a === 'fuel-edit') { const id = t.dataset.fid; closeModal(); openForm('Consumo_Combustible', id); return; }
   if (a === 'mov-transfer' || a === 'mov-dep') { openForm('Movimientos_Banco'); if (a === 'mov-dep') { $('#f_Tipo').value = 'Depósito'; $('#f_ID_Banco_Destino').value = S.banco; } else if (S.banco) { $('#f_ID_Banco_Origen').value = S.banco; const o = bancos().find(b => String(b.ID_Banco) !== S.banco); if (o) $('#f_ID_Banco_Destino').value = o.ID_Banco; } formDynamics(); return; }
   if (a === 'repair') { t.disabled = true; try { const r = await Backend.call('repair'); toast((r.report || []).length ? r.report.length + ' correcciones aplicadas' : 'Todo estaba en orden'); await boot(); } catch (err) { toast(err.message, true); } t.disabled = false; return; }
@@ -1849,16 +1883,15 @@ document.addEventListener('change', async e => {
   }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').innerHTML) closeModal(); });
-$('#fab').addEventListener('click', () => { const n = $('#fab').dataset.new; if (n) openForm(n); });
+$('#fab').addEventListener('click', () => { const n = $('#fab').dataset.new; if (!n) return; if (REL[n] && !ensureTarget(REL[n].mod)) return; openForm(n); });
 let rzT, lastW = window.innerWidth; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { if (Math.abs(window.innerWidth - lastW) > 60 && !FORM && DB.t.Cuentas) { lastW = window.innerWidth; render(); } }, 250); });
 window.addEventListener('scroll', () => $('#top').classList.toggle('scrolled', window.scrollY > 8), {passive: true});
 function applyTheme() { const t = lsGet('theme'); if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
 
 /* ---------- Inicio ---------- */
 function pickMes() {
-  const ms = mesesConDatos(), hoy = periodForDate(todayISO()), ph = DB.idx().periodo[hoy];
-  const open = periodos().filter(p => truthy(p.Abierta)).pop();
-  if (!S.mes || !ms.includes(S.mes)) S.mes = ph && truthy(ph.Abierta) ? hoy : open ? open.Mes_Anio : ms[ms.length - 1];
+  const ms = mesesConDatos(), act = activePeriod();
+  if (!S.mes || !ms.includes(S.mes)) S.mes = act || ms[ms.length - 1];
   const h = (location.hash || '').slice(1); if (h && VIEWS[h] && S.view === 'inicio') S.view = h;
 }
 async function boot(force) {
@@ -1888,7 +1921,16 @@ async function boot(force) {
   $('#loading').style.display = 'none';
 }
 applyTheme(); Backend.detect(); boot();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  // Versión nueva publicada en Netlify: se recarga sola si no hay nada pendiente, si no avisa
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'update') return;
+    if (!FORM && !Q.n) { location.reload(); return; }
+    toast('Hay una versión nueva de la app: se aplicará al terminar lo que estás haciendo');
+    const t = setInterval(() => { if (!FORM && !Q.n) { clearInterval(t); location.reload(); } }, 2000);
+  });
+}
 </script>
 </body>
 </html>

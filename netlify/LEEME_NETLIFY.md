@@ -99,6 +99,25 @@ La sección **Bancos** muestra el saldo de cada cuenta. Al conectar por primera 
 
 Los ingresos automáticos se editan o eliminan desde el retiro o la transferencia que los generó. El tipo de cambio que uses queda como sugerencia para la próxima vez.
 
+## Compras con tarjeta de débito
+
+En el formulario de gasto, **Forma de pago** puede ser *Efectivo* o *Tarjeta de débito* de cualquiera de las cuentas.
+
+- **Débito en córdobas (Avanz o BAC):** se registra el gasto y, al mismo tiempo, un retiro por el mismo monto desde esa cuenta, en el mismo período, fecha y hora. El efectivo en mano no cambia y el saldo del banco baja.
+- **Débito en dólares (BAC US$):** escribes los US$ debitados y el tipo de cambio. Se registran tres cosas: el gasto en córdobas, el retiro de US$ desde la cuenta en dólares y el ingreso automático por la conversión. Así los totales en córdobas cuadran.
+- El retiro (y el ingreso, en dólares) quedan ligados al gasto: si editas el gasto se actualizan, si lo cambias a *Efectivo* o lo eliminas, se eliminan. No se pueden editar sueltos; desde el retiro hay un botón *Abrir el gasto*.
+- En la hoja: `Gastos_Detalle` tiene las columnas nuevas `ID_Banco`, `Monto_Moneda`, `Tipo_Cambio`, `ID_Retiro_Auto`; `Retiros_Detalle` tiene `Origen` (`GAS:` y el número del gasto). Se agregan solas.
+
+## Fecha y hora en cada movimiento
+
+Gastos, retiros, ingresos, llenados de combustible, movimientos de banco y tarjetas se registran con la **fecha y hora en que ocurrió el movimiento**, que tú eliges: un campo para la fecha y otro para la hora, más los atajos *Ahora*, *Hace 1 h*, *Hace 3 h* y *Ayer*. Si lo anotas horas después, cambia la fecha y la hora antes de guardar. Si la fecha queda en el futuro, el formulario avisa.
+
+Aparte, el servidor guarda en `Fecha_Registro` el momento exacto en que lo anotaste (en ingresos, `Fecha_Registro` es la fecha del ingreso que eliges). Los registros antiguos de Access quedan solo con fecha.
+
+## Códigos de cuenta automáticos
+
+Al agregar una cuenta en *Catálogos → Cuentas* el código se asigna solo: el siguiente número libre (C033, C034…). El servidor lo calcula al guardar, así dos personas no pueden recibir el mismo código.
+
 ## Importar el presupuesto desde Excel
 
 En **Presupuesto** usa *Descargar plantilla* (trae el presupuesto del mes o del mes anterior) o el archivo `Plantilla_Presupuesto.xlsx` del paquete. Llénalo y usa *Importar desde Excel*.
@@ -107,9 +126,48 @@ En **Presupuesto** usa *Descargar plantilla* (trae el presupuesto del mes o del 
 - Todo lo que esté después de la fila **TOTAL** se ignora.
 - Antes de importar ves el resumen, las filas con error (por ejemplo una cuenta que no existe) y eliges si **reemplazas** el presupuesto del mes o lo **sumas** al existente.
 
+## Períodos del 20 al 19
+
+Cada período empieza el día de pago y termina el día anterior del mes siguiente: **Octubre 2026 va del 20 de octubre al 19 de noviembre**. El día se cambia en *Períodos → El período empieza el día* (se guarda en la hoja Empresa, columna `Dia_Inicio_Periodo`).
+
+- **Período activo:** es el último mes con *Abierto* activado en Períodos (hoy, Octubre 2026). La app lo selecciona por defecto en todas las secciones y lo marca como *(activo)* en el selector.
+- Puedes consultar otro mes con el selector. Si ese mes está cerrado, verás un aviso y **lo que registres quedará en el período activo**: al tocar *Registrar*, la app cambia sola a ese período y te lo indica.
+- Si cambias los períodos directamente en la hoja de Google, la app lo toma en la siguiente sincronización (cada minuto o al volver a abrirla).
+- Inicio, Presupuesto y Períodos muestran las fechas de cada período.
+- Si registras un gasto, retiro o ingreso con una fecha que pertenece a otro período, el formulario te avisa y ofrece cambiar al período correcto.
+
+**Para cargar el presupuesto de un período nuevo (por ejemplo Octubre 2026):**
+1. En *Períodos*, deja **Abierto** y **Presupuesto** activados para Octubre.
+2. Arriba, en el selector de período, elige **Octubre 2026** (o toca *Ver* en la fila de Octubre).
+3. En *Presupuesto* aparecen las opciones: **Importar desde Excel**, **Copiar las partidas de Septiembre**, **Descargar plantilla** o **Agregar partida**.
+
 ## Períodos que aparecían como fecha
 
 Google Sheets convertía textos como `SEPTIEMBRE-2026` en fechas al guardarlos, por eso el selector mostraba "2026 09" y el mes salía en cero. Ahora todo texto se guarda tal cual. La primera vez que alguien entra, el servicio repara solo los períodos ya convertidos y une los encabezados mensuales duplicados. También puedes hacerlo a mano en la hoja (*Efectivo → Revisar hojas y reparar períodos*) o en la app (*Períodos → Revisar y reparar períodos*).
+
+## Combustible: costo y rendimiento
+
+- Al registrar un llenado escribe el **precio por litro** (se sugiere el último que usaste) o el **total pagado**; la app calcula lo otro.
+- **Fecha y hora:** el llenado se registra con fecha y hora (por defecto, el momento actual; el botón *Ahora* la vuelve a poner). Se guarda en la columna `Fecha` de Consumo_Combustible como fecha con hora. Los registros antiguos quedan solo con fecha.
+- Al guardar aparece el cálculo: kilómetros recorridos desde el llenado anterior, litros y galones, **km/L y km/GL**, un medidor comparado con tu historial, el costo y el costo por km. Con los botones km/L y km/GL eliges cuál ver en grande, en el medidor y en el gráfico; la app recuerda tu elección.
+- km/GL se calcula a partir de km/L (1 galón = 3.78541 litros), así ambas cifras siempre coinciden, también en el historial.
+- Toca cualquier llenado de la lista para ver su cálculo; desde ahí puedes editarlo.
+- **Llenados sin precio:** si hay llenados sin precio, la sección Combustible muestra *Completar precio*: escribes el precio por litro y desde qué fecha, y se calcula el costo de cada uno.
+- **Millas:** `Horometro_Millas` y `Millas_Recorrido` ahora se calculan como km ÷ 1.60934. En Access guardaban el mismo número que los km; el servidor corrige el historial la primera vez que se conecta, y también los litros que Access había truncado a 2 decimales (por ejemplo 41.628 en vez de 41.62), recalculando km/L y km/GL.
+- El costo se guarda en la hoja **Consumo_Combustible** (columnas `Precio_Litro` y `Costo`, que se agregan solas). **No se registra en Gastos**, porque se paga con tarjeta de crédito; el gasto real aparece cuando registras el pago de la tarjeta.
+
+## Velocidad: cómo carga y guarda la app
+
+- **Abre al instante:** la app guarda una copia de los datos en el equipo y la muestra de inmediato. Después pide al servidor solo los cambios nuevos, no toda la base. La primera vez en cada equipo (o tras cerrar sesión) sí descarga todo, comprimido.
+- **Guardado inmediato:** al registrar un gasto, retiro, ingreso, partida, movimiento de banco, tarjeta o combustible, el registro aparece enseguida y se envía en segundo plano. Arriba se ve *Guardando…* mientras tanto. Si el envío falla, el cambio se deshace y el formulario se abre de nuevo con lo que escribiste.
+- **Varios equipos:** cada minuto, y cada vez que vuelves a la app, se traen los cambios hechos desde otros celulares.
+- **Hoja oculta _Cambios:** el servidor anota ahí cada cambio para poder enviar solo lo nuevo. No la borres ni la edites; se limpia sola.
+- **Si editas directamente en Google Sheets:** esos cambios llegan a la app con *Mi cuenta → Recargar datos*, o solos una vez al día.
+- Al cerrar sesión se borra la copia guardada en el equipo.
+
+## Actualizaciones de la app
+
+Cuando subes un `index.html` nuevo a GitHub y Netlify lo publica, la app instalada lo detecta al abrirse y **se recarga sola** con la versión nueva (si estás llenando un formulario, espera a que termines). Ya no hace falta cerrarla y abrirla dos veces.
 
 ## Seguridad
 
