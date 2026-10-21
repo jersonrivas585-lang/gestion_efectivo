@@ -108,7 +108,9 @@ En **Inicio**, la sección *Dinero disponible* muestra lo que tienes para gastar
 - *Saldo de Mes Anterior (Disp. En Mano)* con el efectivo que quedó;
 - *Salario Mensual* con el monto del último salario.
 
-Revisas montos y cuentas, desmarcas lo que no aplique y se registran todos juntos como ingresos.
+Revisas montos y cuentas, desmarcas lo que no aplique y la ventana muestra el **total a registrar** (solo de las líneas activadas, separado en bancos y efectivo); se registran todos juntos como ingresos.
+
+Si el período anterior tiene ingresos o retiros registrados con la app nueva que en realidad son del período nuevo, la ventana lo avisa. Para corregirlos, abre el registro: si su período está abierto, cambia el campo **Período**; si está cerrado, usa el botón **Mover a …** (por ejemplo *Mover a Octubre 2026*). Un gasto con débito mueve también su retiro.
 
 ## Gastos en efectivo: solo con efectivo disponible
 
