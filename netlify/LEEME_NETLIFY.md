@@ -110,7 +110,7 @@ En **Inicio**, la sección *Dinero disponible* muestra lo que tienes para gastar
 
 Revisas montos y cuentas, desmarcas lo que no aplique y la ventana muestra el **total a registrar** (solo de las líneas activadas, separado en bancos y efectivo); se registran todos juntos como ingresos.
 
-Si el período anterior tiene ingresos o retiros registrados con la app nueva que en realidad son del período nuevo, la ventana lo avisa. Para corregirlos, abre el registro: si su período está abierto, cambia el campo **Período**; si está cerrado, usa el botón **Mover a …** (por ejemplo *Mover a Octubre 2026*). Un gasto con débito mueve también su retiro.
+Si el período anterior tiene movimientos hechos con la app nueva (ingresos con banco, retiros, gastos o transferencias), la ventana los lista en el paso **1** con el botón **Mover a …**: los saldos sugeridos ya no los cuentan, así solo quedan los saldos reales que pasan al período nuevo. Para corregirlos, abre el registro: si su período está abierto, cambia el campo **Período**; si está cerrado, usa el botón **Mover a …** (por ejemplo *Mover a Octubre 2026*). Un gasto con débito mueve también su retiro.
 
 ## Gastos en efectivo: solo con efectivo disponible
 
@@ -198,7 +198,7 @@ Google Sheets convertía textos como `SEPTIEMBRE-2026` en fechas al guardarlos, 
 
 ## Actualizaciones de la app
 
-Cuando subes un `index.html` nuevo a GitHub y Netlify lo publica, la app instalada lo detecta al abrirse y **se recarga sola** con la versión nueva (si estás llenando un formulario, espera a que termines). Ya no hace falta cerrarla y abrirla dos veces.
+La página se pide siempre primero a Netlify, así se usa la versión publicada; si no hay señal se abre la copia guardada en el equipo. En *Mi cuenta* (y en el menú lateral) se ve el **número de versión**, para comprobar que tienes la última.
 
 ## Seguridad
 

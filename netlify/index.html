@@ -323,6 +323,10 @@ button.drow:hover{background:var(--sunk)}
 .aptotal span{font-weight:700}
 .aptotal b{font-size:20px;font-weight:800}
 .apline.off{opacity:.45}
+.movebox{background:var(--sun-soft);border-radius:10px;padding:12px;margin-bottom:6px}
+.movebox small{display:block;color:var(--ink2);margin:2px 0 8px}
+.mvrow{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:5px 0;font-size:14px;cursor:pointer}
+.mvrow input{width:17px;height:17px;accent-color:var(--teal)}
 .apline{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:10px 0;border-bottom:1px solid var(--line)}
 .apbody small{display:block;color:var(--muted);font-size:12.5px}
 .aprow{display:grid;grid-template-columns:1fr 1.3fr;gap:8px;margin-top:6px}
@@ -402,6 +406,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
+const APP_VERSION = '2026.10.21-0348';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -841,7 +846,7 @@ function renderNav() {
   $('#side').innerHTML = `<div class="brand"><b>Efectivo</b><span>${esc(cap(emp.split(' ')[0]) + ' ' + cap(emp.split(' ')[1] || ''))}</span></div>` +
     side.map(v => v === '|' ? '<div class="navsep"></div>' :
       `<button class="navbtn" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('') +
-    (Backend.online && Auth.user ? `<div class="sideuser"><b>${esc(Auth.user.nombre)}</b><span class="muted">${esc(Auth.user.rolNombre || Auth.user.rol)}</span><br><button data-act="logout">Cerrar sesión</button></div>` : '');
+    (Backend.online && Auth.user ? `<div class="sideuser"><small class="muted" style="display:block;font-size:11px">Versión ${APP_VERSION}</small><b>${esc(Auth.user.nombre)}</b><span class="muted">${esc(Auth.user.rolNombre || Auth.user.rol)}</span><br><button data-act="logout">Cerrar sesión</button></div>` : '');
   const inMore = MORE.includes(S.view) || S.view === 'mas';
   $('#bottom').innerHTML = ['inicio', 'gastos', 'retiros', 'presupuesto', 'mas'].map(v =>
     `<button data-go="${v}" ${(S.view === v || (v === 'mas' && inMore)) ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('');
@@ -924,12 +929,22 @@ const V = {};
  * asignado (registros antiguos) y el efectivo en mano (retiros − gastos).
  */
 /** Fecha desde la que se usan cuentas de banco (la más antigua de Bancos → Fecha del saldo inicial) */
-const isNew = r => r.ID_Banco === 0 || String(r.ID_Banco) === '0' || /\d{2}:\d{2}/.test(String(r.Fecha_Registro || ''));
+/** Registrado con esta app (y no traído de Access): tiene banco, efectivo marcado (0) o fecha de registro con hora */
+const isNew = r => r.ID_Banco === 0 || String(r.ID_Banco) === '0' || !!banco(r.ID_Banco) || /\d{2}:\d{2}/.test(String(r.Fecha_Registro || ''));
+/** Movimientos hechos con la app dentro de un período (candidatos a pertenecer al período siguiente) */
+function newRowsIn(mes) {
+  const out = [];
+  [['Ingresos_Detalle', 'ID_DetIngresos', 'Ingreso', r => r.Descripcion], ['Retiros_Detalle', 'Id_DetRetiros', 'Retiro', r => r.Movimiento], ['Gastos_Detalle', 'ID_Detalle_Gastos', 'Gasto', r => r.Descripcion_Gasto]]
+    .forEach(([t, k, tipo, d]) => detail(t, mes).filter(r => isNew(r) && !r.Origen && !isTmp(r[k])).forEach(r => out.push({t, id: r[k], tipo, desc: d(r), total: Number(r.Total) || 0, r})));
+  (DB.t.Movimientos_Banco || []).filter(m => m.Mes_Anio === mes && !isTmp(m.ID_Mov)).forEach(m => out.push({t: 'Movimientos_Banco', id: m.ID_Mov, tipo: m.Tipo, desc: m.Tipo === 'Transferencia' ? bankName(m.ID_Banco_Origen) + ' → ' + bankName(m.ID_Banco_Destino) : bankName(m.ID_Banco_Destino), total: Number(m.Monto) || 0, r: m}));
+  return out;
+}
 const bankStart = () => (DB.t.Bancos || []).map(b => String(b.Fecha_Inicial || '').slice(0, 10)).filter(Boolean).sort()[0] || '9999-12-31';
-function disponible(mes) {
-  const ing = detail('Ingresos_Detalle', mes), ret = detail('Retiros_Detalle', mes), gas = detail('Gastos_Detalle', mes);
+function disponible(mes, excl) {
+  const ex = excl || new Set(), keep = t => r => !ex.has(t + ':' + r[DB.key(t)]);
+  const ing = detail('Ingresos_Detalle', mes).filter(keep('Ingresos_Detalle')), ret = detail('Retiros_Detalle', mes).filter(keep('Retiros_Detalle')), gas = detail('Gastos_Detalle', mes).filter(keep('Gastos_Detalle'));
   const noB = r => r.ID_Banco === '' || r.ID_Banco === undefined || r.ID_Banco === null || !banco(r.ID_Banco);
-  const movs = (DB.t.Movimientos_Banco || []).filter(m => m.Mes_Anio === mes && m.Tipo === 'Transferencia');
+  const movs = (DB.t.Movimientos_Banco || []).filter(m => m.Mes_Anio === mes && m.Tipo === 'Transferencia' && !ex.has('Movimientos_Banco:' + m.ID_Mov));
   const cuentas = bancos().filter(b => b.Moneda === 'NIO').map(b => {
     const id = String(b.ID_Banco);
     let v = sum(ing.filter(r => String(r.ID_Banco) === id)) - sum(ret.filter(r => String(r.ID_Banco) === id));
@@ -950,20 +965,27 @@ function disponible(mes) {
 }
 /** Ingresos sugeridos para abrir un período: saldos que quedaron del anterior y el último salario */
 function aperturaSugerida(mes) {
-  const prev = mesAnterior(mes); if (!prev) return {prev: null, lineas: []};
-  const d = disponible(prev), L = [];
+  const prev = mesAnterior(mes); if (!prev) return {prev: null, lineas: [], mover: []};
+  const mover = newRowsIn(prev), ex = new Set();
+  mover.forEach(m => { ex.add(m.t + ':' + m.id); if (m.r.ID_Ingreso_Auto) ex.add('Ingresos_Detalle:' + m.r.ID_Ingreso_Auto); if (m.r.ID_Retiro_Auto) { ex.add('Retiros_Detalle:' + m.r.ID_Retiro_Auto); const ar = DB.t.Retiros_Detalle.find(x => String(x.Id_DetRetiros) === String(m.r.ID_Retiro_Auto)); if (ar && ar.ID_Ingreso_Auto) ex.add('Ingresos_Detalle:' + ar.ID_Ingreso_Auto); } });
+  const d = disponible(prev, ex), L = [];
   d.cuentas.forEach(c => { if (Math.abs(c.v) >= 0.01) L.push({Descripcion: 'Saldo de Mes Anterior (Cuenta)', Total: c.v, ID_Banco: c.b.ID_Banco, on: c.v > 0}); });
   if (Math.abs(d.sinBanco) >= 0.01) L.push({Descripcion: 'Saldo de Mes Anterior (Cuenta)', Total: d.sinBanco, ID_Banco: (bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? '', on: d.sinBanco > 0, nota: 'En ' + mesLabel(prev) + ' no tenía banco asignado: elige la cuenta'});
   if (Math.abs(d.mano) >= 0.01) L.push({Descripcion: 'Saldo de Mes Anterior (Disp. En Mano)', Total: d.mano, ID_Banco: 0, on: d.mano > 0, nota: 'Cuenta el efectivo y corrige si hace falta'});
   const sal = DB.t.Ingresos_Detalle.filter(r => /salario mensual/i.test(r.Descripcion)).sort((a, b) => (Number(a.ID_DetIngresos) || 0) - (Number(b.ID_DetIngresos) || 0)).pop();
   if (sal && !detail('Ingresos_Detalle', mes).some(r => /salario mensual/i.test(r.Descripcion))) L.push({Descripcion: 'Salario Mensual', Total: Number(sal.Total) || 0, ID_Banco: sal.ID_Banco !== '' && banco(sal.ID_Banco) ? sal.ID_Banco : ((bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? ''), on: true, nota: 'Monto del último salario: corrígelo si cambió'});
-  return {prev, lineas: L};
+  return {prev, lineas: L, mover};
 }
 function openApertura() {
   if (!ensureTarget('Ingresos')) return toast('No hay un período abierto para ingresos', true);
   const A = aperturaSugerida(S.mes); S.apertura = A;
   const opts = sel => [...bancos().filter(b => b.Moneda === 'NIO').map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo, sin banco']].map(([v, l]) => `<option value="${v}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(l)}</option>`).join('');
   sheetModal('frmApertura', 'Iniciar ' + mesLabel(S.mes), `
+    ${A.mover.length ? `<div class="movebox"><b>1. Registros de ${esc(mesLabel(S.mes))} que quedaron en ${esc(mesLabel(A.prev))}</b>
+      <small>Se hicieron con la app nueva dentro de ${esc(mesLabel(A.prev))}. Los saldos de abajo ya no los cuentan; muévelos a ${esc(mesLabel(S.mes))} para que queden donde corresponden.</small>
+      ${A.mover.map((m, i) => `<label class="mvrow"><input type="checkbox" data-mv="${i}" checked><span>${esc(m.tipo)}: ${esc(m.desc)}</span><b class="num">${money(m.total)}</b></label>`).join('')}
+      <button type="button" class="btn small primary" data-act="ap-move" style="margin-top:8px">Mover a ${esc(mesLabel(S.mes))}</button></div>
+      <p style="margin:14px 0 6px"><b>2. Saldos con los que empiezas</b></p>` : ''}
     <p style="margin:0 0 12px">Registra los ingresos con los que empiezas el período: lo que quedó de ${A.prev ? '<b>' + esc(mesLabel(A.prev)) + '</b>' : 'el período anterior'} en cada cuenta, el efectivo en mano y el salario. Revisa los montos y la cuenta de cada uno.</p>
     ${A.lineas.length ? A.lineas.map((l, i) => `<div class="apline">
       <label class="toggle" aria-label="Incluir"><input type="checkbox" data-ap="${i}" ${l.on ? 'checked' : ''}><span></span></label>
@@ -972,8 +994,7 @@ function openApertura() {
       : '<p class="muted">No hay saldos del período anterior para sugerir. Registra los ingresos uno por uno.</p>'}
     ${A.lineas.length ? `<div class="aptotal"><span>Total a registrar</span><b class="num" id="apTot"></b></div>
       <div class="muted" id="apDet" style="font-size:12.5px;margin-top:2px"></div>` : ''}
-    ${(() => { const st = bankStart(); const rec = [...detail('Ingresos_Detalle', A.prev || ''), ...detail('Retiros_Detalle', A.prev || '')].filter(r => isNew(r) && !r.Origen && String(r.Fecha_Registro || '').slice(0, 10) >= st);
-      return A.prev && rec.length ? `<div class="notice" style="display:block;margin-top:12px">${esc(mesLabel(A.prev))} tiene ${rec.length} ingresos o retiros registrados desde el ${fdate(st)}. Si en realidad son de ${esc(mesLabel(S.mes))}, muévelos antes de iniciar (ábrelos y cambia el <b>Período</b>); si no, los saldos sugeridos los incluyen dos veces.</div>` : ''; })()}
+
     <p class="muted" style="font-size:12.5px;margin:12px 0 0">Se registran con fecha ${fdate(periodRange(S.mes).desde)}, inicio del período. Puedes editarlos después en Ingresos.</p>`,
     A.lineas.length ? 'Registrar ingresos' : 'Cerrar');
   apTotal();
@@ -1421,7 +1442,7 @@ V.conexion = () => {
   const e = DB.t.Empresa && DB.t.Empresa[0] || {};
   const modeTxt = {gas: 'Conectado a Google Sheets.', http: 'Conectado a Google Sheets.', demo: 'Modo demostración: datos exportados de Access cargados en esta página.', setup: 'Sin conexión configurada.'}[Backend.mode];
   return `<section class="section"><h3>Estado</h3><div class="panel"><p style="margin:0 0 6px"><span class="pill ${Backend.mode === 'gas' || Backend.mode === 'http' ? 'open' : 'warn'}">${Backend.mode === 'gas' || Backend.mode === 'http' ? 'En línea' : 'Local'}</span> ${modeTxt}</p>
-    <p class="muted" style="margin:0">Tablas cargadas: ${Object.keys(DB.t).length}. Movimientos de gasto: ${NF.format(DB.t.Gastos_Detalle.length).replace('.00', '')}.</p>
+    <p class="muted" style="margin:0">Versión de la app: <b>${APP_VERSION}</b>. Tablas cargadas: ${Object.keys(DB.t).length}. Movimientos de gasto: ${NF.format(DB.t.Gastos_Detalle.length).replace('.00', '')}.</p>
     <div class="row" style="margin-top:12px"><button class="btn" data-act="reload">Recargar datos</button></div></div></section>
   ${accountSection()}
   <section class="section"><h3>Hogar</h3><div class="panel"><b>${esc(e.Empresa)}</b><p class="muted" style="margin:4px 0 0">${esc(e.Direccion)}<br>Teléfono ${esc(e.Telefono)}, celular ${esc(e.Celular)}</p></div></section>
@@ -1925,6 +1946,16 @@ document.addEventListener('click', async e => {
     formDynamics(); toast('Registra el retiro; luego vuelves al gasto'); return;
   }
   if (a === 'apertura') return openApertura();
+  if (a === 'ap-move') {
+    const A = S.apertura, sel = A.mover.filter((m, i) => $('#frmApertura [data-mv="' + i + '"]').checked);
+    if (!sel.length) return toast('Marca los registros que quieres mover', true);
+    t.disabled = true; t.textContent = 'Moviendo…';
+    try {
+      for (const m of sel) { const ch = await Q.run(() => Backend.call('save', {table: m.t, row: Object.assign({}, m.r), mes: S.mes})); commit(ch); }
+      toast(sel.length + ' registros movidos a ' + mesLabel(S.mes)); render(); openApertura();
+    } catch (err) { t.disabled = false; t.textContent = 'Mover a ' + mesLabel(S.mes); toast(err.message, true); }
+    return;
+  }
   if (a === 'fuel-price') {
     const sin = fuelRows().filter(r => !(Number(r.Precio_Litro) > 0) && !isTmp(r.ID));
     const desde = (sin.slice(-1)[0] || {}).Fecha ? String(sin.slice(-10)[0].Fecha).slice(0, 10) : todayISO();
@@ -2110,7 +2141,7 @@ async function boot(force) {
 }
 applyTheme(); Backend.detect(); boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('/sw.js', {updateViaCache: 'none'}).then(r => r.update()).catch(() => {});
   // Versión nueva publicada en Netlify: se recarga sola si no hay nada pendiente, si no avisa
   navigator.serviceWorker.addEventListener('message', e => {
     if (!e.data || e.data.type !== 'update') return;
