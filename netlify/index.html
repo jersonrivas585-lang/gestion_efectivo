@@ -148,6 +148,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 @media (min-width:700px){.figs.four{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .figs.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .figs.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:560px){.figs.three.n3m{grid-template-columns:repeat(2,minmax(0,1fr))}.figs.three.n3m .fig:nth-child(3){grid-column:1 / -1}.figs.three.n3m .fig b{font-size:15px}}
 .fig{min-width:0}
 .fig b{overflow:hidden;text-overflow:ellipsis}
 /* Envelopes (sobres) */
@@ -424,7 +425,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.22-0013';
+const APP_VERSION = '2026.10.22-0107';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -455,6 +456,9 @@ const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', '
 const normMes = v => { const t = String(v ?? '').trim().toUpperCase(); const m = t.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/); if (!m) return t; let mo = +m[2], y = +m[1]; if (m[3] && +m[3] > 15) { mo++; if (mo > 12) { mo = 1; y++; } } return MESES[mo - 1] + '-' + y; };
 /** En la tabla de períodos, Mes + Anio mandan sobre Mes_Anio */
 const fixPeriodRows = rows => rows.forEach(p => { if (p.Mes && p.Anio) p.Mes_Anio = String(p.Mes).trim().toUpperCase() + '-' + Number(p.Anio); });
+/** Etiquetas del eje para una lista de períodos: «Nov» y, debajo, el año al empezar y cuando cambia */
+const mLabels = ms => { const many = ms.length > 16; return ms.map((m, i) => { const [n, y] = String(m).split('-'), ys = i === 0 || String(ms[i - 1]).split('-')[1] !== y;
+  return !many || ys || MESES.indexOf(n) % 3 === 0 ? cap(n.slice(0, 3)) + (ys ? '\n' + y : '') : ''; }); };
 const mesLabel = m => { if (!m) return ''; const [a, b] = m.split('-'); return cap(a) + ' ' + b; };
 const truthy = v => v === true || v === 'TRUE' || v === 'true' || v === 1;
 const lsGet = k => { try { return localStorage.getItem('ge_' + k); } catch (e) { return null; } };
@@ -1045,19 +1049,19 @@ function render() {
 }
 
 /* ---------- Gráficos SVG ---------- */
-function barChart(labels, series, {h = 200, fmt = kfmt, marks, tip = money} = {}) {
+function barChart(labels, series, {h = 200, fmt = kfmt, marks, tip = money, tips, all} = {}) {
   const avail = Math.max(300, Math.min(window.innerWidth - (window.innerWidth >= 900 ? 330 : 70), 980));
-  const n = labels.length, gw = Math.max(22, Math.min(90, (avail - 40) / Math.max(n, 1))), padL = 34, padB = 22, W = padL + n * gw + 6, H = h;
+  const n = labels.length, gw = Math.max(10, Math.min(90, (avail - 40) / Math.max(n, 1))), padL = 34, two = labels.some(l => String(l).includes('\n')), padB = two ? 34 : 22, W = padL + n * gw + 6, H = h;
   const max = Math.max(1, ...series.flatMap(s => s.values.map(v => Math.abs(v || 0))), ...(marks ? marks.values : [0]));
   const y = v => (H - padB) - (v / max) * (H - padB - 10);
   let g = '';
   for (let i = 0; i <= 4; i++) { const v = max * i / 4, yy = y(v); g += `<line x1="${padL}" x2="${W}" y1="${yy}" y2="${yy}" stroke="var(--line)" stroke-width="1"/><text x="${padL - 6}" y="${yy + 3}" text-anchor="end">${fmt(v)}</text>`; }
-  const bw = (gw - 8) / series.length;
+  const bpad = gw < 16 ? 1.5 : 4, bw = (gw - bpad * 2) / series.length;
   labels.forEach((l, i) => {
-    series.forEach((s, j) => { const v = Math.max(0, s.values[i] || 0), x = padL + i * gw + 4 + j * bw;
-      g += `<rect x="${x}" y="${y(v)}" width="${Math.max(bw - 2, 2)}" height="${(H - padB) - y(v)}" rx="2" fill="${s.color}"><title>${esc(l)}: ${esc(s.name)} ${tip(v)}</title></rect>`; });
-    if (marks && marks.values[i]) { const yy = y(marks.values[i]); g += `<line x1="${padL + i * gw + 2}" x2="${padL + (i + 1) * gw - 2}" y1="${yy}" y2="${yy}" stroke="${marks.color}" stroke-width="2.5"><title>${esc(l)}: ${esc(marks.name)} ${money(marks.values[i])}</title></line>`; }
-    if (n <= 16 || i % Math.ceil(n / 16) === 0) g += `<text x="${padL + i * gw + gw / 2}" y="${H - 6}" text-anchor="middle">${esc(l)}</text>`;
+    series.forEach((s, j) => { const v = Math.max(0, s.values[i] || 0), x = padL + i * gw + bpad + j * bw;
+      g += `<rect x="${x}" y="${y(v)}" width="${Math.max(bw - (gw < 16 ? .5 : 2), 2)}" height="${(H - padB) - y(v)}" rx="2" fill="${s.color}"><title>${esc(tips ? tips[i] : String(l).replace('\n', ' '))}: ${esc(s.name)} ${tip(v)}</title></rect>`; });
+    if (marks && marks.values[i]) { const yy = y(marks.values[i]); g += `<line x1="${padL + i * gw + 2}" x2="${padL + (i + 1) * gw - 2}" y1="${yy}" y2="${yy}" stroke="${marks.color}" stroke-width="2.5"><title>${esc(tips ? tips[i] : String(l).replace('\n', ' '))}: ${esc(marks.name)} ${money(marks.values[i])}</title></line>`; }
+    if (l !== '' && (all || n <= 16 || i % Math.ceil(n / 16) === 0)) { const ln = String(l).split('\n'); g += `<text x="${padL + i * gw + gw / 2}" y="${H - (two ? 19 : 6)}" text-anchor="middle">${esc(ln[0])}</text>` + (ln[1] ? `<text x="${padL + i * gw + gw / 2}" y="${H - 6}" text-anchor="middle">${esc(ln[1])}</text>` : ''); }
   });
   const leg = series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('') + (marks ? `<span><i style="background:${marks.color};height:3px"></i>${esc(marks.name)}</span>` : '');
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico">${g}</svg><div class="legend">${leg}</div></div>`;
@@ -1195,7 +1199,7 @@ V.inicio = () => {
   </section>
   <section class="section">
     <h3>Últimos 12 meses</h3>
-    <div class="panel">${barChart(last.map(m => cap(m.slice(0, 3)) + ' ' + m.slice(-2)), [{name: 'Ingresos', values: T.map(x => x.I), color: 'var(--bar-left)'}, {name: 'Gastos', values: T.map(x => x.G), color: 'var(--bar-spent)'}], {marks: {name: 'Presupuesto', values: T.map(x => x.P), color: 'var(--sun)'}})}</div>
+    <div class="panel">${barChart(mLabels(last), [{name: 'Ingresos', values: T.map(x => x.I), color: 'var(--bar-left)'}, {name: 'Gastos', values: T.map(x => x.G), color: 'var(--bar-spent)'}], {tips: last.map(mesLabel), marks: {name: 'Presupuesto', values: T.map(x => x.P), color: 'var(--sun)'}})}</div>
   </section>
   <section class="section">
     <h3>Corte del mes <small>se guarda en la hoja Resumen</small></h3>
@@ -1371,21 +1375,31 @@ V.historico = () => {
 
 V.cuenta = () => {
   const ctas = DB.t.Cuentas.filter(c => truthy(c.Cuenta_de_Gastos));
-  const ms = mesesConDatos(); const sel = S.rango ? ms.slice(-S.rango) : ms;
+  const all = mesesConDatos(), years = [...new Set(all.map(yearOf))].filter(Boolean).sort((a, b) => b - a);
+  let yr = S.cuentaYear || 'all'; if (yr !== 'all' && !years.includes(yr)) yr = 'all'; S.cuentaYear = yr;
+  // los meses de donde se toman los últimos N: todos o solo los del año elegido
+  const ms = yr === 'all' ? all : all.filter(m => yearOf(m) === yr), sel = S.rango ? ms.slice(-S.rango) : ms;
+  const desde = sel[0], hasta = sel[sel.length - 1];
+  const rangeTxt = !sel.length ? 'sin meses' : sel.length === 1 ? mesLabel(hasta) : mesLabel(desde) + ' a ' + mesLabel(hasta);
   const G = sel.map(m => sum(detail('Gastos_Detalle', m).filter(r => r.Cuenta_Gastos === S.cuentaSel)));
   const P = sel.map(m => sum(detail('Presupuesto_Detalle', m).filter(r => r.Cuenta_Gastos === S.cuentaSel)));
+  // con más de 36 meses el gráfico se agrupa por año
+  const byYear = sel.length > 36, ysel = [...new Set(sel.map(yearOf))];
+  const grp = arr => ysel.map(y => r2(arr.reduce((a, v, i) => a + (yearOf(sel[i]) === y ? v : 0), 0)));
   const items = {}; sel.forEach(m => detail('Gastos_Detalle', m).filter(r => r.Cuenta_Gastos === S.cuentaSel).forEach(r => { const k = r.Descripcion_Gasto; items[k] = items[k] || {n: 0, t: 0}; items[k].n++; items[k].t += Number(r.Total) || 0; }));
   const top = Object.entries(items).sort((a, b) => b[1].t - a[1].t).slice(0, 12);
   const tg = G.reduce((a, b) => a + b, 0), tp = P.reduce((a, b) => a + b, 0), act = G.filter(v => v > 0).length;
   return `
   <div class="toolbar"><select class="input" data-bind="cuentaSel" aria-label="Cuenta">${ctas.map(c => `<option value="${c.Codigo}" ${c.Codigo === S.cuentaSel ? 'selected' : ''}>${esc(c.Cuentas)}</option>`).join('')}</select>
-    <div class="tabs" style="margin:0">${[[12, '12 meses'], [24, '24 meses'], [0, 'Todo']].map(([v, l]) => `<button class="tab" data-rango="${v}" aria-pressed="${S.rango === v}">${l}</button>`).join('')}</div></div>
-  <div class="figs three">
+    <select class="input" data-bind="cuentaYear" aria-label="Año"><option value="all" ${yr === 'all' ? 'selected' : ''}>Todos los años</option>${years.map(y => `<option value="${y}" ${y === yr ? 'selected' : ''}>${y}</option>`).join('')}</select>
+    <div class="tabs" style="margin:0">${[[1, 'Último mes'], [6, '6 meses'], [12, '12 meses'], [24, '24 meses'], [0, yr === 'all' ? 'Todo' : 'Todo el año']].map(([v, l]) => `<button class="tab" data-rango="${v}" aria-pressed="${S.rango === v}">${l}</button>`).join('')}</div></div>
+  <p class="muted" style="font-size:13px;margin:0 2px 4px">Mostrando <b>${esc(cuentaNombre(S.cuentaSel))}</b>: ${esc(rangeTxt)} (${sel.length} ${sel.length === 1 ? 'mes' : 'meses'}${byYear ? ', el gráfico se agrupa por año' : ''}).</p>
+  <div class="figs three n3m">
     <div class="fig"><small>Gastado en el período</small><b class="num">${money(tg)}</b></div>
     <div class="fig"><small>Presupuestado</small><b class="num">${money(tp)}</b></div>
     <div class="fig"><small>Promedio por mes</small><b class="num">${money(act ? tg / act : 0)}</b></div>
   </div>
-  <section class="section"><div class="panel">${barChart(sel.map(m => cap(m.slice(0, 3)) + ' ' + m.slice(-2)), [{name: 'Gastado', values: G, color: 'var(--bar-spent)'}], {marks: {name: 'Presupuesto', values: P, color: 'var(--sun)'}})}</div></section>
+  <section class="section"><div class="panel">${barChart(byYear ? ysel : mLabels(sel), [{name: 'Gastado', values: byYear ? grp(G) : G, color: 'var(--bar-spent)'}], {all: true, tips: byYear ? ysel : sel.map(mesLabel), marks: {name: 'Presupuesto', values: byYear ? grp(P) : P, color: 'var(--sun)'}})}</div></section>
   <section class="section"><h3>En qué se va <small>artículos con más gasto</small></h3>
   ${top.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Descripción</th><th class="n">Veces</th><th class="n">Total</th><th class="n">Promedio</th></tr></thead><tbody>${top.map(([k, v]) => `<tr data-buscar="${esc(k)}"><td>${esc(k)}</td><td class="n">${v.n}</td><td class="n">${money(v.t)}</td><td class="n">${money(v.t / v.n)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>Sin gastos en este período</b></div>'}</section>`;
 };
@@ -2454,7 +2468,7 @@ document.addEventListener('change', async e => {
     catch (err) { toast(err.message, true); el.disabled = false; }
     return;
   }
-  if (b === 'cuenta' || b === 'cuentaSel') { S[b] = el.value; render(); return; }
+  if (b === 'cuenta' || b === 'cuentaSel' || b === 'cuentaYear') { S[b] = el.value; render(); return; }
   if (b === 'all') { S.all = el.checked; render(); return; }
   if (b === 'bankAll') { S.bankAll = el.checked; render(); return; }
   if (el.id === 'ur' && $('#uperms')) { renderPerms(el.value, {}); return; }

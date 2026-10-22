@@ -176,6 +176,10 @@ Al registrar un gasto, debajo de *Cuenta* aparece **Partida del presupuesto**, c
 - **Al cambiar de período** un gasto, se quita el vínculo (la partida pertenece al otro período) y se vuelve a vincular por descripción si coincide. Si **reemplazas el presupuesto** al importar desde Excel, los gastos vinculados se vuelven a ligar por cuenta y descripción.
 - El vínculo se guarda en la columna `ID_Partida` de Gastos_Detalle (se agrega sola; `0` = sin partida a propósito).
 
+## Análisis por cuenta
+
+En *Más → Análisis por cuenta* eliges la cuenta, el **año** (*Todos los años* o uno en particular) y el **período**: *Último mes*, *6 meses*, *12 meses*, *24 meses* o *Todo* (*Todo el año* si elegiste un año). Con *Todos los años* los períodos cuentan hacia atrás desde el último mes; con un año elegido, desde el último mes de ese año. Debajo de los filtros una línea dice qué estás viendo (por ejemplo, «Abril 2026 a Septiembre 2026, 6 meses»). El eje del gráfico muestra el mes y, en una segunda línea, el año al empezar y cuando cambia; si hay más de 36 meses, el gráfico se agrupa por año. El mismo formato de etiquetas se usa en *Últimos 12 meses* del Inicio.
+
 ## Importar el presupuesto desde Excel
 
 En **Presupuesto** usa *Descargar plantilla* (trae el presupuesto del mes o del mes anterior) o el archivo `Plantilla_Presupuesto.xlsx` del paquete. Llénalo y usa *Importar desde Excel*.
