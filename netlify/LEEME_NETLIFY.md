@@ -71,6 +71,8 @@ Todos los roles pueden consultar toda la información. Un rol que no exista aqu�
 
 **Importante si copias usuarios de otra app:** las contraseñas solo funcionarán si esa app cifra con el mismo método (función `hash_` en `Code.gs`). Si no es así, copia las filas, pon una contraseña temporal a cada uno desde *Mi cuenta → Usuarios* y deja marcado *Pedir que cree su propia contraseña*.
 
+
+**Si un formulario aparece en solo lectura:** el mensaje indica el motivo. *Tu usuario no tiene permiso…* significa que el rol o los permisos del usuario no incluyen esa acción (por ejemplo `bancos.editar`, «Registrar transferencias y movimientos de banco»); un administrador lo activa en *Mi cuenta → Usuarios*. *Este período está cerrado…* significa que hay que abrir el período en *Períodos*. La app **refresca los permisos del usuario** desde el servidor al abrirse y cada 10 minutos, así que un permiso nuevo se aplica sin volver a entrar (aparece el aviso «Tus permisos se actualizaron»). El botón **+** solo se muestra si tienes permiso para lo que abre.
 ## App Android sin barra del navegador (PWABuilder)
 
 La APK de PWABuilder es una *Trusted Web Activity*. Android solo la abre a pantalla completa si el sitio demuestra que la app es suya con el archivo `/.well-known/assetlinks.json`. Sin ese archivo, o si no coincide, la abre como pestaña de Chrome con la barra de dirección.

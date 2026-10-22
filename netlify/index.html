@@ -259,6 +259,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .spin{width:34px;height:34px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--teal);animation:sp 1s linear infinite;margin:0 auto 12px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .fab{position:fixed;right:18px;bottom:calc(78px + env(safe-area-inset-bottom,0px));z-index:24;width:56px;height:56px;border-radius:18px;border:0;background:var(--ink);color:var(--paper);display:grid;place-items:center;cursor:pointer;box-shadow:0 8px 22px rgba(10,40,38,.28)}
+.fab[hidden]{display:none}
 .fab svg{width:26px;height:26px}
 @media (min-width:900px){.fab{display:none}}
 .desk-only{display:none}
@@ -423,7 +424,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.21-2228';
+const APP_VERSION = '2026.10.22-0013';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -953,7 +954,7 @@ const Sync = {
     return this.p;
   },
   async _run() {
-    this.busy = true; this.again = false; this.refresh();
+    this.busy = true; this.again = false; this.refresh(); refreshMe();
     let err = null;
     try {
       const daily = Date.now() - Number(lsGet('full_at') || 0) > 864e5;
@@ -1893,6 +1894,7 @@ function openForm(table, id) {
   const k = DB.key(table);
   const rec = id !== undefined && id !== null ? DB.t[table].find(r => String(r[k]) === String(id)) : null;
   const auto = (table === 'Ingresos_Detalle' || table === 'Retiros_Detalle' || table === 'Gastos_Detalle') && rec && rec.Origen;
+  const noPerm = (F.mod && !can(MOD_PERM[F.mod])) || (F.perm && !can(F.perm)), permKey = F.perm || (F.mod ? MOD_PERM[F.mod] : '');
   const ro = (F.mod && !canEdit(F.mod)) || (F.perm && !can(F.perm)) || !!auto;
   const o = rec ? Object.assign({}, rec) : {};
   if (!rec) F.fields.forEach(f => { if (f.def !== undefined) o[f.k] = typeof f.def === 'function' ? f.def() : f.def; });
@@ -1914,7 +1916,7 @@ function openForm(table, id) {
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="frm" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <h4>${esc(title)}${REL[table] ? ` <span class="pill">${esc(mesLabel(S.mes))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
     ${auto ? (table === 'Gastos_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Gasto automático por una transferencia a la cuenta en dólares. Se cambia desde la transferencia.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir la transferencia</button></div>` : table === 'Retiros_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Retiro automático por un gasto pagado con tarjeta de débito. Se cambia desde el gasto.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el gasto</button></div>`
-      : `<div class="notice info" style="margin-top:0"><span>Ingreso automático por una conversión de dólares. Se cambia desde el movimiento que lo generó.</span>${/^(RET|MOV):/.test(rec.Origen) ? `<button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el origen</button>` : ''}</div>`) : ro ? '<div class="notice" style="margin-top:0">Solo lectura: período cerrado o sin permiso.</div>' : ''}
+      : `<div class="notice info" style="margin-top:0"><span>Ingreso automático por una conversión de dólares. Se cambia desde el movimiento que lo generó.</span>${/^(RET|MOV):/.test(rec.Origen) ? `<button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el origen</button>` : ''}</div>`) : ro ? (noPerm ? `<div class="notice" style="margin-top:0">Tu usuario no tiene permiso para registrar o corregir esto (<code>${esc(permKey)}</code>). Pídele a un administrador que lo active en tu usuario. Si ya lo hizo, cierra sesión y vuelve a entrar.</div>` : '<div class="notice" style="margin-top:0">Solo lectura: este período está cerrado para este módulo. Ábrelo en Períodos para registrar o corregir.</div>') : ''}
     ${(() => { if (!rec || !REL[table] || auto) return '';
       const cur = recPeriod(table, rec), mod = REL[table].mod, tg = periodos().filter(p => truthy(p[mod]) && p.Mes_Anio !== cur).map(p => p.Mes_Anio);
       if (!can(MOD_PERM[mod])) return '';
@@ -2468,7 +2470,7 @@ document.addEventListener('change', async e => {
   }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').innerHTML) cancelModal(); });
-$('#fab').addEventListener('click', () => { const n = $('#fab').dataset.new; if (!n) return; if ($('#fab').dataset.dep) return openDeposito(); if (REL[n] && !ensureTarget(REL[n].mod)) return; openForm(n); });
+$('#fab').addEventListener('click', () => { const n = $('#fab').dataset.new; if (!n) return; if ($('#fab').dataset.dep) return openDeposito(); if (REL[n] && !ensureTarget(REL[n].mod)) return; const FF = FORMS[n]; if (FF && FF.perm && !can(FF.perm)) return toast('Tu usuario no tiene permiso para registrar esto (' + FF.perm + ')', true); openForm(n); });
 let rzT, lastW = window.innerWidth; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { if (Math.abs(window.innerWidth - lastW) > 60 && !FORM && DB.t.Cuentas) { lastW = window.innerWidth; render(); } }, 250); });
 window.addEventListener('scroll', () => $('#top').classList.toggle('scrolled', window.scrollY > 8), {passive: true});
 function applyTheme() { const t = lsGet('theme'); if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
@@ -2478,6 +2480,20 @@ function pickMes() {
   const ms = mesesConDatos(), act = activePeriod();
   if (!S.mes || !ms.includes(S.mes)) S.mes = act || ms[ms.length - 1];
   const h = (location.hash || '').slice(1); if (h && VIEWS[h] && S.view === 'inicio') S.view = h;
+}
+/** El servidor calcula los permisos en cada petición; la app los refresca para no usar los guardados al iniciar sesión */
+async function refreshMe(force) {
+  if (!Backend.online || !Auth.s) return;
+  if (!force && Date.now() - (Auth.lastMe || 0) < 600000) return;
+  Auth.lastMe = Date.now();
+  try {
+    const r = await Backend.call('me');
+    if (r && r.user) {
+      const old = JSON.stringify((Auth.user || {}).permisos || {}), nu = JSON.stringify(r.user.permisos || {});
+      Auth.set(Auth.s, r.user);
+      if (old !== nu && DB.t.Cuentas && !FORM) { render(); toast('Tus permisos se actualizaron'); }
+    }
+  } catch (e) {}
 }
 async function checkTZ() {
   if (!Backend.online || S.tzChecked) return; S.tzChecked = true;
@@ -2492,13 +2508,13 @@ async function boot(force) {
       if (c && c.t && c.user === (Auth.user || {}).usuario) {
         DB.t = c.t; DB.cols = c.cols; DB.ver++; Sync.seq = c.seq || 0;
         hideLogin(); pickMes(); render(); $('#loading').style.display = 'none';
-        Sync.start(); Sync.soon(); checkTZ(); return;
+        Sync.start(); Sync.soon(); checkTZ(); refreshMe(true); return;
       }
     }
     $('#loading').style.display = 'grid';
     if (Backend.online) await Sync.full(); else DB.load(await Backend.call('getAll'));
     hideLogin(); pickMes(); render();
-    if (Backend.online) { Sync.start(); checkTZ(); }
+    if (Backend.online) { Sync.start(); checkTZ(); refreshMe(true); }
   } catch (e) {
     if (e.code !== 'AUTH') {
       $('#mp').style.display = 'none';
