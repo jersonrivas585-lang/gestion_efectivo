@@ -180,6 +180,16 @@ Al registrar un gasto, debajo de *Cuenta* aparece **Partida del presupuesto**, c
 
 En *Más → Análisis por cuenta* eliges la cuenta, el **año** (*Todos los años* o uno en particular) y el **período**: *Último mes*, *6 meses*, *12 meses*, *24 meses* o *Todo* (*Todo el año* si elegiste un año). Con *Todos los años* los períodos cuentan hacia atrás desde el último mes; con un año elegido, desde el último mes de ese año. Debajo de los filtros una línea dice qué estás viendo (por ejemplo, «Abril 2026 a Septiembre 2026, 6 meses»). El eje del gráfico muestra el mes y, en una segunda línea, el año al empezar y cuando cambia; si hay más de 36 meses, el gráfico se agrupa por año. El mismo formato de etiquetas se usa en *Últimos 12 meses* del Inicio.
 
+## Resumen automático del período
+
+El corte ya no se guarda a mano: cada período abierto para el resumen tiene **una fila automática** en la hoja *Resumen* (columna `Auto` = TRUE) que se **actualiza sola** cada vez que registras, corriges o eliminas un gasto, un retiro, un depósito o una partida del presupuesto, al importar o copiar el presupuesto, al ajustar los saldos y al mover un registro de período. Varias acciones seguidas se agrupan en una sola actualización, y si nada cambió no se escribe nada. La fila guarda ingresos (incluidos los depósitos), presupuesto, gastos, retiros y el efectivo en mano, y también actualiza la hoja *Consolidado* del período.
+
+- **Solo efectivo en mano:** se quitaron «Efectivo con Jerson» y «Efectivo con Mariela». En las filas automáticas esas dos columnas quedan en 0; los cortes anteriores se conservan tal como estaban.
+- **Efectivo en mano:** en el período en curso es el efectivo de hoy; en un período de Access es ingresos − gastos como siempre; en otros períodos nuevos se conserva el último valor guardado.
+- **Quién lo dispara:** cualquier usuario que haga la acción, tenga o no el permiso de guardar cortes.
+- **Períodos cerrados:** si un período está cerrado en *Períodos → Resumen* (antes llamada *Corte*), su resumen queda congelado. Al volver a activarlo se actualiza de inmediato.
+- **Pantallas:** en el *Inicio*, *Resumen del mes* muestra el último guardado y **Ver resumen** abre los totales con el botón **Actualizar ahora**. *Cortes de resumen* lista todos, con la etiqueta «automático».
+
 ## Importar el presupuesto desde Excel
 
 En **Presupuesto** usa *Descargar plantilla* (trae el presupuesto del mes o del mes anterior) o el archivo `Plantilla_Presupuesto.xlsx` del paquete. Llénalo y usa *Importar desde Excel*.
