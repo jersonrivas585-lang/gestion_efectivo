@@ -188,6 +188,7 @@ El corte ya no se guarda a mano: cada período abierto para el resumen tiene **u
 - **Efectivo en mano:** en el período en curso es el efectivo de hoy; en un período de Access es ingresos − gastos como siempre; en otros períodos nuevos se conserva el último valor guardado.
 - **Quién lo dispara:** cualquier usuario que haga la acción, tenga o no el permiso de guardar cortes.
 - **Períodos cerrados:** si un período está cerrado en *Períodos → Resumen* (antes llamada *Corte*), su resumen queda congelado. Al volver a activarlo se actualiza de inmediato.
+- **Cortes de resumen:** la pantalla muestra **el último resumen de cada mes**; si el mes tiene más cortes guardados, aparece un botón **+** (con el número de cortes) que despliega los anteriores, y **−** los oculta. Arriba hay un filtro de **año** (por defecto el actual, o *Todos los años*) con el conteo de meses y cortes.
 - **Pantallas:** en el *Inicio*, *Resumen del mes* muestra el último guardado y **Ver resumen** abre los totales con el botón **Actualizar ahora**. *Cortes de resumen* lista todos, con la etiqueta «automático».
 
 ## Importar el presupuesto desde Excel

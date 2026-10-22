@@ -299,6 +299,12 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .dtrow .input{flex:1.4;min-width:0}
 .dtrow .dt-time{flex:1}
 .item.pre{opacity:.62}
+.cortes .mcell{white-space:nowrap}
+.expand{display:inline-grid;place-items:center;width:24px;height:24px;margin-right:8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:700 15px/1 var(--font, inherit);cursor:pointer;padding:0;vertical-align:middle}
+.expand:hover{border-color:var(--teal)}
+.expand.ph{border-color:transparent;background:none;cursor:default}
+.cortes tr.sub td{background:var(--sunk);color:var(--ink2);font-size:13.5px}
+.cortes tr.sub .mcell{padding-left:44px}
 .lnk{text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
 .pgrow{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;cursor:pointer}
 .pgrow small{color:var(--muted);font-size:12.5px}
@@ -425,7 +431,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.22-0122';
+const APP_VERSION = '2026.10.22-2013';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1602,10 +1608,22 @@ V.tarjetas = () => {
 };
 
 V.cortes = () => {
-  const rows = DB.t.Resumen.slice().sort((a, b) => String(b.Hora_Registro).localeCompare(String(a.Hora_Registro))).slice(0, 300);
-  return `<p class="muted">Cada período abierto para el resumen tiene una fila <b>automática</b> que se actualiza sola cada vez que registras un gasto, un retiro, un depósito o cambias el presupuesto. Los cortes guardados antes se conservan. Se muestran los 300 más recientes.</p>
-  <div class="tablewrap"><table class="t"><thead><tr><th>Mes</th><th>Actualizado</th><th class="n">Ingresos</th><th class="n">Presupuesto</th><th class="n">Gastos</th><th class="n">Retiros</th><th class="n">En mano</th><th class="n">Ing − gastos</th></tr></thead>
-  <tbody>${rows.map(r => `<tr data-mes="${esc(r.Mes_Anio)}"><td>${mesLabel(r.Mes_Anio)}</td><td>${fdate(r.Fecha_Registro)} ${String(r.Hora_Registro).slice(11, 16)}${truthy(r.Auto) ? ' <span class="pill open">automático</span>' : ''}</td><td class="n">${money(r.Total_Ingresos)}</td><td class="n">${money(r.Total_Presupuesto)}</td><td class="n">${money(r.Total_Gastos)}</td><td class="n">${money(r.Total_Ret_Efectivo)}</td><td class="n ${r.Disp_enMano < 0 ? 'neg' : ''}">${money(r.Disp_enMano)}</td><td class="n">${money(r.Dif_Ing_Gastos)}</td></tr>`).join('')}</tbody></table></div>`;
+  const all = DB.t.Resumen.slice(), tm = r => String(r.Hora_Registro || '') + String(1e9 + Number(r.Id_Resumen || 0));
+  const years = [...new Set(all.map(r => yearOf(r.Mes_Anio)).filter(Boolean))].sort().reverse();
+  let y = S.corteYear; if (!y || (y !== 'all' && !years.includes(y))) y = years.includes(String(new Date().getFullYear())) ? String(new Date().getFullYear()) : (years[0] || 'all');
+  S.corteYear = y;
+  // un grupo por mes: el último corte arriba y, con [+], todos los guardados en ese mes
+  const by = new Map(); all.filter(r => y === 'all' || yearOf(r.Mes_Anio) === y).forEach(r => { if (!by.has(r.Mes_Anio)) by.set(r.Mes_Anio, []); by.get(r.Mes_Anio).push(r); });
+  const groups = [...by.entries()].map(([m, rs]) => [m, rs.sort((a, b) => tm(b).localeCompare(tm(a)))]).sort((a, b) => mesNum(b[0]) - mesNum(a[0]));
+  const open = S.corteOpen || (S.corteOpen = new Set()), nCortes = groups.reduce((a, [, rs]) => a + rs.length, 0);
+  const cells = r => `<td>${fdate(r.Fecha_Registro)} ${String(r.Hora_Registro).slice(11, 16)}${truthy(r.Auto) ? ' <span class="pill open">automático</span>' : ''}</td><td class="n">${money(r.Total_Ingresos)}</td><td class="n">${money(r.Total_Presupuesto)}</td><td class="n">${money(r.Total_Gastos)}</td><td class="n">${money(r.Total_Ret_Efectivo)}</td><td class="n ${r.Disp_enMano < 0 ? 'neg' : ''}">${money(r.Disp_enMano)}</td><td class="n">${money(r.Dif_Ing_Gastos)}</td>`;
+  return `<div class="toolbar" style="margin-top:0"><label class="ff" style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px;color:var(--ink2)"><span>Año</span><select class="input" data-bind="corteYear" style="width:auto"><option value="all" ${y === 'all' ? 'selected' : ''}>Todos los años</option>${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    <span class="spacer"></span><span class="muted" style="font-size:13px">${groups.length} ${groups.length === 1 ? 'mes' : 'meses'}, ${nCortes} cortes</span></div>
+  <p class="muted" style="margin:6px 2px 12px">Se muestra el <b>último resumen de cada mes</b>. Toca <b>+</b> para ver todos los cortes guardados en ese mes. El resumen automático de cada período se actualiza solo cada vez que registras un gasto, un retiro, un depósito o cambias el presupuesto.</p>
+  ${groups.length ? `<div class="tablewrap"><table class="t cortes"><thead><tr><th>Mes</th><th>Actualizado</th><th class="n">Ingresos</th><th class="n">Presupuesto</th><th class="n">Gastos</th><th class="n">Retiros</th><th class="n">En mano</th><th class="n">Ing − gastos</th></tr></thead>
+  <tbody>${groups.map(([m, rs]) => `<tr data-mes="${esc(m)}"><td class="mcell">${rs.length > 1 ? `<button type="button" class="expand" data-corte="${esc(m)}" aria-expanded="${open.has(m)}" aria-label="${open.has(m) ? 'Ocultar' : 'Ver'} los ${rs.length} cortes de ${esc(mesLabel(m))}" title="${rs.length} cortes">${open.has(m) ? '−' : '+'}</button>` : '<span class="expand ph"></span>'}${esc(mesLabel(m))}${rs.length > 1 ? ` <small class="muted">(${rs.length})</small>` : ''}</td>${cells(rs[0])}</tr>`
+    + (open.has(m) ? rs.slice(1).map(r => `<tr class="sub" data-mes="${esc(m)}"><td class="mcell muted">anterior</td>${cells(r)}</tr>`).join('') : '')).join('')}</tbody></table></div>`
+    : '<div class="panel empty"><b>No hay cortes en este año</b>Elige otro año.</div>'}`;
 };
 
 const CATS = {
@@ -2269,13 +2287,14 @@ function toast(msg, err) { clearTimeout(toastT); let el = $('.toast'); if (!el) 
 /* ---------- Eventos ---------- */
 document.addEventListener('click', async e => {
   if (e.target.closest && e.target.closest('#fab')) return;  // el botón + tiene su propio manejador
-  const t = e.target.closest('[data-pgastos],[data-fveh],[data-frange],[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
+  const t = e.target.closest('[data-corte],[data-pgastos],[data-fveh],[data-frange],[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
   if (!t) return;
   const d = t.dataset;
   if (d.close !== undefined) { if (e.target === t) cancelModal(); return; }
   if (d.user) { openUserForm(d.user); return; }
   if (d.banco) { S.banco = d.banco; render(); return; }
   if (d.gotoMes) { S.mes = d.gotoMes; if (d.stay) render(); else go('inicio'); toast('Trabajando en ' + mesLabel(d.gotoMes)); return; }
+  if (d.corte) { e.preventDefault(); const st = S.corteOpen || (S.corteOpen = new Set()); st.has(d.corte) ? st.delete(d.corte) : st.add(d.corte); render(); return; }
   if (d.pgastos) { e.preventDefault(); openPartidaGastos(d.pgastos); return; }
   if (d.fveh) { S.fuelVeh = d.fveh; lsSet('fuel_veh', d.fveh); S.fuelRange = 'all'; render(); return; }
   if (d.frange) { S.fuelRange = d.frange; render(); return; }
@@ -2509,7 +2528,7 @@ document.addEventListener('change', async e => {
     catch (err) { toast(err.message, true); el.disabled = false; }
     return;
   }
-  if (b === 'cuenta' || b === 'cuentaSel' || b === 'cuentaYear') { S[b] = el.value; render(); return; }
+  if (b === 'cuenta' || b === 'cuentaSel' || b === 'cuentaYear' || b === 'corteYear') { S[b] = el.value; render(); return; }
   if (b === 'all') { S.all = el.checked; render(); return; }
   if (b === 'bankAll') { S.bankAll = el.checked; render(); return; }
   if (el.id === 'ur' && $('#uperms')) { renderPerms(el.value, {}); return; }
