@@ -191,6 +191,10 @@ El corte ya no se guarda a mano: cada período abierto para el resumen tiene **u
 - **Cortes de resumen:** la pantalla muestra **el último resumen de cada mes**; si el mes tiene más cortes guardados, aparece un botón **+** (con el número de cortes) que despliega los anteriores, y **−** los oculta. Arriba hay un filtro de **año** (por defecto el actual, o *Todos los años*) con el conteo de meses y cortes.
 - **Pantallas:** en el *Inicio*, *Resumen del mes* muestra el último guardado y **Ver resumen** abre los totales con el botón **Actualizar ahora**. *Cortes de resumen* lista todos, con la etiqueta «automático».
 
+## Datos del hogar
+
+En *Mi cuenta → Hogar* los **administradores** tienen el botón **Editar** para cambiar el nombre del hogar, la dirección, el teléfono y el celular. El cambio se guarda en la hoja *Empresa* y llega a los demás equipos con la sincronización. Como el nombre es la llave de esa fila, al cambiarlo se renombra la misma fila (no se crea otra) y se conservan la configuración y los saldos iniciales. Los supervisores pueden seguir cambiando la configuración (por ejemplo, el bloqueo de saldos negativos), pero no los datos del hogar.
+
 ## Barra inferior en el celular
 
 La barra de abajo tiene, en este orden, **Inicio, Bancos, Retiros, Gastos, Presupuesto y Combustible**, y se **desliza** hacia la derecha para ver las que no caben; un desvanecido en el borde indica que hay más. **Más** queda fijo a la derecha y lleva a las demás secciones (Ingresos, Histórico, Análisis por cuenta, Tarjetas, Cortes, Catálogos, Períodos y Mi cuenta). La sección en la que estás siempre queda a la vista y resaltada.

@@ -69,7 +69,7 @@ a{color:var(--teal)}
 }
 .brand{display:flex;flex-direction:column;padding:4px 10px 18px}
 .brand b{font-size:19px;letter-spacing:-.01em}
-.brand span{font-size:12.5px;color:var(--muted)}
+.brand span{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .navbtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;padding:9px 10px;border-radius:9px;cursor:pointer;color:var(--ink2);font-weight:500}
 .navbtn:hover{background:var(--sunk)}
 .navbtn[aria-current="page"]{background:var(--teal-soft);color:var(--ink);font-weight:700}
@@ -459,7 +459,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.23-0346';
+const APP_VERSION = '2026.10.23-0400';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -883,6 +883,7 @@ const Demo = {
     try { this._guard(p.table, (p.row || {})[DB.key(p.table)]); } catch (e) { return {error: e.message}; }
     const ch = {upserts: {}, deletes: {}}; const row = Object.assign({}, p.row);
     if (p.table === 'Cuentas' && !String(row.Codigo || '').trim()) { row.Codigo = nextCodigo(); row.Cuentas_Gastos = row.Codigo + '-' + (row.Cuentas || ''); }
+    if (p.table === 'Empresa' && p.oldKey !== undefined && String(p.oldKey) !== String(row.Empresa)) { const r0 = DB.t.Empresa.find(x => String(x.Empresa) === String(p.oldKey)); if (r0) { r0.Empresa = row.Empresa; ch.deletes.Empresa = [p.oldKey]; } }
     if (p.table === 'Movimientos_Banco') { row.Usuario = 'demo'; row.Fecha_Registro = row.Fecha_Registro || todayISO(); if (p.mes) row.Mes_Anio = p.mes; }
     const saved = this._saveDet(p.table, row, p.mes, ch);
     if (p.table === 'Movimientos_Banco') this._syncGastoMov(saved, ch);
@@ -1065,7 +1066,7 @@ function go(v) { S.view = v; S.tab = ''; try { history.replaceState(null, '', '#
 function renderNav() {
   const side = ['inicio', 'gastos', 'retiros', 'presupuesto', 'ingresos', 'bancos', '|', 'historico', 'cuenta', 'combustible', 'tarjetas', 'cortes', '|', 'catalogos', 'periodos', 'conexion'];
   const emp = (DB.t.Empresa && DB.t.Empresa[0]) ? DB.t.Empresa[0].Empresa : '';
-  $('#side').innerHTML = `<div class="brand"><b>Efectivo</b><span>${esc(cap(emp.split(' ')[0]) + ' ' + cap(emp.split(' ')[1] || ''))}</span></div>` +
+  $('#side').innerHTML = `<div class="brand"><b>Efectivo</b><span>${esc(String(emp).trim().split(/\s+/).map((w, i) => i && w.length <= 2 ? w.toLowerCase() : cap(w)).join(' '))}</span></div>` +
     side.map(v => v === '|' ? '<div class="navsep"></div>' :
       `<button class="navbtn" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('') +
     (Backend.online && Auth.user ? `<div class="sideuser"><small class="muted" style="display:block;font-size:11px">Versión ${APP_VERSION}</small><b>${esc(Auth.user.nombre)}</b><span class="muted">${esc(Auth.user.rolNombre || Auth.user.rol)}</span><br><button data-act="logout">Cerrar sesión</button></div>` : '');
@@ -1734,7 +1735,7 @@ V.conexion = () => {
     <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start;flex-wrap:nowrap"><span class="toggle" style="flex:none;margin-top:2px"><input type="checkbox" data-cfg="Bloquear_Negativos" ${blockNeg() ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></span>
       <span><b>Bloquear eliminaciones que dejan saldos en negativo</b><br><small class="muted">Si eliminar un retiro, depósito o transferencia dejaría una cuenta o el efectivo en negativo (porque ese dinero ya se gastó o se movió), la app no lo deja. Desactivado, solo avisa y pide confirmar. Antes de eliminar siempre se muestra qué saldos cambian.${can('periodos.gestionar') ? '' : ' Solo un administrador o supervisor puede cambiarlo.'}</small></span></label>
   </div></section>
-  <section class="section"><h3>Hogar</h3><div class="panel"><b>${esc(e.Empresa)}</b><p class="muted" style="margin:4px 0 0">${esc(e.Direccion)}<br>Teléfono ${esc(e.Telefono)}, celular ${esc(e.Celular)}</p></div></section>
+  <section class="section"><h3>Hogar</h3><div class="panel"><div class="row" style="align-items:flex-start;flex-wrap:nowrap"><div style="flex:1;min-width:0"><b>${esc(e.Empresa)}</b><p class="muted" style="margin:4px 0 0">${esc(e.Direccion || 'Sin dirección')}<br>Teléfono ${esc(e.Telefono || '—')}, celular ${esc(e.Celular || '—')}</p></div>${can('usuarios.gestionar') ? '<button class="btn small" data-act="hogar-edit">Editar</button>' : ''}</div></div></section>
   <section class="section"><h3>Apariencia</h3><div class="tabs">${[['', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, l]) => `<button class="tab" data-theme-set="${v}" aria-pressed="${(lsGet('theme') || '') === v}">${l}</button>`).join('')}</div></section>`;
 };
 
@@ -1948,6 +1949,13 @@ const FORMS = {
     validate: o => FORM.rec && !o.Activo && !vehiculos().some(v => String(v.ID_Vehiculo) !== String(FORM.rec.ID_Vehiculo)) ? 'Debe quedar al menos un vehículo activo' : (!FORM.rec && DB.t.Vehiculos.some(v => nrm(v.Nombre) === nrm(o.Nombre)) ? 'Ya existe un vehículo con ese nombre' : ''),
     guardDelete: rec => DB.t.Consumo_Combustible.some(r => vehOf(r) === String(rec.ID_Vehiculo)) ? 'Este vehículo tiene llenados registrados. Desactívalo en lugar de eliminarlo.' : (vehiculos(true).length <= 1 ? 'Debe quedar al menos un vehículo.' : ''),
     after: (o, ch) => { const nv = ((ch && ch.upserts && ch.upserts.Vehiculos) || [])[0]; if (nv && !(FORM && FORM.rec)) { S.fuelVeh = String(nv.ID_Vehiculo); lsSet('fuel_veh', S.fuelVeh); } }},
+  Empresa: {t: 'datos del hogar', g: 'os', perm: 'usuarios.gestionar', fields: [
+    {k: 'Empresa', l: 'Nombre del hogar', ty: 'text', req: 1},
+    {k: 'Direccion', l: 'Dirección', ty: 'text'},
+    {k: 'Telefono', l: 'Teléfono', ty: 'text', half: 1},
+    {k: 'Celular', l: 'Celular', ty: 'text', half: 1}],
+    payload: (o, rec) => ({oldKey: rec ? rec.Empresa : undefined}),
+    before: o => { o.Empresa = String(o.Empresa || '').trim(); ['Direccion', 'Telefono', 'Celular'].forEach(k => { o[k] = String(o[k] || '').trim(); }); }},
   Cuentas: {t: 'cuenta', g: 'a', perm: 'catalogos.editar', fields: [
     {k: 'Codigo', l: 'Código', ty: 'text', keyEdit: 1, auto: 1, def: () => nextCodigo(), hint: 'Se numera solo. Si dos personas crean una cuenta a la vez, el servidor asigna el siguiente libre.'},
     {k: 'Cuentas', l: 'Nombre', ty: 'text', req: 1},
@@ -2127,7 +2135,7 @@ async function submitForm() {
   }
   const btn = $('#frm button[type=submit]'); btn.disabled = true; btn.textContent = 'Guardando…';
   try {
-    const ch = await Q.run(() => Backend.call('save', {table, row, mes}));
+    const ch = await Q.run(() => Backend.call('save', Object.assign({table, row, mes}, F.payload ? F.payload(o, rec) : {})));
     if (F.after) F.after(o, ch);
     commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, o, rec)); closeModal(); render(); if (!F.doneModal) toast(label + ' guardad' + (F.g || 'o')); if (F.done) F.done(o);
   } catch (e) { if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Guardar'; } toast('No se pudo guardar: ' + e.message, true); }
@@ -2448,6 +2456,7 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'hogar-edit') { const e0 = empresa(); return openForm('Empresa', e0.Empresa, true); }
   if (a === 'form-edit') { const tb = FORM.table, id = FORM.rec[DB.key(tb)]; openForm(tb, id, true); const first = $('#frm input:not([disabled]), #frm select:not([disabled])'); if (first && matchMedia('(pointer:fine)').matches) first.focus(); return; }
   if (a === 'veh-new') return openForm('Vehiculos');
   if (a === 'veh-edit') return openForm('Vehiculos', curVeh(), true);
