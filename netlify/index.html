@@ -87,7 +87,14 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .monthpick .yearsel{color:var(--muted);border-right:1px solid var(--line);padding-right:6px;margin-right:2px}
 @media (max-width:420px){.top h2{display:none}.monthpick{margin-left:auto}}
 
-.bottom{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px))}
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);display:flex;align-items:stretch;padding:6px 0 calc(6px + env(safe-area-inset-bottom,0px))}
+.bscroll{flex:1;min-width:0;display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.bscroll::-webkit-scrollbar{display:none}
+.bscroll button{flex:0 0 auto;min-width:74px;padding:4px 6px;scroll-snap-align:start}
+.bscroll.more-r{-webkit-mask-image:linear-gradient(to right,#000 82%,transparent);mask-image:linear-gradient(to right,#000 82%,transparent)}
+.bscroll.more-l.more-r{-webkit-mask-image:linear-gradient(to right,transparent,#000 12%,#000 82%,transparent);mask-image:linear-gradient(to right,transparent,#000 12%,#000 82%,transparent)}
+.bscroll.more-l:not(.more-r){-webkit-mask-image:linear-gradient(to right,transparent,#000 12%);mask-image:linear-gradient(to right,transparent,#000 12%)}
+.bottom .bmore{flex:0 0 70px;border-left:1px solid var(--line)}
 .bottom button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;color:var(--muted);padding:4px 0;cursor:pointer;font-weight:500}
 .bottom button svg{width:22px;height:22px}
 .bottom button[aria-current="page"]{color:var(--teal);font-weight:700}
@@ -311,6 +318,8 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .delfx{list-style:none;margin:8px 0 0;padding:0}
 .delfx li{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px dashed var(--line);font-size:13.5px}
 .combo{position:relative}
+.combo-inline{display:inline-block;flex:1 1 230px;min-width:200px;max-width:420px}
+.combo-inline .combo-pop{min-width:240px}
 .combo-native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:0;top:0}
 .combo-btn{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;cursor:pointer;color:var(--ink)}
 .combo-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -341,6 +350,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .fuelfilter select.input{width:auto;min-width:0}
 .fuelfilter select.input.on{border-color:var(--teal);background:var(--teal-soft);font-weight:600}
 .fuelres{text-align:center}
+.fuel-when{margin:-6px 0 10px;text-align:left;display:flex;flex-wrap:wrap;gap:6px}
 .fuelres h4{text-align:left}
 .fuel-say{font-size:17px;margin:4px 0 8px;line-height:1.5}
 .fuel-kml{font-size:46px;font-weight:800;letter-spacing:-.03em;line-height:1}
@@ -449,7 +459,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.23-0316';
+const APP_VERSION = '2026.10.23-0346';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1059,9 +1069,18 @@ function renderNav() {
     side.map(v => v === '|' ? '<div class="navsep"></div>' :
       `<button class="navbtn" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('') +
     (Backend.online && Auth.user ? `<div class="sideuser"><small class="muted" style="display:block;font-size:11px">Versión ${APP_VERSION}</small><b>${esc(Auth.user.nombre)}</b><span class="muted">${esc(Auth.user.rolNombre || Auth.user.rol)}</span><br><button data-act="logout">Cerrar sesión</button></div>` : '');
-  const inMore = MORE.includes(S.view) || S.view === 'mas';
-  $('#bottom').innerHTML = ['inicio', 'gastos', 'retiros', 'presupuesto', 'mas'].map(v =>
-    `<button data-go="${v}" ${(S.view === v || (v === 'mas' && inMore)) ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('');
+  const BOTTOM = ['inicio', 'bancos', 'retiros', 'gastos', 'presupuesto', 'combustible'];
+  const inMore = (MORE.includes(S.view) && !BOTTOM.includes(S.view)) || S.view === 'mas';
+  const prev = $('#bottom .bscroll'), keep = prev ? prev.scrollLeft : (S.bscroll || 0);
+  $('#bottom').innerHTML = `<div class="bscroll">${BOTTOM.map(v => `<button data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('')}</div>`
+    + `<button class="bmore" data-go="mas" ${inMore ? 'aria-current="page"' : ''}>${ico(VIEWS.mas.icon)}${VIEWS.mas.t}</button>`;
+  const bs = $('#bottom .bscroll'); if (bs) {
+    bs.scrollLeft = keep;
+    const act = bs.querySelector('[aria-current]');   // la sección actual siempre a la vista
+    if (act && (act.offsetLeft < bs.scrollLeft || act.offsetLeft + act.offsetWidth > bs.scrollLeft + bs.clientWidth)) bs.scrollLeft = act.offsetLeft - (bs.clientWidth - act.offsetWidth) / 2;
+    const edge = () => { bs.classList.toggle('more-r', bs.scrollLeft + bs.clientWidth < bs.scrollWidth - 4); bs.classList.toggle('more-l', bs.scrollLeft > 4); S.bscroll = bs.scrollLeft; };
+    bs.addEventListener('scroll', edge, {passive: true}); edge();
+  }
 }
 const yearOf = m => String(m || '').split('-')[1] || '';
 function renderMonthPicker() {
@@ -1081,7 +1100,8 @@ function render() {
   renderNav(); renderMonthPicker();
   $('#ttl').textContent = VIEWS[S.view].t;
   const fn = V[S.view] || V.inicio;
-  $('#view').innerHTML = fn();
+  COMBO = null;
+  $('#view').innerHTML = fn(); syncCombos();
   const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Movimientos_Banco', bancos: 'Movimientos_Banco', combustible: 'Consumo_Combustible', tarjetas: 'Referencias_Tarjetas'}[S.view];
   const fabOk = fabFor && (REL[fabFor] ? canAdd(REL[fabFor].mod) : can(FORMS[fabFor].perm));
   fab.hidden = !fabOk; fab.dataset.new = fabFor || ''; fab.dataset.dep = S.view === 'ingresos' ? '1' : '';
@@ -1269,7 +1289,7 @@ V.gastos = () => {
   return `${S.all ? '' : lockNote('Gastos')}
   <div class="toolbar">
     <input class="input" type="search" placeholder="Buscar descripción" value="${esc(S.q)}" data-bind="q" aria-label="Buscar">
-    <select class="input" data-bind="cuenta" aria-label="Cuenta"><option value="">Todas las cuentas</option>${ctas.map(c => `<option value="${c.Codigo}" ${c.Codigo === S.cuenta ? 'selected' : ''}>${esc(c.Cuentas)}</option>`).join('')}</select>
+    ${comboize(`<select class="input" data-bind="cuenta" aria-label="Cuenta"><option value="">Todas las cuentas</option>${ctas.map(c => `<option value="${c.Codigo}" ${c.Codigo === S.cuenta ? 'selected' : ''}>${esc(c.Cuentas)}</option>`).join('')}</select>`, 'selCuentaFiltro')}
     <label class="row" style="gap:8px;font-size:14px;cursor:pointer"><span class="toggle"><input type="checkbox" data-bind="all" ${S.all ? 'checked' : ''}><span></span></span>Todos los meses</label>
     ${canAdd('Gastos') && !S.all ? '<button class="btn primary desk-only" data-new="Gastos_Detalle">Registrar gasto</button>' : ''}
   </div>
@@ -1430,7 +1450,7 @@ V.cuenta = () => {
   const top = Object.entries(items).sort((a, b) => b[1].t - a[1].t).slice(0, 12);
   const tg = G.reduce((a, b) => a + b, 0), tp = P.reduce((a, b) => a + b, 0), act = G.filter(v => v > 0).length;
   return `
-  <div class="toolbar"><select class="input" data-bind="cuentaSel" aria-label="Cuenta">${ctas.map(c => `<option value="${c.Codigo}" ${c.Codigo === S.cuentaSel ? 'selected' : ''}>${esc(c.Cuentas)}</option>`).join('')}</select>
+  <div class="toolbar">${comboize(`<select class="input" data-bind="cuentaSel" aria-label="Cuenta">${ctas.map(c => `<option value="${c.Codigo}" ${c.Codigo === S.cuentaSel ? 'selected' : ''}>${esc(c.Cuentas)}</option>`).join('')}</select>`, 'selCuentaAnalisis')}
     <select class="input" data-bind="cuentaYear" aria-label="Año"><option value="all" ${yr === 'all' ? 'selected' : ''}>Todos los años</option>${years.map(y => `<option value="${y}" ${y === yr ? 'selected' : ''}>${y}</option>`).join('')}</select>
     <div class="tabs" style="margin:0">${[[1, 'Último mes'], [6, '6 meses'], [12, '12 meses'], [24, '24 meses'], [0, yr === 'all' ? 'Todo' : 'Todo el año']].map(([v, l]) => `<button class="tab" data-rango="${v}" aria-pressed="${S.rango === v}">${l}</button>`).join('')}</div></div>
   <p class="muted" style="font-size:13px;margin:0 2px 4px">Mostrando <b>${esc(cuentaNombre(S.cuentaSel))}</b>: ${esc(rangeTxt)} (${sel.length} ${sel.length === 1 ? 'mes' : 'meses'}${byYear ? ', el gráfico se agrupa por año' : ''}).</p>
@@ -1502,7 +1522,8 @@ function showFuelResult(r, fromList) {
   const main = u === 'GL' ? c.kmg : c.kml, other = u === 'GL' ? c.kml : c.kmg;
   const vv = vehOf(r), avg = fuelAvg(r.ID, 10, u, vv), diff = avg && main ? (main - avg) / avg * 100 : 0;
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><div class="sheet fuelres" role="dialog" aria-modal="true" aria-label="Cálculo de rendimiento">
-    <h4>Rendimiento del llenado <span class="pill">${fdatetime(r.Fecha)}</span>${vehiculos().length > 1 ? ` <span class="pill open">${esc(vehName(vv))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
+    <h4>Rendimiento del llenado<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
+    <p class="fuel-when"><span class="pill">${fdatetime(r.Fecha)}</span>${vehiculos().length > 1 ? ` <span class="pill open">${esc(vehName(vv))}</span>` : ''}</p>
     ${c.km > 0 ? `<p class="fuel-say">Manejaste <b>${NF0.format(c.km)} kilómetros</b> (${NF.format(c.km / 1.60934)} millas).<br>Usaste <b>${c.litros.toFixed(3)} litros</b> (${c.galones.toFixed(3)} galones).</p>
       <div class="tabs" style="justify-content:center;margin:6px 0 10px">${['L', 'GL'].map(x => `<button type="button" class="tab" data-funit="${x}" data-fres="1" aria-pressed="${u === x}">${uLabel(x)}</button>`).join('')}</div>
       <div class="fuel-kml num">${main.toFixed(2)}<span>${uLabel(u)}</span></div>
@@ -1951,6 +1972,8 @@ const FORMS = {
 let FORM = null;
 /* Lista compacta propia (la del celular la dibuja el sistema y no se puede achicar): filas bajas y búsqueda */
 let COMBO = null;
+/** Convierte un <select> de una pantalla en la lista compacta */
+const comboize = (html, id) => `<div class="combo combo-inline">${html.replace('<select class="input"', `<select class="input combo-native" id="${id}" tabindex="-1" aria-hidden="true"`)}<button type="button" class="input combo-btn" data-combo="${id}" aria-haspopup="listbox"><span></span></button></div>`;
 function syncCombos() { document.querySelectorAll('.combo-btn').forEach(b => { const sel = document.getElementById(b.dataset.combo); if (sel && b.firstElementChild) b.firstElementChild.textContent = (sel.selectedOptions[0] || {}).textContent || ''; }); }
 function closeCombo() { if (COMBO) { COMBO.pop.remove(); COMBO.btn.setAttribute('aria-expanded', 'false'); COMBO = null; } }
 function openCombo(btn) {

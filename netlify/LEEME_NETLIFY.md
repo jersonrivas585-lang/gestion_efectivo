@@ -191,11 +191,15 @@ El corte ya no se guarda a mano: cada período abierto para el resumen tiene **u
 - **Cortes de resumen:** la pantalla muestra **el último resumen de cada mes**; si el mes tiene más cortes guardados, aparece un botón **+** (con el número de cortes) que despliega los anteriores, y **−** los oculta. Arriba hay un filtro de **año** (por defecto el actual, o *Todos los años*) con el conteo de meses y cortes.
 - **Pantallas:** en el *Inicio*, *Resumen del mes* muestra el último guardado y **Ver resumen** abre los totales con el botón **Actualizar ahora**. *Cortes de resumen* lista todos, con la etiqueta «automático».
 
+## Barra inferior en el celular
+
+La barra de abajo tiene, en este orden, **Inicio, Bancos, Retiros, Gastos, Presupuesto y Combustible**, y se **desliza** hacia la derecha para ver las que no caben; un desvanecido en el borde indica que hay más. **Más** queda fijo a la derecha y lleva a las demás secciones (Ingresos, Histórico, Análisis por cuenta, Tarjetas, Cortes, Catálogos, Períodos y Mi cuenta). La sección en la que estás siempre queda a la vista y resaltada.
+
 ## Consultar y editar registros
 
 Al tocar un gasto, retiro, depósito, transferencia, partida del presupuesto, llenado o consumo con tarjeta, se abre **en modo consulta**: se ven todos los datos sin poder cambiarlos, con los botones **Cerrar** y **Editar**. *Editar* aparece solo si el período del registro está abierto para ese módulo y tu usuario tiene permiso; al tocarlo, el formulario pasa a modo edición (con *Guardar cambios* y *Eliminar*). Si el período está cerrado, se ve el aviso correspondiente y no hay botón *Editar*. Los catálogos (cuentas, unidades, vehículos, cuentas de banco) se siguen abriendo directamente para editar.
 
-**Listas compactas:** en el gasto y en el presupuesto, *Cuenta* y *Partida del presupuesto* usan una lista propia, más compacta que la del celular, con filas bajas y un buscador cuando hay más de 8 opciones (por ejemplo, escribe «medic» para encontrar *Medicamentos y Consultas*). Se cierra al elegir, al tocar fuera o con Escape.
+**Listas compactas:** en el gasto y en el presupuesto (*Cuenta* y *Partida del presupuesto*), en el filtro de cuenta de *Gastos* y en *Análisis por cuenta* se usa una lista propia, más compacta que la del celular, con filas bajas y un buscador cuando hay más de 8 opciones (por ejemplo, escribe «medic» para encontrar *Medicamentos y Consultas*). Se cierra al elegir, al tocar fuera o con Escape.
 
 ## Eliminar con advertencia y bloqueo de saldos negativos
 
