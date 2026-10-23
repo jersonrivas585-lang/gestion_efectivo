@@ -191,6 +191,20 @@ El corte ya no se guarda a mano: cada período abierto para el resumen tiene **u
 - **Cortes de resumen:** la pantalla muestra **el último resumen de cada mes**; si el mes tiene más cortes guardados, aparece un botón **+** (con el número de cortes) que despliega los anteriores, y **−** los oculta. Arriba hay un filtro de **año** (por defecto el actual, o *Todos los años*) con el conteo de meses y cortes.
 - **Pantallas:** en el *Inicio*, *Resumen del mes* muestra el último guardado y **Ver resumen** abre los totales con el botón **Actualizar ahora**. *Cortes de resumen* lista todos, con la etiqueta «automático».
 
+## Consultar y editar registros
+
+Al tocar un gasto, retiro, depósito, transferencia, partida del presupuesto, llenado o consumo con tarjeta, se abre **en modo consulta**: se ven todos los datos sin poder cambiarlos, con los botones **Cerrar** y **Editar**. *Editar* aparece solo si el período del registro está abierto para ese módulo y tu usuario tiene permiso; al tocarlo, el formulario pasa a modo edición (con *Guardar cambios* y *Eliminar*). Si el período está cerrado, se ve el aviso correspondiente y no hay botón *Editar*. Los catálogos (cuentas, unidades, vehículos, cuentas de banco) se siguen abriendo directamente para editar.
+
+**Listas compactas:** en el gasto y en el presupuesto, *Cuenta* y *Partida del presupuesto* usan una lista propia, más compacta que la del celular, con filas bajas y un buscador cuando hay más de 8 opciones (por ejemplo, escribe «medic» para encontrar *Medicamentos y Consultas*). Se cierra al elegir, al tocar fuera o con Escape.
+
+## Eliminar con advertencia y bloqueo de saldos negativos
+
+Al tocar **Eliminar** en un registro, la app muestra antes, dentro del formulario, **qué saldos cambian** (por ejemplo, *Avanz Córdobas +C$ 1,000 · queda C$ 20,567.69* y *Efectivo en mano −C$ 1,000 · queda −C$ 790*) y pide confirmar. Si el registro es anterior a los saldos actuales, dice que no cambia ningún saldo.
+
+Si eliminar un retiro, depósito o transferencia dejaría una cuenta, el efectivo en mano o el efectivo en dólares **en negativo** (porque ese dinero ya se gastó o se movió), la app **no deja eliminarlo** y explica cuál quedaría en negativo: primero hay que corregir o eliminar esos gastos o movimientos. Eliminar un gasto nunca se bloquea (sube el saldo).
+
+El bloqueo se cambia en *Mi cuenta → Configuración → Bloquear eliminaciones que dejan saldos en negativo* (activo por defecto; lo cambian administradores y supervisores). Desactivado, la app solo avisa y ofrece *Eliminar de todos modos*. Se guarda en la columna `Bloquear_Negativos` de la hoja Empresa (vacío = activo) y aplica a todos los usuarios.
+
 ## Importar el presupuesto desde Excel
 
 En **Presupuesto** usa *Descargar plantilla* (trae el presupuesto del mes o del mes anterior) o el archivo `Plantilla_Presupuesto.xlsx` del paquete. Llénalo y usa *Importar desde Excel*.

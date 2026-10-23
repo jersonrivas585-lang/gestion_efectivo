@@ -305,6 +305,24 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .expand.ph{border-color:transparent;background:none;cursor:default}
 .cortes tr.sub td{background:var(--sunk);color:var(--ink2);font-size:13.5px}
 .cortes tr.sub .mcell{padding-left:44px}
+.delbox{margin:14px 0 0;padding:12px 14px;border-radius:10px;background:var(--sunk);border:1px solid var(--line);font-size:14px}
+.delbox.block{border-color:var(--over)}
+.delbox.block > b{color:var(--over)}
+.delfx{list-style:none;margin:8px 0 0;padding:0}
+.delfx li{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px dashed var(--line);font-size:13.5px}
+.combo{position:relative}
+.combo-native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:0;top:0}
+.combo-btn{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;cursor:pointer;color:var(--ink)}
+.combo-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.combo-btn::after{content:'';flex:none;width:7px;height:7px;margin:-4px 3px 0 10px;border-right:2px solid var(--ink2);border-bottom:2px solid var(--ink2);transform:rotate(45deg)}
+.combo-btn:disabled{cursor:default}
+.combo-pop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:60;display:flex;flex-direction:column;max-height:min(46vh,320px);background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);overflow:hidden}
+.combo-q{margin:6px;min-height:36px;padding:6px 10px;font-size:14px;width:auto}
+.combo-list{overflow:auto;overscroll-behavior:contain}
+.combo-opt{display:block;width:100%;min-height:34px;padding:7px 12px;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);font:inherit;font-size:14.5px;text-align:left;cursor:pointer}
+.combo-opt:first-child{border-top:0}
+.combo-opt:hover{background:var(--sunk)}
+.combo-opt.on{background:var(--teal-soft);font-weight:700}
 .lnk{text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
 .pgrow{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;cursor:pointer}
 .pgrow small{color:var(--muted);font-size:12.5px}
@@ -431,7 +449,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.22-2013';
+const APP_VERSION = '2026.10.23-0316';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1691,6 +1709,10 @@ V.conexion = () => {
     <p class="muted" style="margin:0">Versión de la app: <b>${APP_VERSION}</b>. Tablas cargadas: ${Object.keys(DB.t).length}. Movimientos de gasto: ${NF.format(DB.t.Gastos_Detalle.length).replace('.00', '')}.</p>
     <div class="row" style="margin-top:12px"><button class="btn" data-act="reload">Recargar datos</button></div></div></section>
   ${accountSection()}
+  <section class="section"><h3>Configuración</h3><div class="panel">
+    <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start;flex-wrap:nowrap"><span class="toggle" style="flex:none;margin-top:2px"><input type="checkbox" data-cfg="Bloquear_Negativos" ${blockNeg() ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></span>
+      <span><b>Bloquear eliminaciones que dejan saldos en negativo</b><br><small class="muted">Si eliminar un retiro, depósito o transferencia dejaría una cuenta o el efectivo en negativo (porque ese dinero ya se gastó o se movió), la app no lo deja. Desactivado, solo avisa y pide confirmar. Antes de eliminar siempre se muestra qué saldos cambian.${can('periodos.gestionar') ? '' : ' Solo un administrador o supervisor puede cambiarlo.'}</small></span></label>
+  </div></section>
   <section class="section"><h3>Hogar</h3><div class="panel"><b>${esc(e.Empresa)}</b><p class="muted" style="margin:4px 0 0">${esc(e.Direccion)}<br>Teléfono ${esc(e.Telefono)}, celular ${esc(e.Celular)}</p></div></section>
   <section class="section"><h3>Apariencia</h3><div class="tabs">${[['', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, l]) => `<button class="tab" data-theme-set="${v}" aria-pressed="${(lsGet('theme') || '') === v}">${l}</button>`).join('')}</div></section>`;
 };
@@ -1731,8 +1753,8 @@ function histDesc(table, field, filterFn, limit = 80) {
 const FORMS = {
   Gastos_Detalle: {t: 'gasto', mod: 'Gastos', fields: [
     {k: 'Fecha', l: 'Fecha y hora de la compra', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo compraste, no cuándo lo anotas. Cámbialo si lo registras después.'},
-    {k: 'Cuenta_Gastos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(true), req: 1, def: () => S.cuenta || 'C014'},
-    {k: 'ID_Partida', l: 'Partida del presupuesto', ty: 'select', num: 1, opts: () => [], dynOpts: o => partidaOpts(o), fillFrom: rec => { const m = partidaOfGasto(rec, partidasOf(recPeriod('Gastos_Detalle', rec), rec.Cuenta_Gastos)); return m ? Number(m.ID_DetPresupuesto) : ''; }, hint: 'Vincula el gasto con lo presupuestado. Si no eliges, se asigna a la partida con la misma descripción, si existe.'},
+    {k: 'Cuenta_Gastos', l: 'Cuenta', ty: 'select', combo: 1, opts: () => optsCuentas(true), req: 1, def: () => S.cuenta || 'C014'},
+    {k: 'ID_Partida', l: 'Partida del presupuesto', ty: 'select', combo: 1, num: 1, opts: () => [], dynOpts: o => partidaOpts(o), fillFrom: rec => { const m = partidaOfGasto(rec, partidasOf(recPeriod('Gastos_Detalle', rec), rec.Cuenta_Gastos)); return m ? Number(m.ID_DetPresupuesto) : ''; }, hint: 'Vincula el gasto con lo presupuestado. Si no eliges, se asigna a la partida con la misma descripción, si existe.'},
     {k: 'Descripcion_Gasto', l: 'Descripción', ty: 'text', req: 1, list: o => [...DB.t.Items.filter(i => i.Cuenta === o.Cuenta_Gastos).map(i => i.Descripcion), ...histDesc('Gastos_Detalle', 'Descripcion_Gasto', r => r.Cuenta_Gastos === o.Cuenta_Gastos)], dep: 'Cuenta_Gastos'},
     {k: 'Cantidad', l: 'Cantidad', ty: 'number', half: 1, def: 1, step: 'any'},
     {k: 'UM', l: 'Unidad', ty: 'select', half: 1, opts: optsUM, def: 'Unidad'},
@@ -1768,7 +1790,7 @@ const FORMS = {
       o.Precio_Unitario = Number(o.Cantidad) ? r2(o.Total / o.Cantidad * 10000) / 10000 : o.Total; },
     after: o => { if (o.ID_Banco !== '' && o.ID_Banco !== undefined) lsSet('debito_pref', String(o.ID_Banco)); lsSet('pago_gasto', String(o.ID_Banco ?? '')); if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); }},
   Presupuesto_Detalle: {t: 'partida', g: 'a', mod: 'Presupuesto', fields: [
-    {k: 'Cuenta_Gastos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(true), req: 1, def: 'C014'},
+    {k: 'Cuenta_Gastos', l: 'Cuenta', ty: 'select', combo: 1, opts: () => optsCuentas(true), req: 1, def: 'C014'},
     {k: 'Descripcion', l: 'Descripción', ty: 'text', req: 1, list: o => [...DB.t.Items.filter(i => i.Cuenta === o.Cuenta_Gastos).map(i => i.Descripcion), ...histDesc('Presupuesto_Detalle', 'Descripcion', r => r.Cuenta_Gastos === o.Cuenta_Gastos)], dep: 'Cuenta_Gastos'},
     {k: 'Cantidad', l: 'Cantidad', ty: 'number', half: 1, def: 1, step: 'any'},
     {k: 'UM', l: 'Unidad', ty: 'select', half: 1, opts: optsUM, def: 'Unidad'},
@@ -1809,7 +1831,7 @@ const FORMS = {
           o.Monto_Moneda = rec && Number(rec.Monto_Moneda) && Number(rec.Total) === Number(o.Total) && Number(rec.Tipo_Cambio) === tc ? rec.Monto_Moneda : r2((Number(o.Total) || 0) / tc); }
       } else { o.Monto_Moneda = ''; o.Tipo_Cambio = ''; o.Efectivo_Moneda = ''; } },
     after: o => { lsSet('bank_ret', String(o.ID_Banco)); if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); },
-    done: () => { const P = S.pendingGasto; if (!P) return; S.pendingGasto = null; setTimeout(() => { openForm('Gastos_Detalle', P.rec ? P.rec.ID_Detalle_Gastos : undefined); fillFormValues(P.o); toast('Retiro registrado. Ahora guarda el gasto'); }, 50); }},
+    done: () => { const P = S.pendingGasto; if (!P) return; S.pendingGasto = null; setTimeout(() => { openForm('Gastos_Detalle', P.rec ? P.rec.ID_Detalle_Gastos : undefined, true); fillFormValues(P.o); toast('Retiro registrado. Ahora guarda el gasto'); }, 50); }},
   Movimientos_Banco: {t: 'movimiento de banco', perm: 'bancos.editar', needsMes: 1, fields: [
     {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Transferencia', 'Transferencia entre cuentas'], ['Depósito', 'Depósito de efectivo'], ...(FORM && FORM.rec && FORM.rec.Tipo === 'Ajuste' ? [['Ajuste', 'Ajuste de saldo (registro anterior)']] : [])], def: 'Transferencia'},
     {k: 'Fecha', l: 'Fecha y hora', ty: 'datetime', req: 1, def: nowDT},
@@ -1927,6 +1949,23 @@ const FORMS = {
 };
 
 let FORM = null;
+/* Lista compacta propia (la del celular la dibuja el sistema y no se puede achicar): filas bajas y búsqueda */
+let COMBO = null;
+function syncCombos() { document.querySelectorAll('.combo-btn').forEach(b => { const sel = document.getElementById(b.dataset.combo); if (sel && b.firstElementChild) b.firstElementChild.textContent = (sel.selectedOptions[0] || {}).textContent || ''; }); }
+function closeCombo() { if (COMBO) { COMBO.pop.remove(); COMBO.btn.setAttribute('aria-expanded', 'false'); COMBO = null; } }
+function openCombo(btn) {
+  closeCombo();
+  const sel = document.getElementById(btn.dataset.combo); if (!sel || sel.disabled || btn.disabled) return;
+  const opts = [...sel.options].map(o => [o.value, o.textContent]);
+  const pop = document.createElement('div'); pop.className = 'combo-pop';
+  pop.innerHTML = (opts.length > 8 ? '<input class="input combo-q" type="search" placeholder="Buscar…" aria-label="Buscar en la lista" autocomplete="off">' : '')
+    + `<div class="combo-list" role="listbox">${opts.map(([v, l]) => `<button type="button" class="combo-opt ${v === sel.value ? 'on' : ''}" data-cval="${esc(v)}" role="option" aria-selected="${v === sel.value}">${esc(l)}</button>`).join('')}</div>`;
+  btn.parentElement.appendChild(pop); btn.setAttribute('aria-expanded', 'true'); COMBO = {btn, sel, pop};
+  const q = pop.querySelector('.combo-q');
+  if (q) { q.addEventListener('input', () => { const t = nrm(q.value); pop.querySelectorAll('.combo-opt').forEach(b => { b.hidden = !!t && !nrm(b.textContent).includes(t); }); }); if (matchMedia('(pointer:fine)').matches) setTimeout(() => q.focus(), 20); }
+  const on = pop.querySelector('.combo-opt.on'); if (on) on.scrollIntoView({block: 'nearest'});
+}
+function pickCombo(v) { if (!COMBO) return; const sel = COMBO.sel; sel.value = v; closeCombo(); sel.dispatchEvent(new Event('change', {bubbles: true})); syncCombos(); }
 /** Opciones de un selector; si el registro usa una cuenta o un vehículo ya desactivado, se conserva para no cambiarlo sin querer */
 function optsWithCurrent(f, v) {
   const list = f.opts();
@@ -1937,20 +1976,24 @@ function optsWithCurrent(f, v) {
   else if (f.k === 'ID_Banco' && v === EFUSD) name = 'Efectivo en dólares (US$)';
   return name ? [...list, [v, name]] : list;
 }
-function openForm(table, id) {
+/** Registros que se abren primero en modo consulta (con el botón Editar) */
+const VIEW_FIRST = new Set(['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Consumo_Combustible', 'Referencias_Tarjetas']);
+function openForm(table, id, edit) {
   const F = FORMS[table]; if (!F) return;
   const k = DB.key(table);
   const rec = id !== undefined && id !== null ? DB.t[table].find(r => String(r[k]) === String(id)) : null;
   const auto = (table === 'Ingresos_Detalle' || table === 'Retiros_Detalle' || table === 'Gastos_Detalle') && rec && rec.Origen;
   const noPerm = (F.mod && !can(MOD_PERM[F.mod])) || (F.perm && !can(F.perm)), permKey = F.perm || (F.mod ? MOD_PERM[F.mod] : '');
   const ro = (F.mod && !canEdit(F.mod)) || (F.perm && !can(F.perm)) || !!auto;
+  // al tocar un registro se ve sin poder cambiarlo; «Editar» aparece solo si el período está abierto y hay permiso
+  const view = !!rec && !edit && !ro && VIEW_FIRST.has(table), lock = ro || view;
   const o = rec ? Object.assign({}, rec) : {};
   if (!rec) F.fields.forEach(f => { if (f.def !== undefined) o[f.k] = typeof f.def === 'function' ? f.def() : f.def; });
   else F.fields.forEach(f => { if (f.fillEmpty && (o[f.k] === '' || o[f.k] === undefined) && f.def !== undefined) o[f.k] = typeof f.def === 'function' ? f.def() : f.def; if (f.fillFrom && (o[f.k] === '' || o[f.k] === undefined)) o[f.k] = f.fillFrom(rec); });
   if (table === 'Gastos_Detalle' && rec && truthy(rec.Efectivo_USD)) o.ID_Banco = EFUSD;
-  FORM = {table, rec, o, F};
+  FORM = {table, rec, o, F, view};
   const fieldHtml = f => {
-    const v = o[f.k] ?? '', dis = ro || (rec && f.keyEdit) || f.auto ? 'disabled' : '', idf = 'f_' + f.k;
+    const v = o[f.k] ?? '', dis = lock || (rec && f.keyEdit) || f.auto ? 'disabled' : '', idf = 'f_' + f.k;
     let inp;
     if (f.ty === 'select') inp = `<select class="input" id="${idf}" name="${f.k}" ${dis} ${f.req ? 'required' : ''}>${(f.dynOpts ? f.dynOpts(o) : optsWithCurrent(f, v)).map(([a, b]) => `<option value="${esc(a)}" ${String(a) === String(v) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
     else if (f.ty === 'bool') return `<div class="field" data-fk="${f.k}"><div class="field check" style="padding:0"><label for="${idf}">${f.l}</label><label class="toggle"><input type="checkbox" id="${idf}" name="${f.k}" ${truthy(v) ? 'checked' : ''} ${dis}><span></span></label></div>${f.hint ? `<span class="hint">${f.hint}</span>` : ''}</div>`;
@@ -1958,23 +2001,24 @@ function openForm(table, id) {
     else if (f.ty === 'datetime') { const dv = toDTL(v); inp = `<div class="dtrow"><input class="input" id="${idf}" name="${f.k}" type="date" aria-label="Fecha" value="${esc(dv.slice(0, 10))}" ${dis} ${f.req ? 'required' : ''}><input class="input dt-time" id="${idf}_t" type="time" aria-label="Hora" value="${esc(dv.slice(11, 16))}" ${dis}></div>
       ${dis ? '' : `<div class="dtchips">${[['Ahora', 0], ['Hace 1 h', 60], ['Hace 3 h', 180], ['Ayer', 1440]].map(([l, m]) => `<button type="button" class="chip" data-act="dt-set" data-for="${idf}" data-min="${m}">${l}</button>`).join('')}</div>`}`; }
     else inp = `<input class="input" id="${idf}" name="${f.k}" type="${f.ty === 'number' ? 'number' : f.ty}" ${f.ty === 'number' ? `inputmode="decimal" step="${f.step || 'any'}"` : ''} value="${esc(f.ty === 'date' ? String(v).slice(0, 10) : v)}" ${f.list ? `list="dl_${f.k}" autocomplete="off"` : ''} ${dis} ${f.req ? 'required' : ''}>${f.list ? `<datalist id="dl_${f.k}"></datalist>` : ''}`;
+    if (f.combo && f.ty === 'select') inp = `<div class="combo">${inp.replace('<select class="input"', '<select class="input combo-native" tabindex="-1" aria-hidden="true"')}<button type="button" class="input combo-btn" data-combo="${idf}" ${dis} aria-haspopup="listbox"><span></span></button></div>`;
     return `<div class="field ${f.half ? 'half' : ''}" data-fk="${f.k}"><label for="${idf}">${f.l}</label>${inp}${f.live ? `<div class="saldo" data-live="${f.k}"></div>` : ''}${f.hint ? `<span class="hint">${typeof f.hint === 'function' ? f.hint() : f.hint}</span>` : ''}</div>`;
   };
-  const title = (rec ? (ro ? 'Ver ' : 'Editar ') : (F.g === 'a' ? 'Nueva ' : 'Nuevo ')) + F.t;
+  const title = rec ? (view ? F.t.charAt(0).toUpperCase() + F.t.slice(1) : (ro ? 'Ver ' : 'Editar ') + F.t) : (F.g === 'a' ? 'Nueva ' : 'Nuevo ') + F.t;
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="frm" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
-    <h4>${esc(title)}${REL[table] ? ` <span class="pill">${esc(mesLabel(S.mes))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
+    <h4>${esc(title)}${REL[table] ? ` <span class="pill">${esc(mesLabel(rec ? recPeriod(table, rec) : S.mes))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
     ${auto ? (table === 'Gastos_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Gasto automático por una transferencia a la cuenta en dólares. Se cambia desde la transferencia.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir la transferencia</button></div>` : table === 'Retiros_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Retiro automático por un gasto pagado con tarjeta de débito. Se cambia desde el gasto.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el gasto</button></div>`
       : `<div class="notice info" style="margin-top:0"><span>Ingreso automático por una conversión de dólares. Se cambia desde el movimiento que lo generó.</span>${/^(RET|MOV):/.test(rec.Origen) ? `<button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el origen</button>` : ''}</div>`) : ro ? (noPerm ? `<div class="notice" style="margin-top:0">Tu usuario no tiene permiso para registrar o corregir esto (<code>${esc(permKey)}</code>). Pídele a un administrador que lo active en tu usuario. Si ya lo hizo, cierra sesión y vuelve a entrar.</div>` : '<div class="notice" style="margin-top:0">Solo lectura: este período está cerrado para este módulo. Ábrelo en Períodos para registrar o corregir.</div>') : ''}
-    ${(() => { if (!rec || !REL[table] || auto) return '';
+    ${(() => { if (!rec || !REL[table] || auto || view) return '';
       const cur = recPeriod(table, rec), mod = REL[table].mod, tg = periodos().filter(p => truthy(p[mod]) && p.Mes_Anio !== cur).map(p => p.Mes_Anio);
       if (!can(MOD_PERM[mod])) return '';
       if (ro) return tg.length ? `<div class="notice info" style="margin-top:0"><span>Registrado en <b>${esc(mesLabel(cur))}</b>. ¿Corresponde a otro período?</span>${tg.slice(-2).map(m => `<button type="button" class="btn small" data-act="move-period" data-to="${m}">Mover a ${esc(mesLabel(m))}</button>`).join('')}</div>` : '';
       return `<div class="field"><label for="f__periodo">Período</label><select class="input" id="f__periodo">${[cur, ...tg].map(m => `<option value="${m}" ${m === cur ? 'selected' : ''}>${esc(mesLabel(m))}${m === cur ? ' (actual)' : ''}</option>`).join('')}</select><span class="hint">Cámbialo si este movimiento pertenece a otro período abierto.</span></div>`; })()}
     <div class="fgrid">${F.fields.map(fieldHtml).join('')}<div class="fpreview" id="fpreview"></div></div>
-    <div class="actions">${rec && !ro ? '<button type="button" class="btn danger" data-act="del">Eliminar</button>' : ''}<span class="spacer"></span><button type="button" class="btn" data-close="1">Cancelar</button>${ro ? '' : `<button type="submit" class="btn primary">${rec ? 'Guardar cambios' : F.t.length > 14 ? 'Guardar' : 'Guardar ' + F.t}</button>`}</div>
+    <div class="actions">${view ? '<span class="spacer"></span><button type="button" class="btn" data-close="1">Cerrar</button><button type="button" class="btn primary" data-act="form-edit">Editar</button>' : `${rec && !ro ? '<button type="button" class="btn danger" data-act="del">Eliminar</button>' : ''}<span class="spacer"></span><button type="button" class="btn" data-close="1">${ro ? 'Cerrar' : 'Cancelar'}</button>${ro ? '' : `<button type="submit" class="btn primary">${rec ? 'Guardar cambios' : F.t.length > 14 ? 'Guardar' : 'Guardar ' + F.t}</button>`}`}</div>
   </form></div>`;
-  fillLists(); formDynamics();
-  const first = $('#frm input:not([disabled]), #frm select:not([disabled])'); if (first && !rec) setTimeout(() => first.focus(), 30);
+  fillLists(); formDynamics(); syncCombos();
+  const first = $('#frm input:not([disabled]), #frm select:not([disabled]):not(.combo-native)'); if (first && !rec) setTimeout(() => first.focus(), 30);
 }
 /** Muestra u oculta campos, ajusta etiquetas y la vista previa según lo que se va llenando */
 function formDynamics() {
@@ -1983,7 +2027,7 @@ function formDynamics() {
   F.fields.forEach(f => { if (!f.dynOpts) return; const el = $('#f_' + f.k); if (!el) return;
     const list = f.dynOpts(o), html = list.map(([a, b]) => `<option value="${esc(a)}">${esc(b)}</option>`).join('');
     if (el._sig !== html) { const cur = el.value; el.innerHTML = html; el._sig = html; el.value = list.some(([a]) => String(a) === String(cur)) ? cur : ''; } });
-  F.fields.forEach(f => { const w = $(`#frm [data-fk="${f.k}"]`); if (w && f.show) w.hidden = !f.show(o); if (f.live) { const el = $(`#frm [data-live="${f.k}"]`); if (el) el.innerHTML = f.live(o); } });
+  F.fields.forEach(f => { const w = $(`#frm [data-fk="${f.k}"]`); if (w && f.show) w.hidden = !f.show(o); if (f.live) { const el = $(`#frm [data-live="${f.k}"]`); if (el) el.innerHTML = FORM.view ? '' : f.live(o); } });
   if (F.label) Object.entries(F.label(o)).forEach(([k, l]) => { const lb = $(`#frm [data-fk="${k}"] > label`); if (lb) lb.textContent = l; });
   let warn = '';
   const dtf = F.fields.find(x => x.ty === 'datetime');
@@ -1994,7 +2038,9 @@ function formDynamics() {
     if (pm && pm !== cur) warn += `<div class="fwarn">Esta fecha corresponde al período <b>${esc(mesLabel(pm))}</b> (${rangeLabel(pm)}), pero se registrará en <b>${esc(mesLabel(cur))}</b>.${FORM.rec ? '' : truthy((DB.idx().periodo[pm] || {})[REL[FORM.table].mod]) ? ` <button type="button" class="btn small" data-act="to-period" data-mes="${pm}">Cambiar a ${esc(mesLabel(pm))}</button>` : ''}</div>`;
   }
   if (FORM.table === 'Bancos' && !FORM.rec && !FORM.nameTouched && o.Banco) { const nm = $('#f_Nombre'); if (nm) nm.value = o.Banco + (o.Moneda === 'USD' ? ' Dólares' : ' Córdobas'); }
+  if (FORM.view) warn = '';
   const pv = $('#fpreview'); if (pv) pv.innerHTML = (F.preview ? F.preview(o) : '') + (F.extra ? F.extra(o) : '') + warn;
+  syncCombos();
 }
 const fieldVisible = f => { const w = $(`#frm [data-fk="${f.k}"]`); return !w || !w.hidden; };
 function readForm() {
@@ -2051,7 +2097,7 @@ async function submitForm() {
     }).catch(e => {
       undo(); render();
       toast(label + ' no se guardó: ' + e.message, true);
-      if (!FORM && e.code !== 'AUTH') { openForm(table, rec ? rec[k] : undefined); fillFormValues(o); }
+      if (!FORM && e.code !== 'AUTH') { openForm(table, rec ? rec[k] : undefined, true); fillFormValues(o); }
     });
     if (!F.doneModal) toast(label + (rec ? ' actualizad' : ' registrad') + (F.g || 'o'));
     return;
@@ -2070,9 +2116,44 @@ function fillFormValues(o) {
     if (f.ty === 'bool') el.checked = truthy(o[f.k]); else if (f.ty === 'pct') el.value = o[f.k] === '' ? '' : r2(Number(o[f.k]) * 100); else if (f.ty === 'datetime') { const dv = toDTL(o[f.k]); el.value = dv.slice(0, 10); const tt = $('#f_' + f.k + '_t'); if (tt) tt.value = dv.slice(11, 16); } else el.value = f.ty === 'date' ? String(o[f.k]).slice(0, 10) : o[f.k]; });
   formDynamics();
 }
-async function deleteRecord() {
+/* ---------- Eliminar con advertencia ----------
+   Antes de eliminar se muestra qué saldos cambian. Si una cuenta o el efectivo quedaría en negativo (porque ese dinero
+   ya se gastó o se movió) y el bloqueo está activo (Mi cuenta → Configuración), no se deja eliminar. */
+const BAL_TABLES = new Set(['Retiros_Detalle', 'Movimientos_Banco', 'Ingresos_Detalle', 'Gastos_Detalle']);
+const blockNeg = () => { const v = empresa().Bloquear_Negativos; return v === '' || v === undefined || v === null ? true : truthy(v); };
+function pocketBalances() {
+  const out = {};
+  bancos(true).forEach(b => { out['b' + b.ID_Banco] = {name: b.Nombre, cur: b.Moneda, v: ledger(b.ID_Banco).saldo}; });
+  out.ef = {name: 'Efectivo en mano', cur: 'NIO', v: cashLedger().saldo};
+  if (hasUsdCash()) out.efd = {name: 'Efectivo en dólares', cur: 'USD', v: cashUsdLedger().saldo};
+  return out;
+}
+/** Saldos antes y después de quitar el registro (se quita un momento de los datos en memoria y se vuelve a poner) */
+function deleteImpact(table, rec) {
+  if (!BAL_TABLES.has(table) || !rec) return null;
+  const arr = DB.t[table], i = arr.indexOf(rec); if (i < 0) return null;
+  const before = pocketBalances(); let after;
+  arr.splice(i, 1); DB.ver++;
+  try { after = pocketBalances(); } finally { arr.splice(i, 0, rec); DB.ver++; }
+  const changes = Object.keys(before).map(k => Object.assign({}, before[k], {d: r2(after[k].v - before[k].v), after: after[k].v})).filter(x => Math.abs(x.d) >= 0.005);
+  return {changes, negs: changes.filter(x => x.d < 0 && x.after < -0.005)};
+}
+function askDelete() {
   const gd = FORM.F.guardDelete ? FORM.F.guardDelete(FORM.rec) : ''; if (gd) return toast(gd, true);
-  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+  const F = FORM.F, imp = deleteImpact(FORM.table, FORM.rec), negs = imp ? imp.negs : [];
+  const blocked = negs.length && blockNeg() && saldosConfigurados();
+  const art = F.g === 'a' ? 'esta' : 'este';
+  const list = imp ? (imp.changes.length
+    ? `<ul class="delfx">${imp.changes.map(c => `<li><span>${esc(c.name)}</span><span class="num ${c.after < -0.005 ? 'neg' : ''}">${c.d > 0 ? '+' : '−'}${fcur(Math.abs(c.d), c.cur)} · queda ${fcur(c.after, c.cur)}</span></li>`).join('')}</ul>`
+    : '<p class="muted" style="margin:6px 0 0">No cambia ningún saldo: es anterior a los saldos actuales.</p>') : '';
+  const neg = negs.length ? `<p class="neg" style="margin:8px 0 0"><b>${negs.map(c => esc(c.name) + ' quedaría en ' + fcur(c.after, c.cur)).join('; ')}</b>, porque ya hay gastos o movimientos que usaron ese dinero.</p>` : '';
+  const html = blocked
+    ? `<div class="delbox block" role="alert"><b>No se puede eliminar ${art} ${esc(F.t)}.</b>${list}${neg}<p style="margin:8px 0 0">Corrige o elimina primero esos gastos o movimientos. El bloqueo se puede desactivar en <i>Mi cuenta → Configuración</i>.</p><div class="row" style="margin-top:10px;justify-content:flex-end"><button type="button" class="btn" data-act="del-cancel">Entendido</button></div></div>`
+    : `<div class="delbox" role="alert"><b>¿Eliminar ${art} ${esc(F.t)}?</b> No se puede deshacer.${list}${neg}<div class="row" style="margin-top:10px;justify-content:flex-end"><button type="button" class="btn" data-act="del-cancel">Cancelar</button><button type="button" class="btn danger" data-act="del-ok">${negs.length ? 'Eliminar de todos modos' : 'Eliminar'}</button></div></div>`;
+  const old = $('#frm .delbox'); if (old) old.remove();
+  $('#frm .actions').insertAdjacentHTML('beforebegin', html); $('#frm .delbox').scrollIntoView({block: 'nearest'});
+}
+async function deleteRecord() {
   const table = FORM.table, k = DB.key(table), prev = Object.assign({}, FORM.rec), F = FORM.F, label = cap(F.t.toUpperCase()), g = F.g || 'o';
   DB.apply({deletes: {[table]: [prev[k]]}}); closeModal(); render(); toast(label + ' eliminad' + g);
   Q.run(() => Backend.call('remove', Backend.online ? {table, id: prev[k]} : {table, id: prev[k], prev})).then(ch => { commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, prev, prev)); if (!FORM) render(); })
@@ -2106,7 +2187,7 @@ function openPartidaGastos(pid) {
     <div class="actions"><span class="spacer"></span><button type="button" class="btn primary" data-close="1">Cerrar</button></div></div></div>`;
 }
 function closeModal() { $('#modal').innerHTML = ''; FORM = null; }
-function cancelModal() { if (S.pendingGasto && FORM && FORM.table === 'Retiros_Detalle') { const P = S.pendingGasto; S.pendingGasto = null; closeModal(); openForm('Gastos_Detalle', P.rec ? P.rec.ID_Detalle_Gastos : undefined); fillFormValues(P.o); return; } closeModal(); }
+function cancelModal() { if (S.pendingGasto && FORM && FORM.table === 'Retiros_Detalle') { const P = S.pendingGasto; S.pendingGasto = null; closeModal(); openForm('Gastos_Detalle', P.rec ? P.rec.ID_Detalle_Gastos : undefined, true); fillFormValues(P.o); return; } closeModal(); }
 
 /* ---------- Resumen automático ----------
    Cada acción que cambia gastos, retiros, ingresos (depósitos) o presupuesto actualiza sola la fila del período
@@ -2286,6 +2367,10 @@ function toast(msg, err) { clearTimeout(toastT); let el = $('.toast'); if (!el) 
 
 /* ---------- Eventos ---------- */
 document.addEventListener('click', async e => {
+  if (COMBO && !(e.target.closest && e.target.closest('.combo'))) closeCombo();
+  { const cb = e.target.closest && e.target.closest('.combo-btn, .combo-opt');
+    if (cb && cb.classList.contains('combo-btn')) { e.preventDefault(); if (COMBO && COMBO.btn === cb) closeCombo(); else openCombo(cb); return; }
+    if (cb && cb.classList.contains('combo-opt')) { e.preventDefault(); pickCombo(cb.dataset.cval); return; } }
   if (e.target.closest && e.target.closest('#fab')) return;  // el botón + tiene su propio manejador
   const t = e.target.closest('[data-corte],[data-pgastos],[data-fveh],[data-frange],[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
   if (!t) return;
@@ -2315,7 +2400,9 @@ document.addEventListener('click', async e => {
   if (d.themeSet !== undefined) { lsSet('theme', d.themeSet || null); applyTheme(); render(); return; }
   const a = d.act;
   if (a === 'mes-prev' || a === 'mes-next') { const ms = mesesConDatos(); const i = ms.indexOf(S.mes) + (a === 'mes-prev' ? -1 : 1); if (ms[i]) { S.mes = ms[i]; render(); } return; }
-  if (a === 'del') return deleteRecord();
+  if (a === 'del') return askDelete();
+  if (a === 'del-ok') return deleteRecord();
+  if (a === 'del-cancel') { const bx = $('#frm .delbox'); if (bx) bx.remove(); return; }
   if (a === 'resumen') return openResumen();
   if (a === 'resumen-now') { t.disabled = true; resPend.add(S.mes); await flushResumen(); closeModal(); render(); toast('Resumen actualizado'); return; }
   if (a === 'copiar-ppto') {
@@ -2338,10 +2425,11 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'form-edit') { const tb = FORM.table, id = FORM.rec[DB.key(tb)]; openForm(tb, id, true); const first = $('#frm input:not([disabled]), #frm select:not([disabled])'); if (first && matchMedia('(pointer:fine)').matches) first.focus(); return; }
   if (a === 'veh-new') return openForm('Vehiculos');
-  if (a === 'veh-edit') return openForm('Vehiculos', curVeh());
+  if (a === 'veh-edit') return openForm('Vehiculos', curVeh(), true);
   if (a === 'bank-new') return openForm('Bancos');
-  if (a === 'bank-edit') return openForm('Bancos', S.banco);
+  if (a === 'bank-edit') return openForm('Bancos', S.banco, true);
   if (a === 'bank-inactive') { go('catalogos'); S.tab = 'Bancos'; render(); return; }
   if (a === 'usd-dep') { openForm('Ingresos_Detalle'); const sel = $('#f_ID_Banco'); if (sel) { sel.value = S.banco; formDynamics(); } return; }
   if (a === 'usd-buy') { openForm('Movimientos_Banco'); const o = bancos().find(b => b.Moneda === 'NIO'); if ($('#f_ID_Banco_Origen') && o) $('#f_ID_Banco_Origen').value = o.ID_Banco; if ($('#f_ID_Banco_Destino')) $('#f_ID_Banco_Destino').value = S.banco; formDynamics(); return; }
@@ -2386,7 +2474,7 @@ document.addEventListener('click', async e => {
   if (a === 'dt-set' || a === 'dt-now') { const el = $('#' + t.dataset.for), tt = $('#' + t.dataset.for + '_t'); if (!el) return;
     const d = new Date(Date.now() - (Number(t.dataset.min) || 0) * 60000); const v = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     el.value = v; if (tt) tt.value = pad(d.getHours()) + ':' + pad(d.getMinutes()); el.dispatchEvent(new Event('input', {bubbles: true})); return; }
-  if (a === 'fuel-edit') { const id = t.dataset.fid; closeModal(); openForm('Consumo_Combustible', id); return; }
+  if (a === 'fuel-edit') { const id = t.dataset.fid; closeModal(); openForm('Consumo_Combustible', id, true); return; }
   if (a === 'efd-bank' || a === 'efd-cash' || a === 'ef-buy') {
     openForm('Movimientos_Banco'); const set = (id, v) => { const el = $(id); if (el) el.value = String(v); };
     if (a === 'ef-buy') { set('#f_ID_Banco_Origen', 0); set('#f_ID_Banco_Destino', -1); }
@@ -2503,6 +2591,12 @@ document.addEventListener('input', e => {
   if (FORM && e.target.name === 'Descripcion_Gasto' && e.inputType === 'insertReplacementText') autofillFromHistory(e.target);
 });
 document.addEventListener('change', async e => {
+  if (e.target.dataset && e.target.dataset.cfg) {
+    const el = e.target, e0 = empresa(); el.disabled = true;
+    try { commit(await Q.run(() => Backend.call('save', {table: 'Empresa', row: {Empresa: e0.Empresa, [el.dataset.cfg]: el.checked}}))); toast(el.checked ? 'Bloqueo activado' : 'Bloqueo desactivado: al eliminar solo se avisará'); }
+    catch (err) { el.checked = !el.checked; toast(err.message, true); }
+    el.disabled = false; return;
+  }
   const el = e.target, b = el.dataset.bind;
   if (el.closest && el.closest('#frmApertura')) { apTotal(); return; }
   if (el.id === 'fYear') { S.fuelYear = el.value; render(); return; }
@@ -2543,7 +2637,7 @@ document.addEventListener('change', async e => {
     el.disabled = false; renderMonthPicker();
   }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').innerHTML) cancelModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && COMBO) { closeCombo(); return; } if (e.key === 'Escape' && $('#modal').innerHTML) cancelModal(); });
 $('#fab').addEventListener('click', () => { const n = $('#fab').dataset.new; if (!n) return; if ($('#fab').dataset.dep) return openDeposito(); if (REL[n] && !ensureTarget(REL[n].mod)) return; const FF = FORMS[n]; if (FF && FF.perm && !can(FF.perm)) return toast('Tu usuario no tiene permiso para registrar esto (' + FF.perm + ')', true); openForm(n); });
 let rzT, lastW = window.innerWidth; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { if (Math.abs(window.innerWidth - lastW) > 60 && !FORM && DB.t.Cuentas) { lastW = window.innerWidth; render(); } }, 250); });
 window.addEventListener('scroll', () => $('#top').classList.toggle('scrolled', window.scrollY > 8), {passive: true});
