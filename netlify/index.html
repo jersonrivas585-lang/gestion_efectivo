@@ -308,6 +308,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .dtrow .dt-time{flex:1}
 .item.pre{opacity:.62}
 .cortes .mcell{white-space:nowrap}
+.cortes td.motivo{min-width:200px;max-width:320px;white-space:normal;font-size:13px}
 .expand{display:inline-grid;place-items:center;width:24px;height:24px;margin-right:8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:700 15px/1 var(--font, inherit);cursor:pointer;padding:0;vertical-align:middle}
 .expand:hover{border-color:var(--teal)}
 .expand.ph{border-color:transparent;background:none;cursor:default}
@@ -466,7 +467,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.23-2225';
+const APP_VERSION = '2026.10.23-2306';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -962,12 +963,12 @@ const Demo = {
   autoResumen(p) {
     const ch = {upserts: {}, deletes: {}}, per = DB.t.Mes_Anio.find(x => x.Mes_Anio === p.mes);
     if (!per || !truthy(per.Guardar_Resumen)) return ch;
-    const ex = DB.t.Resumen.filter(r => r.Mes_Anio === p.mes && truthy(r.Auto)).pop(), P = sum(detail('Presupuesto_Detalle', p.mes)), G = sum(detail('Gastos_Detalle', p.mes)), I = r2(p.Ingresos), R = r2(p.Retiros);
+    const ex = DB.t.Resumen.filter(r => r.Mes_Anio === p.mes && truthy(r.Auto)).sort((a, b) => String(a.Hora_Registro).localeCompare(String(b.Hora_Registro)) || a.Id_Resumen - b.Id_Resumen).pop();
+    const P = p.Presupuesto !== undefined ? r2(p.Presupuesto) : sum(detail('Presupuesto_Detalle', p.mes)), G = p.Gastos !== undefined ? r2(p.Gastos) : sum(detail('Gastos_Detalle', p.mes)), I = r2(p.Ingresos), R = r2(p.Retiros);
     const mano = p.Disp_enMano !== undefined ? r2(p.Disp_enMano) : (ex ? Number(ex.Disp_enMano) : r2(R - G));
     if (ex && [['Total_Ingresos', I], ['Total_Presupuesto', P], ['Total_Gastos', G], ['Total_Ret_Efectivo', R], ['Disp_enMano', mano]].every(([k, v]) => Math.abs(Number(ex[k]) - v) < 0.005)) return ch;
     const row = {Fecha_Registro: todayISO(), Hora_Registro: nowISO(), Total_Ingresos: I, Total_Presupuesto: P, Total_Gastos: G, Total_Ret_Efectivo: R, Disp_enMano: mano,
-      Dif_Ing_Presupuesto: r2(I - P), Dif_Ing_Gastos: r2(I - G), Dif_Ing_RetEfectivo: r2(I - R), Mes_Anio: p.mes, Anio: Number(p.mes.split('-')[1]), Disp_Jerson: 0, Disp_Mariela: 0, Auto: true};
-    if (ex) row.Id_Resumen = ex.Id_Resumen;
+      Dif_Ing_Presupuesto: r2(I - P), Dif_Ing_Gastos: r2(I - G), Dif_Ing_RetEfectivo: r2(I - R), Mes_Anio: p.mes, Anio: Number(p.mes.split('-')[1]), Disp_Jerson: 0, Disp_Mariela: 0, Auto: true, Motivo: String(p.motivo || '').slice(0, 200)};
     ch.upserts.Resumen = [this._upsert('Resumen', row)];
     const removed = DB.t.Consolidado.filter(c => c.Mes_Anio === p.mes).map(c => c.Id_Consolidado);
     DB.t.Consolidado = DB.t.Consolidado.filter(c => c.Mes_Anio !== p.mes);
@@ -1272,7 +1273,7 @@ V.inicio = () => {
   <section class="section">
     <h3>Resumen del mes <small>se actualiza solo</small></h3>
     <div class="panel">
-      ${resumenes.length ? `<div class="tablewrap" style="border:0"><table class="t"><thead><tr><th>Actualizado</th><th class="n">Ingresos</th><th class="n">Gastos</th><th class="n">Retiros</th><th class="n">En mano</th></tr></thead><tbody>${resumenes.map(r => `<tr><td>${fdate(r.Fecha_Registro)} ${String(r.Hora_Registro).slice(11, 16)}${truthy(r.Auto) ? ' <span class="pill open">automático</span>' : ''}</td><td class="n">${money(r.Total_Ingresos)}</td><td class="n">${money(r.Total_Gastos)}</td><td class="n">${money(r.Total_Ret_Efectivo)}</td><td class="n">${money(r.Disp_enMano)}</td></tr>`).join('')}</tbody></table></div>` : `<p class="muted" style="margin:0 0 10px">${resumenOpen(S.mes) ? 'Se creará solo con el próximo movimiento.' : 'Este período está cerrado para el resumen.'}</p>`}
+      ${resumenes.length ? `<div class="tablewrap" style="border:0"><table class="t"><thead><tr><th>Actualizado</th><th class="n">Ingresos</th><th class="n">Gastos</th><th class="n">Retiros</th><th class="n">En mano</th></tr></thead><tbody>${resumenes.map(r => `<tr><td>${fdate(r.Fecha_Registro)} ${String(r.Hora_Registro).slice(11, 16)}${r.Motivo ? `<br><small class="muted">${esc(r.Motivo)}</small>` : ''}</td><td class="n">${money(r.Total_Ingresos)}</td><td class="n">${money(r.Total_Gastos)}</td><td class="n">${money(r.Total_Ret_Efectivo)}</td><td class="n">${money(r.Disp_enMano)}</td></tr>`).join('')}</tbody></table></div>` : `<p class="muted" style="margin:0 0 10px">${resumenOpen(S.mes) ? 'Se creará solo con el próximo movimiento.' : 'Este período está cerrado para el resumen.'}</p>`}
       <div class="row" style="margin-top:10px"><button class="btn" data-act="resumen">Ver resumen</button><button class="btn small" data-go="cortes">Ver todos los resúmenes</button></div>
     </div>
   </section>`;
@@ -1335,7 +1336,7 @@ V.ingresos = () => {
   const byBank = {}, byUsd = {}; rows.forEach(r => { const k = !banco(r.ID_Banco) ? '' : String(r.ID_Banco); byBank[k] = (byBank[k] || 0) + (Number(r.Total) || 0); if (isUsdBank(r.ID_Banco)) byUsd[k] = (byUsd[k] || 0) + (Number(r.Monto_Moneda) || 0); });
   const enBancos = r2(Object.entries(byBank).filter(([k]) => k !== '').reduce((a, [, v]) => a + v, 0));
   return `${lockNote('Ingresos')}
-  ${isNewPeriod(S.mes) ? `<p class="muted" style="margin:12px 2px 0">Ingresos con fecha ${rangeLabel(S.mes)}: los depósitos que cuentan como ingreso. Se registran desde la cuenta de banco (<i>Bancos → Depósito de efectivo</i>).</p>` : ''}
+  ${isNewPeriod(S.mes) ? `<p class="muted" style="margin:12px 2px 0">Ingresos con fecha ${rangeLabel(S.mes)}: los depósitos que cuentan como ingreso. Se registran desde la cuenta de banco (<i>Bancos → Transferir o depositar → Depósito de efectivo</i>).</p>` : ''}
   ${rows.length && bancos().length ? `<div class="figs three"><div class="fig"><small>Ingresos del mes</small><b class="num">${money(sum(rows))}</b></div>
     <div class="fig" data-go="bancos"><small>Depositado en bancos</small><b class="num">${money(enBancos)}</b></div>
     <div class="fig"><small>Efectivo o sin banco</small><b class="num">${money(byBank[''] || 0)}</b></div></div>
@@ -1343,7 +1344,7 @@ V.ingresos = () => {
   <div class="toolbar"><div class="sumline" style="margin:0;flex:1"><span>${rows.length} ingresos</span><b class="num">${money(sum(rows))}</b></div>${can('bancos.editar') ? '<button class="btn primary desk-only" data-act="deposito">Depósito en cuenta</button>' : ''}</div>
   ${rows.length ? `<div class="list">${rows.slice().sort((a, b) => dtKey(b.Fecha_Registro).localeCompare(dtKey(a.Fecha_Registro))).map(r => `<button class="item" data-edit="${r._mov !== undefined ? 'Movimientos_Banco' : 'Ingresos_Detalle'}" data-id="${r._mov !== undefined ? r._mov : r.ID_DetIngresos}"><span class="dot" style="background:${r.Origen ? 'var(--teal)' : 'var(--good)'}"></span>
     <span class="tx"><b>${esc(r.Descripcion)}</b><small>${esc(bankName(r.ID_Banco))}${Number(r.Monto_Moneda) ? ', ' + usd(r.Monto_Moneda) + (r.Tipo_Cambio ? ' a ' + r.Tipo_Cambio : '') : ''}, ${fdatetime(r.Fecha_Registro)}${r._mov !== undefined ? ', depósito de efectivo' : ''}${r.Origen ? ', automático' : r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num pos">${money(r.Total)}</span></button>`).join('')}</div>`
-    : `<div class="panel empty"><b>No hay ingresos en este mes</b>Los ingresos se registran como <b>depósitos</b> en una cuenta de banco o en efectivo (<i>Bancos → Depósito de efectivo</i>) y aparecen aquí según su fecha.${can('bancos.editar') ? '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="deposito">Depósito en cuenta</button></div>' : ''}</div>`}`;
+    : `<div class="panel empty"><b>No hay ingresos en este mes</b>Los ingresos se registran como <b>depósitos</b> en una cuenta de banco o en efectivo (<i>Bancos → Transferir o depositar → Depósito de efectivo</i>) y aparecen aquí según su fecha.${can('bancos.editar') ? '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="deposito">Depósito en cuenta</button></div>' : ''}</div>`}`;
 };
 
 V.bancos = () => {
@@ -1369,7 +1370,7 @@ V.bancos = () => {
   <section class="section"><h3>Movimientos de ${esc(cur.Nombre)} <small>${S.bankAll ? 'todos los meses' : esc(mesLabel(S.mes)) + ', ' + rangeLabel(S.mes)}</small></h3>
     <p class="muted" style="font-size:12.5px;margin:-4px 0 8px">${inPer.length} ${inPer.length === 1 ? 'movimiento' : 'movimientos'}${S.bankAll ? '' : ' en este período'}${inPer.length > 250 ? ' (se muestran los 250 más recientes)' : ''}${led.start ? ' · saldo inicial ' + fcur(led.inicial, cur.Moneda) + ' (' + fdatetime(led.start) + ')' : ''}</p>
     <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="bankAll" ${S.bankAll ? 'checked' : ''}><span></span></span>Mostrar todos los meses</label>
-    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir entre cuentas</button><button class="btn" data-act="mov-dep">Depósito de efectivo</button>' : ''}${!ef && !efd && cur.Moneda === 'USD' ? `${ed ? '<button class="btn" data-act="usd-buy">Comprar dólares</button>' : ''}` : ''}${efd && ed ? '<button class="btn" data-act="efd-bank">Depositar en la cuenta en dólares</button><button class="btn" data-act="efd-cash">Cambiar a córdobas</button>' : ''}${ef && ed && hasUsdCash() ? '<button class="btn" data-act="ef-buy">Cambiar a dólares</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `${!ef && !efd ? '<button class="btn small" data-act="bank-edit">Editar esta cuenta</button>' : ''}<button class="btn small" data-act="bank-new">Agregar cuenta</button>` : ''}</div>
+    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir o depositar</button>' : ''}${!ef && !efd && cur.Moneda === 'USD' ? `${ed ? '<button class="btn" data-act="usd-buy">Comprar dólares</button>' : ''}` : ''}${efd && ed ? '<button class="btn" data-act="efd-bank">Depositar en la cuenta en dólares</button><button class="btn" data-act="efd-cash">Cambiar a córdobas</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `${!ef && !efd ? '<button class="btn small" data-act="bank-edit">Editar esta cuenta</button>' : ''}<button class="btn small" data-act="bank-new">Agregar cuenta</button>` : ''}</div>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">${efd ? 'Sube con los retiros hechos en dólares, los depósitos y lo que cambias o transfieres hacia aquí; baja con los gastos pagados con «Efectivo en dólares» y con lo que depositas en la cuenta en dólares o cambias a córdobas. No cuenta en el dinero disponible en córdobas.' : ef ? 'Sube con los retiros de cajero y los ingresos en efectivo; baja con los gastos pagados en efectivo.' : 'Sube con los ingresos depositados y las transferencias que recibes; baja con los retiros de cajero, los gastos con débito o pago directo y las transferencias que haces.'}</p>
     ${previosVista ? `<p class="muted" style="font-size:12.5px;margin:0 0 10px">${previosVista} ${previosVista === 1 ? 'movimiento es anterior' : 'movimientos son anteriores'} a los saldos actuales (${fdatetime(led.start)}): se muestran atenuados y no cambian el saldo.</p>` : ''}
     ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.pre ? 'var(--muted)' : r.amt >= 0 ? 'var(--good)' : 'var(--sun)'}"></span>
@@ -1663,11 +1664,11 @@ V.cortes = () => {
   const by = new Map(); all.filter(r => y === 'all' || yearOf(r.Mes_Anio) === y).forEach(r => { if (!by.has(r.Mes_Anio)) by.set(r.Mes_Anio, []); by.get(r.Mes_Anio).push(r); });
   const groups = [...by.entries()].map(([m, rs]) => [m, rs.sort((a, b) => tm(b).localeCompare(tm(a)))]).sort((a, b) => mesNum(b[0]) - mesNum(a[0]));
   const open = S.corteOpen || (S.corteOpen = new Set()), nCortes = groups.reduce((a, [, rs]) => a + rs.length, 0);
-  const cells = r => `<td>${fdate(r.Fecha_Registro)} ${String(r.Hora_Registro).slice(11, 16)}${truthy(r.Auto) ? ' <span class="pill open">automático</span>' : ''}</td><td class="n">${money(r.Total_Ingresos)}</td><td class="n">${money(r.Total_Presupuesto)}</td><td class="n">${money(r.Total_Gastos)}</td><td class="n">${money(r.Total_Ret_Efectivo)}</td><td class="n ${r.Disp_enMano < 0 ? 'neg' : ''}">${money(r.Disp_enMano)}</td><td class="n">${money(r.Dif_Ing_Gastos)}</td>`;
+  const cells = r => `<td>${fdate(r.Fecha_Registro)} ${String(r.Hora_Registro).slice(11, 16)}${truthy(r.Auto) ? ' <span class="pill open">automático</span>' : ''}</td><td class="motivo">${r.Motivo ? esc(r.Motivo) : `<span class="muted">${truthy(r.Auto) ? '—' : 'Corte guardado'}</span>`}</td><td class="n">${money(r.Total_Ingresos)}</td><td class="n">${money(r.Total_Presupuesto)}</td><td class="n">${money(r.Total_Gastos)}</td><td class="n">${money(r.Total_Ret_Efectivo)}</td><td class="n ${r.Disp_enMano < 0 ? 'neg' : ''}">${money(r.Disp_enMano)}</td><td class="n">${money(r.Dif_Ing_Gastos)}</td>`;
   return `<div class="toolbar" style="margin-top:0"><label class="ff" style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px;color:var(--ink2)"><span>Año</span><select class="input" data-bind="corteYear" style="width:auto"><option value="all" ${y === 'all' ? 'selected' : ''}>Todos los años</option>${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
     <span class="spacer"></span><span class="muted" style="font-size:13px">${groups.length} ${groups.length === 1 ? 'mes' : 'meses'}, ${nCortes} cortes</span></div>
-  <p class="muted" style="margin:6px 2px 12px">Se muestra el <b>último resumen de cada mes</b>. Toca <b>+</b> para ver todos los cortes guardados en ese mes. El resumen automático de cada período se actualiza solo cada vez que registras un gasto, un retiro, un depósito o cambias el presupuesto.</p>
-  ${groups.length ? `<div class="tablewrap"><table class="t cortes"><thead><tr><th>Mes</th><th>Actualizado</th><th class="n">Ingresos</th><th class="n">Presupuesto</th><th class="n">Gastos</th><th class="n">Retiros</th><th class="n">En mano</th><th class="n">Ing − gastos</th></tr></thead>
+  <p class="muted" style="margin:6px 2px 12px">Se muestra el <b>último corte de cada mes</b>. Toca <b>+</b> para ver todos los cortes del mes: cada gasto, retiro, depósito o cambio del presupuesto deja su propio corte automático, con el movimiento que lo generó.</p>
+  ${groups.length ? `<div class="tablewrap"><table class="t cortes"><thead><tr><th>Mes</th><th>Actualizado</th><th>Movimiento</th><th class="n">Ingresos</th><th class="n">Presupuesto</th><th class="n">Gastos</th><th class="n">Retiros</th><th class="n">En mano</th><th class="n">Ing − gastos</th></tr></thead>
   <tbody>${groups.map(([m, rs]) => `<tr data-mes="${esc(m)}"><td class="mcell">${rs.length > 1 ? `<button type="button" class="expand" data-corte="${esc(m)}" aria-expanded="${open.has(m)}" aria-label="${open.has(m) ? 'Ocultar' : 'Ver'} los ${rs.length} cortes de ${esc(mesLabel(m))}" title="${rs.length} cortes">${open.has(m) ? '−' : '+'}</button>` : '<span class="expand ph"></span>'}${esc(mesLabel(m))}${rs.length > 1 ? ` <small class="muted">(${rs.length})</small>` : ''}</td>${cells(rs[0])}</tr>`
     + (open.has(m) ? rs.slice(1).map(r => `<tr class="sub" data-mes="${esc(m)}"><td class="mcell muted">anterior</td>${cells(r)}</tr>`).join('') : '')).join('')}</tbody></table></div>`
     : '<div class="panel empty"><b>No hay cortes en este año</b>Elige otro año.</div>'}`;
@@ -2131,7 +2132,7 @@ async function submitForm() {
     if (F.done) F.done(Object.assign({}, o, {ID: rec ? rec[k] : 'tmp'}));
     Q.run(() => Backend.call('save', {table, row, mes})).then(ch => {
       if (o.__tmp) DB.apply({deletes: {[table]: [o.__tmp]}});
-      commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, o, rec)); if (!FORM) render();
+      commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, o, rec), motivoOf(table, o, rec ? 'edit' : 'new')); if (!FORM) render();
     }).catch(e => {
       undo(); render();
       toast(label + ' no se guardó: ' + e.message, true);
@@ -2144,7 +2145,7 @@ async function submitForm() {
   try {
     const ch = await Q.run(() => Backend.call('save', Object.assign({table, row, mes}, F.payload ? F.payload(o, rec) : {})));
     if (F.after) F.after(o, ch);
-    commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, o, rec)); closeModal(); render(); if (!F.doneModal) toast(label + ' guardad' + (F.g || 'o')); if (F.done) F.done(o);
+    commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, o, rec), motivoOf(table, o, rec ? 'edit' : 'new')); closeModal(); render(); if (!F.doneModal) toast(label + ' guardad' + (F.g || 'o')); if (F.done) F.done(o);
   } catch (e) { if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Guardar'; } toast('No se pudo guardar: ' + e.message, true); }
 }
 /** Vuelve a poner en el formulario lo que la persona había escrito (si el envío falló) */
@@ -2194,7 +2195,7 @@ function askDelete() {
 async function deleteRecord() {
   const table = FORM.table, k = DB.key(table), prev = Object.assign({}, FORM.rec), F = FORM.F, label = cap(F.t.toUpperCase()), g = F.g || 'o';
   DB.apply({deletes: {[table]: [prev[k]]}}); closeModal(); render(); toast(label + ' eliminad' + g);
-  Q.run(() => Backend.call('remove', Backend.online ? {table, id: prev[k]} : {table, id: prev[k], prev})).then(ch => { commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, prev, prev)); if (!FORM) render(); })
+  Q.run(() => Backend.call('remove', Backend.online ? {table, id: prev[k]} : {table, id: prev[k], prev})).then(ch => { commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, prev, prev), motivoOf(table, prev, 'del')); if (!FORM) render(); })
     .catch(e => { DB.apply({upserts: {[table]: [prev]}}); render(); toast(label + ' no se eliminó: ' + e.message, true); });
 }
 /** Período al que pertenece un registro de detalle (por su encabezado mensual) */
@@ -2232,31 +2233,42 @@ function cancelModal() { if (S.pendingGasto && FORM && FORM.table === 'Retiros_D
    en la hoja Resumen. Se agrupan las acciones seguidas en una sola actualización. */
 const RESUMEN_TABLES = ['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco'];
 const resumenOpen = mes => truthy((DB.idx().periodo[mes] || {}).Guardar_Resumen);
-const resumenRow = mes => (DB.t.Resumen || []).filter(r => r.Mes_Anio === mes && truthy(r.Auto)).pop();
+const resumenRow = mes => (DB.t.Resumen || []).filter(r => r.Mes_Anio === mes && truthy(r.Auto)).sort((a, b) => String(a.Hora_Registro).localeCompare(String(b.Hora_Registro)) || a.Id_Resumen - b.Id_Resumen).pop();
 function resumenPayload(mes) {
   const t = totals(mes), cur = periodForDate(todayISO());
   // el efectivo en mano es el de hoy: solo se actualiza en el período en curso (en los de Access, ingresos − gastos como siempre)
-  return {mes, Ingresos: t.I, Retiros: t.R, Disp_enMano: isNewPeriod(mes) ? (mes === cur ? disponible().mano : undefined) : t.mano};
+  return {mes, Ingresos: t.I, Presupuesto: t.P, Gastos: t.G, Retiros: t.R, Disp_enMano: isNewPeriod(mes) ? (mes === cur ? disponible().mano : undefined) : t.mano};
 }
-const resPend = new Set(); let resT = null;
-/** Períodos que cambian con un registro: el que se está viendo y el de su fecha (antes y después de editarlo) */
 function periodsOf(table, o, rec) {
   const out = [S.mes], df = DATE_FIELD[table] || (table === 'Movimientos_Banco' ? 'Fecha' : '');
   if (df && o && o[df]) out.push(periodForDate(o[df]));
   if (rec) { if (df && rec[df]) out.push(periodForDate(rec[df])); if (REL[table]) { try { out.push(recPeriod(table, rec)); } catch (e) {} } }
   return out;
 }
-function queueResumen(...ms) {
-  ms.flat().filter(Boolean).forEach(m => resPend.add(m));
-  clearTimeout(resT); resT = setTimeout(flushResumen, 1500);
+/** Texto del corte: qué movimiento lo generó */
+function motivoOf(table, o, acc) {
+  if (!o) return '';
+  const pre = acc === 'del' ? 'Eliminado · ' : acc === 'edit' ? 'Corregido · ' : '';
+  const d = isUsdDest(o.ID_Banco_Destino) ? 'USD' : 'NIO';
+  const m = {
+    Gastos_Detalle: () => `Gasto: ${o.Descripcion_Gasto || ''} ${money(o.Total)}`,
+    Retiros_Detalle: () => `Retiro: ${o.Efectivo_Moneda === 'USD' ? usd(o.Monto_Moneda) : money(o.Total)} de ${bankName(o.ID_Banco)}`,
+    Ingresos_Detalle: () => `Ingreso: ${o.Descripcion || ''} ${money(o.Total)}`,
+    Presupuesto_Detalle: () => `Partida: ${o.Descripcion || ''} ${money(o.Total)}`,
+    Movimientos_Banco: () => o.Tipo === 'Transferencia' ? `Transferencia: ${bankName(o.ID_Banco_Origen)} → ${bankName(o.ID_Banco_Destino)} ${fcur(o.Monto_Destino, d)}` : `${o.Tipo === 'Depósito' ? 'Depósito' : 'Ajuste'}: ${fcur(o.Monto_Destino, d)} en ${bankName(o.ID_Banco_Destino)}${o.Descripcion ? ' (' + o.Descripcion + ')' : ''}`
+  }[table];
+  return m ? pre + m().replace(/\s+/g, ' ').trim() : '';
+}
+/* Cada acción deja su propio corte: se toma la foto de los totales en ese momento y se envía en orden */
+const resQ = []; let resBusy = false;
+function queueResumen(ms, motivo) {
+  [...new Set([].concat(ms).flat().filter(Boolean))].forEach(mes => { if (resumenOpen(mes)) resQ.push(Object.assign(resumenPayload(mes), {motivo: motivo || ''})); });
+  flushResumen();
 }
 async function flushResumen() {
-  clearTimeout(resT); const list = [...resPend]; resPend.clear();
-  for (const mes of list) {
-    if (!resumenOpen(mes)) continue;
-    try { const ch = await Q.run(() => Backend.call('autoResumen', resumenPayload(mes))); if (ch && (ch.upserts || ch.deletes)) { commit(ch); if (!FORM && (S.view === 'inicio' || S.view === 'cortes')) render(); } }
-    catch (e) { /* se vuelve a intentar con la próxima acción */ }
-  }
+  if (resBusy) return; resBusy = true;
+  try { while (resQ.length) { const pl = resQ.shift(); try { const ch = await Q.run(() => Backend.call('autoResumen', pl)); if (ch && ch.upserts && Object.keys(ch.upserts).length) commit(ch); } catch (e) { /* se reintenta con la próxima acción */ } } }
+  finally { resBusy = false; if (!FORM && (S.view === 'inicio' || S.view === 'cortes')) render(); }
 }
 function openResumen() {
   const t = totals(S.mes), D = disponible(), abierto = resumenOpen(S.mes), a = resumenRow(S.mes), nuevo = isNewPeriod(S.mes);
@@ -2265,7 +2277,7 @@ function openResumen() {
     <div class="tablewrap" style="margin-bottom:14px"><table class="t"><tbody>
       ${[['Ingresos', t.I], ['Presupuesto', t.P], ['Gastos', t.G], ['Retiros de efectivo', t.R], ['Efectivo en mano', nuevo ? D.mano : t.mano], ...(nuevo ? [['Total disponible', D.total]] : []), ['Ingresos − presupuesto', t.IP], ['Ingresos − gastos', t.IG], ['Ingresos − retiros', t.IR]].map(([l, v]) => `<tr style="cursor:default"><td>${l}</td><td class="n ${v < 0 ? 'neg' : ''}">${money(v)}</td></tr>`).join('')}
     </tbody></table></div>
-    ${abierto ? `<p class="muted" style="font-size:13px;margin:0">Este resumen se guarda solo en la hoja Resumen cada vez que registras un gasto, un retiro, un depósito o cambias el presupuesto. ${a ? 'Última actualización: <b>' + esc(fdatetime(a.Hora_Registro)) + '</b>' : 'Se creará con el próximo movimiento o al tocar Actualizar ahora.'}</p>`
+    ${abierto ? `<p class="muted" style="font-size:13px;margin:0">Cada gasto, retiro, depósito o cambio del presupuesto deja un corte automático en la hoja Resumen. ${a ? 'Última actualización: <b>' + esc(fdatetime(a.Hora_Registro)) + '</b>' : 'Se creará con el próximo movimiento o al tocar Actualizar ahora.'}</p>`
       : '<div class="notice">Este período está cerrado para el resumen: ya no se actualiza solo. Ábrelo en Períodos (columna Resumen) para reactivarlo.</div>'}
     <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-close="1">Cerrar</button>${abierto ? '<button type="button" class="btn primary" data-act="resumen-now">Actualizar ahora</button>' : ''}</div></div></div>`;
 }
@@ -2442,13 +2454,13 @@ document.addEventListener('click', async e => {
   if (a === 'del-ok') return deleteRecord();
   if (a === 'del-cancel') { const bx = $('#frm .delbox'); if (bx) bx.remove(); return; }
   if (a === 'resumen') return openResumen();
-  if (a === 'resumen-now') { t.disabled = true; resPend.add(S.mes); await flushResumen(); closeModal(); render(); toast('Resumen actualizado'); return; }
+  if (a === 'resumen-now') { t.disabled = true; queueResumen(S.mes, 'Actualización manual'); while (resBusy) await new Promise(r => setTimeout(r, 80)); closeModal(); render(); toast('Resumen actualizado'); return; }
   if (a === 'copiar-ppto') {
     const prev = mesAnterior(S.mes), rows = detail('Presupuesto_Detalle', prev);
     const ya = detail('Presupuesto_Detalle', S.mes).length;
     if (!confirm(`Se agregarán ${rows.length} partidas de ${mesLabel(prev)} a ${mesLabel(S.mes)}${ya ? ` (ya hay ${ya}; podrían quedar duplicadas)` : ''}. ¿Continuar?`)) return;
     t.disabled = true;
-    try { const ch = await Backend.call('saveMany', {table: 'Presupuesto_Detalle', mes: S.mes, rows: rows.map(r => ({Cuenta_Gastos: r.Cuenta_Gastos, Total: r.Total, Cantidad: r.Cantidad, UM: r.UM, Descripcion: r.Descripcion}))}); commit(ch); queueResumen(S.mes); render(); toast(rows.length + ' partidas copiadas'); }
+    try { const ch = await Backend.call('saveMany', {table: 'Presupuesto_Detalle', mes: S.mes, rows: rows.map(r => ({Cuenta_Gastos: r.Cuenta_Gastos, Total: r.Total, Cantidad: r.Cantidad, UM: r.UM, Descripcion: r.Descripcion}))}); commit(ch); queueResumen(S.mes, 'Presupuesto copiado (' + rows.length + ' partidas)'); render(); toast(rows.length + ' partidas copiadas'); }
     catch (err) { t.disabled = false; toast('No se pudo copiar: ' + err.message, true); }
     return;
   }
@@ -2476,7 +2488,7 @@ document.addEventListener('click', async e => {
     const tb = FORM.table, rec = FORM.rec, to = t.dataset.to, rel = REL[tb], k = DB.key(tb), from = rel ? recPeriod(tb, rec) : null;
     if (!confirm(`¿Mover este registro a ${mesLabel(to)}?`)) return;
     t.disabled = true;
-    try { const ch = await Q.run(() => Backend.call('save', {table: tb, row: Object.assign({}, rec, tb === 'Gastos_Detalle' ? {ID_Partida: ''} : {}), mes: to})); commit(ch); queueResumen(from, to); closeModal(); render(); toast('Movido a ' + mesLabel(to)); }
+    try { const ch = await Q.run(() => Backend.call('save', {table: tb, row: Object.assign({}, rec, tb === 'Gastos_Detalle' ? {ID_Partida: ''} : {}), mes: to})); commit(ch); queueResumen([from, to], 'Movido a ' + mesLabel(to) + ' · ' + motivoOf(tb, rec, 'new')); closeModal(); render(); toast('Movido a ' + mesLabel(to)); }
     catch (err) { t.disabled = false; toast(err.message, true); }
     return;
   }
@@ -2522,7 +2534,7 @@ document.addEventListener('click', async e => {
   }
   if (a === 'deposito') return openDeposito();
   if (a === 'mov-dep') return openDeposito(S.banco);
-  if (a === 'mov-transfer' || a === 'mov-dep') { openForm('Movimientos_Banco'); if (a === 'mov-dep') { $('#f_Tipo').value = 'Depósito'; $('#f_ID_Banco_Destino').value = S.banco === 'ef' ? '0' : S.banco === 'efd' ? '-1' : S.banco; } else if (S.banco) { $('#f_ID_Banco_Origen').value = S.banco === 'ef' ? '0' : S.banco === 'efd' ? '-1' : S.banco; const o = bancos().find(b => String(b.ID_Banco) !== S.banco); if (o) $('#f_ID_Banco_Destino').value = o.ID_Banco; } formDynamics(); return; }
+  if (a === 'mov-transfer' || a === 'mov-dep') { openForm('Movimientos_Banco'); FORM.ctxBanco = S.banco === 'ef' ? '0' : S.banco === 'efd' ? '-1' : S.banco; if (a === 'mov-dep') { $('#f_Tipo').value = 'Depósito'; $('#f_ID_Banco_Destino').value = S.banco === 'ef' ? '0' : S.banco === 'efd' ? '-1' : S.banco; } else if (S.banco) { $('#f_ID_Banco_Origen').value = S.banco === 'ef' ? '0' : S.banco === 'efd' ? '-1' : S.banco; const o = bancos().find(b => String(b.ID_Banco) !== S.banco); if (o) $('#f_ID_Banco_Destino').value = o.ID_Banco; } formDynamics(); return; }
   if (a === 'repair') { t.disabled = true; try { const r = await Backend.call('repair'); toast((r.report || []).length ? r.report.length + ' correcciones aplicadas' : 'Todo estaba en orden'); await boot(); } catch (err) { toast(err.message, true); } t.disabled = false; return; }
   if (a === 'imp-ppto') return pickBudgetFile();
   if (a === 'tpl-ppto') return downloadBudgetTemplate();
@@ -2582,7 +2594,7 @@ document.addEventListener('submit', e => {
       commit(await Q.run(() => Backend.call('updateMany', {table: 'Bancos', rows})));
       commit(await Q.run(() => Backend.call('save', {table: 'Empresa', row: {Empresa: e0.Empresa, Efectivo_Inicial: r2(Number($('#sv_ef').value) || 0), Efectivo_USD_Inicial: $('#sv_efusd') ? r2(Number($('#sv_efusd').value) || 0) : (e0.Efectivo_USD_Inicial || 0), Fecha_Efectivo_Inicial: fecha, Inicio_App: e0.Inicio_App || d}})));
       if (carry.length) commit(await Q.run(() => Backend.call('removeMany', {table: 'Ingresos_Detalle', ids: carry.map(r => r.ID_DetIngresos)})));
-      queueResumen(periodForDate(todayISO())); closeModal(); render(); toast('Saldos guardados' + (carry.length ? ' y ' + carry.length + ' saldos de apertura quitados' : ''));
+      queueResumen(periodForDate(todayISO()), 'Saldos actuales'); closeModal(); render(); toast('Saldos guardados' + (carry.length ? ' y ' + carry.length + ' saldos de apertura quitados' : ''));
     } catch (err) { b.disabled = false; b.textContent = 'Guardar saldos'; toast(err.message, true); }
   })();
   if (e.target.id === 'frmImp') (async () => {
@@ -2591,7 +2603,7 @@ document.addEventListener('submit', e => {
     const oldP = detail('Presupuesto_Detalle', S.mes).slice(), linked = rep ? detail('Gastos_Detalle', S.mes).filter(g => hasId(g.ID_Partida) && Number(g.ID_Partida) > 0 && !isTmp(g.ID_Detalle_Gastos)) : [];
     const b = e.target.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Importando…';
     try { const ch = await Backend.call(rep ? 'replaceMany' : 'saveMany', {table: 'Presupuesto_Detalle', mes: S.mes, rows: I.rows.map(({_cta, ...r}) => r)});
-      commit(ch); queueResumen(S.mes);
+      commit(ch); queueResumen(S.mes, 'Presupuesto importado (' + I.rows.length + ' partidas)');
       // al reemplazar las partidas cambian sus números: los gastos vinculados se vuelven a ligar por cuenta y descripción
       let relig = 0; const newP = detail('Presupuesto_Detalle', S.mes);
       for (const g of linked.slice(0, 120)) { const op = oldP.find(x => String(x.ID_DetPresupuesto) === String(g.ID_Partida)), np = op && newP.find(x => x.Cuenta_Gastos === op.Cuenta_Gastos && nrm(x.Descripcion) === nrm(op.Descripcion));
@@ -2667,11 +2679,17 @@ document.addEventListener('change', async e => {
   if (el.id === 'ur' && $('#uperms')) { renderPerms(el.value, {}); return; }
   if (el.dataset.perm) { const def = roleDefaults($('#ur').value); el.closest('.perm').classList.toggle('custom', el.checked !== def[el.dataset.perm]); return; }
   if (FORM) { formDynamics(); if (FORM.F.fields.some(f => f.dep === el.name)) fillLists();
+    if (FORM.table === 'Movimientos_Banco' && el.name === 'Tipo' && FORM.ctxBanco !== undefined && !FORM.rec) {
+      const o = $('#f_ID_Banco_Origen'), d = $('#f_ID_Banco_Destino'), c = String(FORM.ctxBanco);
+      if (el.value === 'Depósito' && d && [...d.options].some(x => x.value === c)) d.value = c;                 // depositar en la cuenta que estás viendo
+      if (el.value === 'Transferencia' && o && d && [...o.options].some(x => x.value === c)) { o.value = c; const other = [...d.options].find(x => x.value !== c); if (other && d.value === c) d.value = other.value; }
+      formDynamics();
+    }
     if (el.id === 'f__periodo') return; if (el.name === 'ID_Partida') prefillFromPartida(el); if (el.name === 'Descripcion_Gasto') autofillFromHistory(el); return; }
   if (el.dataset.flag) {
     const p = DB.t.Mes_Anio.find(x => String(x.ID) === el.dataset.pid); const row = {ID: p.ID}; row[el.dataset.flag] = el.checked;
     el.disabled = true;
-    try { const ch = await Backend.call('save', {table: 'Mes_Anio', row}); commit(ch); if (el.dataset.flag === 'Guardar_Resumen' && el.checked) queueResumen(p.Mes_Anio); toast(`${el.closest('label').getAttribute('aria-label')}: ${el.checked ? 'activado' : 'desactivado'}`); }
+    try { const ch = await Backend.call('save', {table: 'Mes_Anio', row}); commit(ch); if (el.dataset.flag === 'Guardar_Resumen' && el.checked) queueResumen(p.Mes_Anio, 'Resumen reactivado'); toast(`${el.closest('label').getAttribute('aria-label')}: ${el.checked ? 'activado' : 'desactivado'}`); }
     catch (err) { el.checked = !el.checked; toast(err.message, true); }
     el.disabled = false; renderMonthPicker();
   }
