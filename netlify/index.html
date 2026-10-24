@@ -196,7 +196,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .bgroup:first-child{border-top:0}
 .bhead{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px;align-items:center}
 .bhead .t{font-weight:700}
-.bhead .meta{font-size:13px;color:var(--muted)}
+.bhead .meta{font-size:13px;color:var(--muted);grid-column:1 / -1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bhead .track{grid-column:1 / -1}
 .bline .num{white-space:nowrap}
 .bline{display:grid;grid-template-columns:minmax(0,1fr) 110px 120px;gap:10px;padding:8px 14px 8px 26px;font-size:14px;border-top:1px dashed var(--line);cursor:pointer;width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left}
@@ -408,6 +408,11 @@ button.drow:hover{background:var(--sunk)}
   .figs.three .fig b{font-size:13px}
   .figs.three .fig small{font-size:11px}
   .bcols{display:none}
+  .ppto-tools .spacer{display:none}
+  .bhead .meta{font-size:min(13px,3.75vw)}
+  .figs .fig b{font-size:min(18px,4.3vw)}
+  .figs.three{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .figs.three > .fig:last-child:nth-child(odd){grid-column:1 / -1}
   .bline{grid-template-columns:1fr 1fr;padding:9px 14px;font-size:13.5px;gap:3px 10px}
   .bline > span:first-child{grid-column:1 / -1}
   .bline .bp{text-align:left}
@@ -467,7 +472,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.23-2318';
+const APP_VERSION = '2026.10.24-1215';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -541,7 +546,7 @@ const DB = {
       this.t[name] = tb.rows.map(r => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(r[i]) : r[i]); return o; });
     }
     if (this.t.Mes_Anio) fixPeriodRows(this.t.Mes_Anio);
-    ['Bancos', 'Movimientos_Banco', 'Vehiculos'].forEach(n => { if (!this.t[n]) { this.t[n] = []; this.cols[n] = n === 'Bancos' ? ['ID_Banco'] : n === 'Vehiculos' ? ['ID_Vehiculo', 'Nombre', 'Placa', 'Detalle', 'Activo', 'Orden'] : ['ID_Mov']; } });
+    ['Bancos', 'Movimientos_Banco', 'Vehiculos', 'Tarjetas_Credito', 'Movimientos_Tarjeta'].forEach(n => { if (!this.t[n]) { this.t[n] = []; this.cols[n] = n === 'Bancos' ? ['ID_Banco'] : n === 'Vehiculos' ? ['ID_Vehiculo', 'Nombre', 'Placa', 'Detalle', 'Activo', 'Orden'] : n === 'Tarjetas_Credito' ? ['ID_Tarjeta', 'Nombre', 'Banco', 'ID_Banco', 'Ultimos4', 'Moneda', 'Limite', 'Dia_Corte', 'Dia_Pago', 'Descuento_Pct', 'Saldo_Inicial', 'Fecha_Inicial', 'Activa', 'Orden'] : n === 'Movimientos_Tarjeta' ? ['ID_MovTar', 'ID_Tarjeta', 'Fecha', 'Tipo', 'Descripcion', 'Monto', 'Pct_Desc', 'Descuento', 'Cargo', 'ID_Banco', 'Cuenta_Gastos', 'ID_Partida', 'ID_Gasto_Auto', 'Mes_Anio', 'Usuario', 'Fecha_Registro'] : ['ID_Mov']; } });
     this.ver++;
   },
   key(name) { return this.cols[name][0]; },
@@ -700,9 +705,18 @@ const usd = v => { v = r2(v); return (v < 0 ? '−' : '') + 'US$ ' + NF.format(M
 const fcur = (v, cur) => cur === 'USD' ? usd(v) : money(v);
 const bankName = id => id === '' || id === null || id === undefined || Number(id) === 0 ? 'Efectivo' : Number(id) === -1 ? 'Efectivo en dólares' : (banco(id) || {}).Nombre || 'Banco ' + id;
 const lastTC = () => Number(lsGet('tc')) || TC_DEF;
-/** Tipo de cambio del período (Períodos → T/C); si no tiene, el último que usaste */
-const tcFor = mes => { const p = (DB.idx().periodo || {})[mes]; return Number(p && p.Tipo_Cambio) || lastTC(); };
-const tcHint = () => { const p = DB.idx().periodo[S.mes]; return Number(p && p.Tipo_Cambio) ? 'T/C de ' + mesLabel(S.mes) + ' (Períodos)' : 'Este período no tiene T/C: se usa el último que registraste'; };
+/**
+ * Tipos de cambio del período (Períodos):
+ *  - compra: C$ que pagas por US$ 1 cuando compras dólares (de córdobas a dólares)      → columna Tipo_Cambio
+ *  - venta:  C$ que recibes por US$ 1 cuando cambias dólares a córdobas; también valora
+ *            en córdobas los saldos, retiros, gastos y depósitos en dólares            → columna Tipo_Cambio_Venta
+ * Si el período no tiene la tasa, se usa la última registrada (y la otra como respaldo).
+ */
+const tcFor = (mes, kind = 'venta') => { const p = (DB.idx().periodo || {})[mes] || {}, c = Number(p.Tipo_Cambio), v = Number(p.Tipo_Cambio_Venta);
+  return kind === 'compra' ? (c || Number(lsGet('tc_compra')) || v || lastTC()) : (v || Number(lsGet('tc_venta')) || c || lastTC()); };
+const tcHint = (kind = 'venta') => { const p = DB.idx().periodo[S.mes] || {}; return Number(kind === 'compra' ? p.Tipo_Cambio : p.Tipo_Cambio_Venta) ? `T/C de ${kind} de ${mesLabel(S.mes)} (Períodos)` : `Este período no tiene T/C de ${kind}: se usa el último registrado`; };
+/** En una transferencia: de córdobas a dólares se usa la tasa de compra; de dólares a córdobas, la de venta */
+const movTcKind = o => o.Tipo === 'Transferencia' && curOf(o.ID_Banco_Origen) !== 'USD' && curOf(o.ID_Banco_Destino) === 'USD' ? 'compra' : 'venta';
 /* ===== Dinero real: saldo de cada cuenta desde su saldo inicial =====
    Banco:   + ingresos depositados  − retiros de cajero  − gastos con débito o pago directo  ± transferencias
    Efectivo: + ingresos en efectivo + retiros de cajero  − gastos en efectivo                                */
@@ -725,6 +739,73 @@ function saldoLine(bid, monto, rec, cur0) {
   return h;
 }
 const after = (fecha, start) => !start || dtKey(fecha) >= start;
+/* ===== Tarjetas de crédito =====
+   Deuda = deuda inicial + compras (menos su descuento) + combustible pagado con la tarjeta + retiros de efectivo y su cargo − pagos.
+   Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta. */
+const tarjetas = all => (DB.t.Tarjetas_Credito || []).filter(c => all || truthy(c.Activa)).slice().sort((a, b) => (Number(a.Orden) || 0) - (Number(b.Orden) || 0));
+const tarjeta = id => (DB.t.Tarjetas_Credito || []).find(c => String(c.ID_Tarjeta) === String(id));
+const tarName = id => (tarjeta(id) || {}).Nombre || 'de crédito';
+const defaultTarjetaCuenta = () => ((DB.t.Cuentas || []).find(c => truthy(c.Cuenta_de_Gastos) && truthy(c.Activa) && /tarjeta/i.test(c.Cuentas)) || {}).Codigo || defaultGastoCuenta();
+function cardLedger(id) {
+  const c = tarjeta(id); if (!c) return {rows: [], deuda: 0, inicial: 0, start: ''};
+  const start = dtKey(c.Fecha_Inicial), out = [], cur = c.Moneda;
+  const add = (fecha, desc, amt, src, tipo, alt) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, alt, pre: !after(fecha, start)});
+  (DB.t.Movimientos_Tarjeta || []).filter(m => String(m.ID_Tarjeta) === String(id)).forEach(m => {
+    const src = {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, M = Number(m.Monto) || 0, cg = Number(m.Cargo) || 0, d = Number(m.Descuento) || 0;
+    if (m.Tipo === 'Pago') add(m.Fecha, 'Pago desde ' + bankName(m.ID_Banco) + (m.Descripcion ? ': ' + m.Descripcion : ''), -M, src, 'Pago');
+    else if (m.Tipo === 'Retiro de efectivo') add(m.Fecha, m.Descripcion || 'Retiro de efectivo', M + cg, src, 'Retiro de efectivo', cg ? 'incluye cargo de ' + fcur(cg, cur) : '');
+    else add(m.Fecha, m.Descripcion || 'Compra', M - d, src, 'Compra', d ? 'descuento ' + fcur(d, cur) : '');
+  });
+  DB.t.Consumo_Combustible.filter(f => String(f.ID_Tarjeta) === String(id) && Number(f.Costo) > 0).forEach(f => {
+    const d = r2((Number(f.Costo) || 0) * (Number(f.Pct_Desc) || 0));
+    add(f.Fecha, 'Combustible: ' + (Number(f.Litro) || 0).toFixed(2) + ' L' + (vehiculos().length > 1 ? ' (' + vehName(vehOf(f)) + ')' : ''), (Number(f.Costo) || 0) - d, {t: 'Consumo_Combustible', id: f.ID}, 'Combustible', d ? 'descuento ' + fcur(d, cur) : '');
+  });
+  out.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  let bal = Number(c.Saldo_Inicial) || 0; out.forEach(r => { if (r.pre) { r.bal = null; return; } bal = r2(bal + r.amt); r.bal = bal; });
+  return {rows: out, deuda: bal, inicial: Number(c.Saldo_Inicial) || 0, start};
+}
+/** Último corte, próximo corte y fecha límite de pago del último estado de cuenta */
+function cardCycle(c, now = new Date()) {
+  const dc = Number(c.Dia_Corte), dp = Number(c.Dia_Pago); if (!dc) return null;
+  const mk = (y, m, d) => new Date(y, m, Math.min(d, new Date(y, m + 1, 0).getDate()));
+  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let last = mk(t.getFullYear(), t.getMonth(), dc); if (last > t) last = mk(t.getFullYear(), t.getMonth() - 1, dc);
+  const next = mk(last.getFullYear(), last.getMonth() + 1, dc), prev = mk(last.getFullYear(), last.getMonth() - 1, dc);
+  let due = null; if (dp) { due = mk(last.getFullYear(), last.getMonth(), dp); if (due <= last) due = mk(last.getFullYear(), last.getMonth() + 1, dp); }
+  return {last, next, prev, due};
+}
+const isoD = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+function cardStatus(c) {
+  const L = cardLedger(c.ID_Tarjeta), cy = cardCycle(c), lim = Number(c.Limite) || 0;
+  const st = {L, cy, deuda: L.deuda, disponible: lim ? r2(lim - L.deuda) : null, pendiente: null};
+  if (!cy) return st;
+  const lastK = isoD(cy.last) + ' 23:59', live = L.rows.filter(r => !r.pre);
+  // si la deuda inicial se escribió después del último corte, se toma como el saldo de ese estado de cuenta
+  st.saldoCorte = L.start && L.start > lastK ? L.inicial : r2(L.inicial + live.filter(r => r.fecha <= lastK).reduce((a, r) => a + r.amt, 0));
+  st.pagosDesde = r2(-live.filter(r => r.fecha > lastK && r.amt < 0).reduce((a, r) => a + r.amt, 0));
+  st.consumosDesde = r2(live.filter(r => r.fecha > lastK && r.amt > 0).reduce((a, r) => a + r.amt, 0));
+  st.pendiente = Math.max(0, r2(st.saldoCorte - st.pagosDesde));
+  if (cy.due) st.dias = Math.round((cy.due - new Date(new Date().toDateString())) / 864e5);
+  return st;
+}
+function dueText(st, c) {
+  if (!st.cy) return 'Sin día de corte';
+  if (!(st.pendiente > 0)) return 'Al día';
+  const p = fcur(st.pendiente, c.Moneda);
+  if (st.cy.due && st.dias < 0) return `<span class="neg">Vencido: ${p}</span>`;
+  return st.cy.due ? `<span class="${st.dias <= 5 ? 'neg' : ''}">Pagar ${p} antes del ${fdate(isoD(st.cy.due))}${st.dias <= 5 ? ` (${st.dias === 0 ? 'hoy' : st.dias === 1 ? 'mañana' : 'en ' + st.dias + ' días'})` : ''}</span>` : 'Pagar ' + p;
+}
+/** Partida probable para el pago de una tarjeta: la de la cuenta cuyo nombre comparte una palabra con la tarjeta */
+function guessPartida(cardId, mes, cuenta) {
+  const words = String(tarName(cardId)).toLowerCase().split(/[^a-záéíóúñ0-9]+/).filter(w => w.length >= 4);
+  const p = partidasOf(mes, cuenta).find(x => words.some(w => String(x.Descripcion).toLowerCase().includes(w)));
+  return p ? Number(p.ID_DetPresupuesto) : '';
+}
+function partidaOptsFor(mes, cuenta) {
+  const {pr, m} = partidaSpent(mes, cuenta);
+  if (!pr.length) return [['', 'Esta cuenta no tiene partidas en ' + mesLabel(mes)]];
+  return [['', 'Elegir partida…'], ['0', 'Sin partida'], ...pr.map(p => [p.ID_DetPresupuesto, p.Descripcion + ' · queda ' + money(r2((Number(p.Total) || 0) - (m.get(String(p.ID_DetPresupuesto)) || 0)))])];
+}
 function ledger(bid) {
   const b = banco(bid); if (!b) return {rows: [], saldo: 0};
   const cur = b.Moneda, start = dtKey(b.Fecha_Inicial), out = [];
@@ -740,6 +821,7 @@ function ledger(bid) {
     if (String(m.ID_Banco_Origen) === String(bid) && m.Tipo === 'Transferencia') add(m.Fecha, 'Transferencia a ' + bankName(m.ID_Banco_Destino) + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto) || 0), src, {tipo: 'Transferencia'});
     if (String(m.ID_Banco_Destino) === String(bid)) add(m.Fecha, (m.Tipo === 'Depósito' ? 'Depósito de efectivo' : 'Transferencia de ' + bankName(m.ID_Banco_Origen)) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto_Destino) || 0, src, {tipo: m.Tipo});
   });
+  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Pago' && String(m.ID_Banco) === String(bid)).forEach(m => add(m.Fecha, 'Pago de tarjeta ' + tarName(m.ID_Tarjeta) + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto) || 0), {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, {tipo: 'Pago de tarjeta'}));
   out.sort((a, b) => a.fecha.localeCompare(b.fecha));
   let bal = Number(b.Saldo_Inicial) || 0; out.forEach(r => { if (r.pre) { r.bal = null; return; } bal = r2(bal + r.amt); r.bal = bal; });
   return {rows: out, saldo: bal, inicial: Number(b.Saldo_Inicial) || 0, start, previos: out.filter(r => r.pre).length};
@@ -749,6 +831,7 @@ function cashLedger() {
   if (!start) return {rows: [], saldo: 0, inicial: 0, start: ''};
   const add = (fecha, desc, amt, src, tipo) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, pre: !after(fecha, start)});
   DB.t.Ingresos_Detalle.filter(r => noBank(r) && !r.Origen && !isCarry(r)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Total) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, 'Ingreso en efectivo'));
+  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && (tarjeta(m.ID_Tarjeta) || {}).Moneda !== 'USD').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto) || 0, {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
   DB.t.Retiros_Detalle.filter(r => !r.Origen && r.Efectivo_Moneda !== 'USD').forEach(r => add(r.Fecha_Retiro, r.Movimiento + (banco(r.ID_Banco) ? ' (' + bankName(r.ID_Banco) + ')' : ''), Number(r.Total) || 0, {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, 'Retiro de efectivo'));
   DB.t.Gastos_Detalle.filter(r => noBank(r) && !r.Origen && !truthy(r.Efectivo_USD)).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(Number(r.Total) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, 'Gasto en efectivo'));
   (DB.t.Movimientos_Banco || []).filter(m => (m.Tipo === 'Depósito' || m.Tipo === 'Ajuste') && String(m.ID_Banco_Destino) === '0')
@@ -764,6 +847,7 @@ function cashUsdLedger() {
   const e = empresa(), start = dtKey(e.Fecha_Efectivo_Inicial), out = [];
   if (!start) return {rows: [], saldo: 0, inicial: 0, start: '', previos: 0};
   const add = (fecha, desc, amt, src, tipo) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, pre: !after(fecha, start)});
+  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && (tarjeta(m.ID_Tarjeta) || {}).Moneda === 'USD').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta), Number(m.Monto) || 0, {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
   DB.t.Retiros_Detalle.filter(r => r.Efectivo_Moneda === 'USD' && !r.Origen).forEach(r => add(r.Fecha_Retiro, r.Movimiento + ' (' + bankName(r.ID_Banco) + ')', Number(r.Monto_Moneda) || 0, {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, 'Retiro en dólares'));
   DB.t.Gastos_Detalle.filter(r => truthy(r.Efectivo_USD) && !r.Origen).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(Number(r.Monto_Moneda) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, 'Gasto en efectivo en dólares'));
   (DB.t.Movimientos_Banco || []).forEach(m => {
@@ -892,10 +976,21 @@ const Demo = {
     const ch = {upserts: {}, deletes: {}}; const row = Object.assign({}, p.row);
     if (p.table === 'Cuentas' && !String(row.Codigo || '').trim()) { row.Codigo = nextCodigo(); row.Cuentas_Gastos = row.Codigo + '-' + (row.Cuentas || ''); }
     if (p.table === 'Empresa' && p.oldKey !== undefined && String(p.oldKey) !== String(row.Empresa)) { const r0 = DB.t.Empresa.find(x => String(x.Empresa) === String(p.oldKey)); if (r0) { r0.Empresa = row.Empresa; ch.deletes.Empresa = [p.oldKey]; } }
-    if (p.table === 'Movimientos_Banco') { row.Usuario = 'demo'; row.Fecha_Registro = row.Fecha_Registro || todayISO(); if (p.mes) row.Mes_Anio = p.mes; }
+    if (p.table === 'Movimientos_Banco' || p.table === 'Movimientos_Tarjeta') { row.Usuario = 'demo'; row.Fecha_Registro = row.Fecha_Registro || todayISO(); if (p.mes) row.Mes_Anio = p.mes; }
     const saved = this._saveDet(p.table, row, p.mes, ch);
     if (p.table === 'Movimientos_Banco') this._syncGastoMov(saved, ch);
+    if (p.table === 'Movimientos_Tarjeta') this._syncGastoTar(saved, ch);
     return ch;
+  },
+  _syncGastoTar(m, ch) {
+    const c = tarjeta(m.ID_Tarjeta) || {}, need = m.Tipo === 'Pago' && m.ID_Banco !== '' && m.ID_Banco !== null && Number(m.Monto) > 0 && m.Mes_Anio;
+    const ex = m.ID_Gasto_Auto, exists = ex && DB.t.Gastos_Detalle.some(x => String(x.ID_Detalle_Gastos) === String(ex));
+    if (need) {
+      const row = {Fecha: m.Fecha, Cuenta_Gastos: m.Cuenta_Gastos || defaultTarjetaCuenta(), Descripcion_Gasto: 'Pago tarjeta ' + (c.Nombre || '') + (m.Descripcion ? ' (' + m.Descripcion + ')' : ''), Cantidad: 1, UM: 'Unidad', Total: Number(m.Monto), Precio_Unitario: Number(m.Monto), ID_Banco: m.ID_Banco, ID_Partida: m.ID_Partida || '', Origen: 'TAR:' + m.ID_MovTar, Descripcion_Adicional: 'Generado automáticamente'};
+      if (exists) row.ID_Detalle_Gastos = ex;
+      const g = this._saveDet('Gastos_Detalle', row, m.Mes_Anio, ch);
+      if (String(ex) !== String(g.ID_Detalle_Gastos)) this._add(ch, 'Movimientos_Tarjeta', this._upsert('Movimientos_Tarjeta', Object.assign({}, m, {ID_Gasto_Auto: g.ID_Detalle_Gastos})));
+    } else if (ex) { this._removeDet('Gastos_Detalle', ex, ch); this._add(ch, 'Movimientos_Tarjeta', this._upsert('Movimientos_Tarjeta', Object.assign({}, m, {ID_Gasto_Auto: ''}))); }
   },
   _syncGastoMov(m, ch) {
     const o = String(m.ID_Banco_Origen) === '0' ? {Moneda: 'NIO', ID_Banco: ''} : banco(m.ID_Banco_Origen), d = isUsdCashId(m.ID_Banco_Destino) ? {Moneda: 'USD', Nombre: 'Efectivo en dólares'} : banco(m.ID_Banco_Destino);
@@ -1111,7 +1206,7 @@ function render() {
   const fn = V[S.view] || V.inicio;
   COMBO = null;
   $('#view').innerHTML = fn(); syncCombos();
-  const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Movimientos_Banco', bancos: 'Movimientos_Banco', combustible: 'Consumo_Combustible', tarjetas: 'Referencias_Tarjetas'}[S.view];
+  const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Movimientos_Banco', bancos: 'Movimientos_Banco', combustible: 'Consumo_Combustible', tarjetas: 'Movimientos_Tarjeta'}[S.view];
   const fabOk = fabFor && (REL[fabFor] ? canAdd(REL[fabFor].mod) : can(FORMS[fabFor].perm));
   fab.hidden = !fabOk; fab.dataset.new = fabFor || ''; fab.dataset.dep = S.view === 'ingresos' ? '1' : '';
   $('#banner').innerHTML = Backend.mode === 'demo' ? `<div class="demo-banner">Modo demostración con los datos exportados de Access. Los cambios se guardan solo en esta pestaña.</div>` : '';
@@ -1247,6 +1342,7 @@ V.inicio = () => {
       <button class="drow" data-go="bancos" data-banco="ef"><span>${ico('cash')}Efectivo en mano</span><b class="num ${D.mano < 0 ? 'neg' : ''}">${money(D.mano)}</b></button>
       <div class="drow total"><span>Total disponible</span><b class="num ${D.total < 0 ? 'neg' : ''}">${money(D.total)}</b></div>
       ${D.usd.map(u => `<button class="drow usd" data-go="bancos" data-banco="${u.b.ID_Banco}"><span>${esc(u.b.Nombre)}, aparte del total</span><b class="num">${usd(u.v)}</b></button>`).join('')}
+      ${tarjetas().map(c => { const st = cardStatus(c); return st.deuda > 0.004 || st.pendiente > 0 ? `<button class="drow usd" data-go="tarjetas" data-tarjeta="${c.ID_Tarjeta}"><span>Tarjeta ${esc(c.Nombre)}, deuda<br><small>${dueText(st, c)}</small></span><b class="num">${fcur(st.deuda, c.Moneda)}</b></button>` : ''; }).join('')}
       ${hasUsdCash() && (D.efUsd || cashUsdLedger().rows.length) ? `<button class="drow usd" data-go="bancos" data-banco="efd"><span>Efectivo en dólares, aparte del total</span><b class="num">${usd(D.efUsd)}</b></button>` : ''}
     </div>
     ${D.configurado ? `<p class="muted" style="font-size:12.5px;margin:6px 2px 0">Saldos desde ${fdatetime(empresa().Fecha_Efectivo_Inicial)}</p>` : ''}</section>`; })()}
@@ -1306,7 +1402,7 @@ V.gastos = () => {
   ${S.all && !q && !S.cuenta ? '<div class="panel empty"><b>Busca en todo el historial</b>Escribe una descripción o elige una cuenta para buscar desde 2018.</div>' :
     n ? `<div class="list">${listGrouped(shown, 'Fecha', r => `
       <button class="item ${r._pending ? 'pending' : ''}" data-edit="Gastos_Detalle" data-id="${r.ID_Detalle_Gastos}">
-        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${hasTime(r.Fecha) ? ftime(r.Fecha) + ', ' : ''}${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.ID_Banco !== '' && r.ID_Banco !== undefined && banco(r.ID_Banco) ? (r.Origen ? ', compra de dólares desde ' : ', débito ') + esc(bankName(r.ID_Banco)) + (Number(r.Monto_Moneda) ? ' ' + usd(r.Monto_Moneda) : '') : truthy(r.Efectivo_USD) ? ', efectivo en dólares ' + usd(r.Monto_Moneda) : ''}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${hasId(r.ID_Partida) && Number(r.ID_Partida) && PD.get(String(r.ID_Partida)) ? ', partida ' + esc(PD.get(String(r.ID_Partida))) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
+        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${hasTime(r.Fecha) ? ftime(r.Fecha) + ', ' : ''}${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.ID_Banco !== '' && r.ID_Banco !== undefined && banco(r.ID_Banco) ? (r.Origen ? (String(r.Origen).startsWith('TAR:') ? ', pago de tarjeta desde ' : ', compra de dólares desde ') : ', débito ') + esc(bankName(r.ID_Banco)) + (Number(r.Monto_Moneda) ? ' ' + usd(r.Monto_Moneda) : '') : truthy(r.Efectivo_USD) ? ', efectivo en dólares ' + usd(r.Monto_Moneda) : ''}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${hasId(r.ID_Partida) && Number(r.ID_Partida) && PD.get(String(r.ID_Partida)) ? ', partida ' + esc(PD.get(String(r.ID_Partida))) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
         <span class="amt num">${money(r.Total)}${Number(r.Cantidad) > 1 ? `<small>${money(r.Precio_Unitario)} c/u</small>` : ''}</span>
       </button>`)}</div>` : `<div class="panel empty"><b>No hay gastos${q || S.cuenta ? ' con ese filtro' : ' en este mes'}</b>${canEdit('Gastos') ? 'Usa Registrar gasto para agregar el primero.' : ''}</div>`}`;
 };
@@ -1402,7 +1498,7 @@ V.presupuesto = () => {
     <div class="fig"><small>Sin asignar</small><b class="num ${dinero - tp < 0 ? 'neg' : ''}">${money(dinero - tp)}</b></div>
   </div>
   ${enCurso ? `<p class="muted" style="font-size:12.5px;margin:8px 2px 0">Dinero para el período = lo que tienes hoy en cuentas y efectivo (${money(disponible().total)}) más lo gastado en el período (${money(gastado)}). Incluye los saldos con que empezaste, no solo los depósitos de este período.</p>` : ''}
-  <div class="toolbar"><span class="spacer"></span>
+  <div class="toolbar ppto-tools"><span class="spacer"></span>
 ${groups.length ? `    <button class="btn" data-act="tpl-ppto">Descargar plantilla</button>
     ${ed ? '<button class="btn" data-act="imp-ppto">Importar desde Excel</button>' : ''}
     ${ed && prevRows.length ? `<button class="btn" data-act="copiar-ppto">Copiar de ${esc(mesLabel(prev))}</button>` : ''}
@@ -1419,7 +1515,7 @@ ${groups.length ? `    <button class="btn" data-act="tpl-ppto">Descargar plantil
     : `<div class="panel empty"><b>${esc(mesLabel(S.mes))} todavía no tiene presupuesto</b>Período ${rangeLabel(S.mes)}. ${ed ? 'Elige cómo cargarlo:' : 'El período está cerrado o no tienes permiso para editar el presupuesto.'}
       ${ed ? `<div class="row" style="justify-content:center;margin-top:14px">
         <button class="btn primary" data-act="imp-ppto">Importar desde Excel</button>
-        ${prevRows.length ? `<button class="btn" data-act="copiar-ppto">Copiar ${prevRows.length} partidas de ${esc(mesLabel(prev))}</button>` : ''}
+        ${prevRows.length ? `<button class="btn" data-act="copiar-ppto">Copiar ${prevRows.length} ${prevRows.length === 1 ? 'partida' : 'partidas'} de ${esc(mesLabel(prev))}</button>` : ''}
         <button class="btn" data-act="tpl-ppto">Descargar plantilla</button>
         <button class="btn" data-new="Presupuesto_Detalle">Agregar partida</button></div>` : ''}</div>`}`;
 };
@@ -1642,17 +1738,44 @@ V.combustible = () => {
 };
 
 V.tarjetas = () => {
+  const TL = tarjetas(), ed = can('tarjetas.editar'), adm = can('catalogos.editar');
+  if (!S.tarjeta || !TL.some(c => String(c.ID_Tarjeta) === String(S.tarjeta))) S.tarjeta = TL[0] ? String(TL[0].ID_Tarjeta) : '';
+  // historial de Access (consumos con tarjeta de antes de esta app)
   let rows = DB.t.Referencias_Tarjetas.slice().sort((a, b) => String(b.Fecha).localeCompare(String(a.Fecha)));
-  const pend = rows.filter(r => !truthy(r.Pagado));
-  if (S.pend) rows = pend;
+  const pend = rows.filter(r => !truthy(r.Pagado)); if (S.pend) rows = pend;
+  const legacy = DB.t.Referencias_Tarjetas.length ? `<section class="section"><h3>Consumos anteriores <small>registrados en Access (${DB.t.Referencias_Tarjetas.length})</small></h3>
+    <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="tarLegacy" ${S.tarLegacy ? 'checked' : ''}><span></span></span>Mostrar el historial de Access</label>
+    ${S.tarLegacy ? `<div class="toolbar" style="margin-top:0"><div class="tabs" style="margin:0"><button class="tab" data-pend="0" aria-pressed="${!S.pend}">Todos</button><button class="tab" data-pend="1" aria-pressed="${S.pend}">Pendientes (${pend.length})</button></div></div>
+    ${rows.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Concepto</th><th class="n">Valor</th><th class="n">Descuento</th><th class="n">A pagar</th><th>Estado</th><th>Referencia de pago</th></tr></thead>
+  <tbody>${rows.map(r => `<tr data-edit="Referencias_Tarjetas" data-id="${r.ID}"><td>${fdatetime(r.Fecha)}</td><td>${esc(r.Tarjeta_Credito)}</td><td>${esc(r.Observacion_Gastos)}</td><td class="n">${money(r.Valor)}</td><td class="n">${money(r.Descuento)}</td><td class="n">${money(r.Pagar)}</td><td>${truthy(r.Pagado) ? '<span class="pill open">Pagado</span>' : '<span class="pill bad">Pendiente</span>'}</td><td>${esc(r.Referencias_Pago)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>No hay consumos pendientes</b></div>'}` : ''}</section>` : '';
+  if (!TL.length) return `<div class="panel empty" style="margin-top:12px"><b>Aún no hay tarjetas de crédito activas</b>${adm ? '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="tar-new">Agregar tarjeta</button></div>' : ''}</div>${legacy}`;
+  const c = tarjeta(S.tarjeta), st = cardStatus(c), cy = st.cy, cur = c.Moneda;
+  const lastK = cy ? isoD(cy.prev) : '';
+  const shown = (S.tarAll || !cy ? st.L.rows : st.L.rows.filter(r => r.fecha > lastK)).slice().reverse().slice(0, 250);
   return `
-  <div class="figs two">
-    <div class="fig"><small>Consumos registrados</small><b class="num">${DB.t.Referencias_Tarjetas.length}</b></div>
-    <div class="fig"><small>Pendiente de pago</small><b class="num ${pend.length ? 'neg' : ''}">${money(sum(pend, 'Pagar'))}</b></div>
+  <section class="section"><div class="bankgrid">
+    ${TL.map(t => { const s2 = cardStatus(t); return `<button class="bankcard ${String(t.ID_Tarjeta) === S.tarjeta ? 'on' : ''}" data-tarjeta="${t.ID_Tarjeta}"><small>${esc(t.Banco || 'Tarjeta')}${t.Ultimos4 ? ' · ' + esc(t.Ultimos4) : ''}</small><b>${esc(t.Nombre)}</b><span class="num bal" style="--n:${fcur(s2.deuda, t.Moneda).length}">${fcur(s2.deuda, t.Moneda)}</span><small>${dueText(s2, t)}</small></button>`; }).join('')}
+  </div></section>
+  ${!cy ? `<div class="notice" style="margin-top:12px"><span>Escribe el <b>día de corte</b> y el <b>día límite de pago</b> de ${esc(c.Nombre)} para ver su estado de cuenta.</span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button>' : ''}</div>` : ''}
+  <div class="figs three fuelfigs" style="margin-top:12px">
+    <div class="fig"><small>Deuda total</small><b class="num ${st.deuda > 0 ? 'neg' : ''}">${fcur(st.deuda, cur)}</b></div>
+    <div class="fig"><small>Saldo al corte${cy ? ' (' + fdate(isoD(cy.last)) + ')' : ''}</small><b class="num">${cy ? fcur(st.saldoCorte, cur) : '—'}</b></div>
+    <div class="fig"><small>Por pagar${cy && cy.due ? ' antes del ' + fdate(isoD(cy.due)) : ''}</small><b class="num ${st.pendiente > 0 && st.dias <= 5 ? 'neg' : ''}">${cy ? fcur(st.pendiente, cur) : '—'}</b></div>
+    <div class="fig"><small>Consumos desde el corte</small><b class="num">${cy ? fcur(st.consumosDesde, cur) : '—'}</b></div>
+    <div class="fig"><small>Pagado desde el corte</small><b class="num">${cy ? fcur(st.pagosDesde, cur) : '—'}</b></div>
+    <div class="fig"><small>Disponible${Number(c.Limite) ? ' de ' + fcur(c.Limite, cur) : ''}</small><b class="num">${st.disponible !== null ? fcur(st.disponible, cur) : '—'}</b></div>
   </div>
-  <div class="toolbar"><div class="tabs" style="margin:0"><button class="tab" data-pend="0" aria-pressed="${!S.pend}">Todos</button><button class="tab" data-pend="1" aria-pressed="${S.pend}">Pendientes (${pend.length})</button></div><span class="spacer"></span>${can('tarjetas.editar') ? '<button class="btn primary desk-only" data-new="Referencias_Tarjetas">Registrar consumo</button>' : ''}</div>
-  ${rows.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Concepto</th><th class="n">Valor</th><th class="n">Descuento</th><th class="n">A pagar</th><th>Estado</th><th>Referencia de pago</th></tr></thead>
-  <tbody>${rows.map(r => `<tr data-edit="Referencias_Tarjetas" data-id="${r.ID}"><td>${fdatetime(r.Fecha)}</td><td>${esc(r.Tarjeta_Credito)}</td><td>${esc(r.Observacion_Gastos)}</td><td class="n">${money(r.Valor)}</td><td class="n">${money(r.Descuento)}</td><td class="n">${money(r.Pagar)}</td><td>${truthy(r.Pagado) ? '<span class="pill open">Pagado</span>' : '<span class="pill bad">Pendiente</span>'}</td><td>${esc(r.Referencias_Pago)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>No hay consumos pendientes</b></div>'}`;
+  ${cy ? `<p class="muted" style="font-size:12.5px;margin:8px 2px 0">Corte el día ${c.Dia_Corte} de cada mes${c.Dia_Pago ? ', pago hasta el día ' + c.Dia_Pago : ''}. Próximo corte: ${fdate(isoD(cy.next))}. ${st.pendiente > 0 && cy.due ? (st.dias < 0 ? `<b class="neg">El pago venció hace ${-st.dias} ${st.dias === -1 ? 'día' : 'días'}.</b>` : `Faltan <b>${st.dias}</b> ${st.dias === 1 ? 'día' : 'días'} para el límite de pago.`) : ''}</p>` : ''}
+  <section class="section"><h3>Movimientos de ${esc(c.Nombre)} <small>${S.tarAll || !cy ? 'todos' : 'desde el corte del ' + fdate(lastK)}</small></h3>
+    <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="tarAll" ${S.tarAll ? 'checked' : ''}><span></span></span>Mostrar todos</label>
+    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="tar-mov">Registrar movimiento</button><button class="btn" data-act="tar-pay">Pagar tarjeta</button>' : ''}<span class="spacer"></span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button><button class="btn small" data-act="tar-new">Agregar tarjeta</button>' : ''}</div>
+    <p class="muted" style="font-size:12.5px;margin:0 0 10px">Suben la deuda las compras (menos su descuento), el combustible pagado con la tarjeta y los retiros de efectivo con su cargo; la bajan los pagos. Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta.</p>
+    ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt < 0 ? 'var(--good)' : 'var(--sun)'}"></span>
+      <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)}${r.alt ? ', ' + esc(r.alt) : ''}</small></span>
+      <span class="amt num ${r.amt < 0 ? 'pos' : ''}">${r.amt > 0 ? '+' : '−'}${fcur(Math.abs(r.amt), cur)}<small>${r.pre ? 'Anterior a la deuda inicial' : 'Deuda ' + fcur(r.bal, cur)}</small></span></button>`).join('')}</div>`
+      : `<div class="panel empty"><b>Sin movimientos ${S.tarAll || !cy ? '' : 'desde el corte'}</b>Registra compras, retiros y pagos, o paga el combustible con esta tarjeta.</div>`}
+  </section>
+  ${legacy}`;
 };
 
 V.cortes = () => {
@@ -1675,6 +1798,7 @@ V.cortes = () => {
 };
 
 const CATS = {
+  Tarjetas_Credito: {t: 'Tarjetas de crédito', cols: [['Nombre', 'Nombre'], ['Banco', 'Banco'], ['Dia_Corte', 'Corte'], ['Dia_Pago', 'Pago'], ['Saldo_Inicial', 'Deuda inicial', 'n'], ['Activa', 'Activa', 'b']]},
   Bancos: {t: 'Cuentas de banco', cols: [['Nombre', 'Nombre'], ['Banco', 'Banco'], ['Moneda', 'Moneda'], ['Saldo_Inicial', 'Saldo inicial', 'n'], ['Fecha_Inicial', 'Desde', 'd'], ['Activa', 'Activa', 'b']]},
   Cuentas: {t: 'Cuentas', cols: [['Codigo', 'Código'], ['Cuentas', 'Nombre'], ['Cuenta_de_Gastos', 'Gasto', 'b'], ['Cuenta_de_Ingresos', 'Ingreso', 'b'], ['Activa', 'Activa', 'b']]},
   Items: {t: 'Artículos de gasto', cols: [['Descripcion', 'Descripción'], ['Cuenta', 'Cuenta', 'c'], ['UM', 'Unidad', 'u']]},
@@ -1700,15 +1824,15 @@ V.periodos = () => {
   const D = diaInicio(), hoyP = periodForDate(todayISO());
   const actP = activePeriod();
   return `<div class="notice info" style="margin-top:4px"><span>${actP ? `Período activo: <b>${esc(mesLabel(actP))}</b> (${rangeLabel(actP)}). Es el que la app usa por defecto en Gastos, Retiros, Ingresos y Presupuesto.` : 'No hay ningún período activo: activa la columna Abierto del mes en curso.'}</span></div>
-  <p class="muted" style="font-size:13px;margin:0 0 10px">La columna <b>T/C</b> es el tipo de cambio (C$ por US$) de cada período: se propone al registrar movimientos con la cuenta en dólares.</p>
+  <p class="muted" style="font-size:13px;margin:0 0 10px"><b>T/C compra</b>: córdobas que pagas por US$ 1 cuando compras dólares (de córdobas a dólares). <b>T/C venta</b>: córdobas que recibes por US$ 1 cuando cambias dólares a córdobas; también se usa para valorar en córdobas los saldos, retiros, gastos y depósitos en dólares. Cada movimiento propone la que le corresponde.</p>
   <p class="muted">Cada período va del día ${D} de su mes al ${D - 1 || 'último'} del mes siguiente (cobras el ${D}). Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
   ${can('periodos.gestionar') ? `<div class="row" style="margin:0 0 12px;gap:10px"><label for="diaIni" style="font-weight:600;font-size:14px">El período empieza el día</label>
     <select class="input" id="diaIni" style="width:auto">${Array.from({length: 28}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === D ? 'selected' : ''}>${n}</option>`).join('')}</select>
     <span class="muted" style="font-size:13px">Hoy corresponde a <b>${esc(mesLabel(hoyP))}</b>.</span></div>` : ''}
   ${Backend.online && can('periodos.gestionar') ? '<div class="notice info"><span>Si un período aparece como fecha (por ejemplo 2026 09) o con datos en cero, revisa la hoja.</span><button class="btn small" data-act="repair">Revisar y reparar períodos</button></div>' : ''}
   <div class="toolbar"><div class="tabs" style="margin:0">${years.map(y => `<button class="tab" data-anio="${y}" aria-pressed="${String(y) === String(S.anio)}">${y}</button>`).join('')}</div><span class="spacer"></span>${can('periodos.gestionar') ? `<button class="btn" data-act="add-year">Crear año ${Math.max(...years) + 1}</button>` : ''}</div>
-  <div class="tablewrap"><table class="t"><thead><tr><th>Mes</th><th>Fechas</th>${flags.map(f => `<th>${f[1]}</th>`).join('')}<th>T/C</th><th></th></tr></thead>
-  <tbody>${ps.filter(p => String(p.Anio) === String(S.anio)).map(p => `<tr style="cursor:default" ${p.Mes_Anio === hoyP ? 'class="cur"' : ''}><td><b>${cap(p.Mes)}</b>${p.Mes_Anio === hoyP ? ' <span class="pill open">actual</span>' : ''}</td><td class="muted">${rangeLabel(p.Mes_Anio)}</td>${flags.map(([f, l]) => `<td><label class="toggle" aria-label="${l} ${cap(p.Mes)}"><input type="checkbox" data-flag="${f}" data-pid="${p.ID}" ${truthy(p[f]) ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></label></td>`).join('')}<td><input class="input tcin" type="number" step="any" inputmode="decimal" data-tcpid="${p.ID}" value="${esc(p.Tipo_Cambio ?? '')}" placeholder="—" aria-label="Tipo de cambio ${cap(p.Mes)}" ${can('periodos.gestionar') ? '' : 'disabled'}></td><td><button class="btn small" data-goto-mes="${p.Mes_Anio}">Ver</button></td></tr>`).join('')}</tbody></table></div>`;
+  <div class="tablewrap"><table class="t"><thead><tr><th>Mes</th><th>Fechas</th>${flags.map(f => `<th>${f[1]}</th>`).join('')}<th title="C$ que pagas por US$ 1 al comprar dólares">T/C compra</th><th title="C$ que recibes por US$ 1 al cambiar dólares a córdobas">T/C venta</th><th></th></tr></thead>
+  <tbody>${ps.filter(p => String(p.Anio) === String(S.anio)).map(p => `<tr style="cursor:default" ${p.Mes_Anio === hoyP ? 'class="cur"' : ''}><td><b>${cap(p.Mes)}</b>${p.Mes_Anio === hoyP ? ' <span class="pill open">actual</span>' : ''}</td><td class="muted">${rangeLabel(p.Mes_Anio)}</td>${flags.map(([f, l]) => `<td><label class="toggle" aria-label="${l} ${cap(p.Mes)}"><input type="checkbox" data-flag="${f}" data-pid="${p.ID}" ${truthy(p[f]) ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></label></td>`).join('')}<td><input class="input tcin" type="number" step="any" inputmode="decimal" data-tcpid="${p.ID}" data-tckey="Tipo_Cambio" value="${esc(p.Tipo_Cambio ?? '')}" placeholder="—" aria-label="T/C de compra ${cap(p.Mes)}" ${can('periodos.gestionar') ? '' : 'disabled'}></td><td><input class="input tcin" type="number" step="any" inputmode="decimal" data-tcpid="${p.ID}" data-tckey="Tipo_Cambio_Venta" value="${esc(p.Tipo_Cambio_Venta ?? '')}" placeholder="—" aria-label="T/C de venta ${cap(p.Mes)}" ${can('periodos.gestionar') ? '' : 'disabled'}></td><td><button class="btn small" data-goto-mes="${p.Mes_Anio}">Ver</button></td></tr>`).join('')}</tbody></table></div>`;
 };
 
 const loadUsers = () => Backend.call('listUsers').then(r => { S.users = r.users; S.roles = r.roles; S.permisos = r.permisos; if (S.view === 'conexion') render(); }).catch(e => toast(e.message, true));
@@ -1790,7 +1914,7 @@ const FORMS = {
     {k: 'UM', l: 'Unidad', ty: 'select', half: 1, opts: optsUM, def: 'Unidad'},
     {k: 'ID_Banco', l: 'Forma de pago', ty: 'select', live: o => saldoLine(o.ID_Banco === '' ? 0 : o.ID_Banco, isUsdPay(o.ID_Banco) ? o.Monto_Moneda : o.Total, FORM && FORM.rec && (truthy(FORM.rec.Efectivo_USD) ? FORM.rec : (FORM.rec.ID_Banco === '' || !banco(FORM.rec.ID_Banco)) ? {ID_Banco: 0, Total: FORM.rec.Total} : FORM.rec)), opts: () => [['', hasUsdCash() ? 'Efectivo en córdobas' : 'Efectivo'], ...(hasUsdCash() ? [[EFUSD, 'Efectivo en dólares (US$)']] : []), ...bancos().map(b => [b.ID_Banco, 'Débito o pago directo desde ' + b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')])], def: () => lsGet('pago_gasto') ?? ''},
     {k: 'Monto_Moneda', l: 'Monto (US$)', ty: 'number', req: 1, step: '0.01', half: 1, show: o => isUsdPay(o.ID_Banco)},
-    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: () => tcFor(S.mes), hint: tcHint, show: o => isUsdPay(o.ID_Banco)},
+    {k: 'Tipo_Cambio', l: 'Tipo de cambio de venta (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: () => tcFor(S.mes), hint: tcHint, show: o => isUsdPay(o.ID_Banco)},
     {k: 'Total', l: 'Total (C$)', ty: 'number', req: 1, step: '0.01', show: o => !isUsdPay(o.ID_Banco)},
     {k: 'Descripcion_Adicional', l: 'Nota', ty: 'text'}],
     preview: o => {
@@ -1829,7 +1953,7 @@ const FORMS = {
     {k: 'Descripcion', l: 'Concepto', ty: 'text', req: 1, list: () => [...DB.t.Items_Ingresos.map(i => i.Descripcion), ...histDesc('Ingresos_Detalle', 'Descripcion')]},
     {k: 'ID_Banco', l: 'Depositado en', ty: 'select', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), [0, 'Efectivo, sin banco']], def: () => lsGet('bank_ing') ?? (bancos().find(b => b.Moneda === 'NIO') || {}).ID_Banco ?? ''},
     {k: 'Monto_Moneda', l: 'Monto recibido (US$)', ty: 'number', req: 1, step: '0.01', half: 1, show: o => isUsdBank(o.ID_Banco)},
-    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: () => tcFor(S.mes), hint: tcHint, show: o => isUsdBank(o.ID_Banco)},
+    {k: 'Tipo_Cambio', l: 'Tipo de cambio de venta (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: () => tcFor(S.mes), hint: tcHint, show: o => isUsdBank(o.ID_Banco)},
     {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01', show: o => !isUsdBank(o.ID_Banco)},
     {k: 'Cuenta_Ingresos', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(false), def: 'C001', half: 1},
     {k: 'Fecha_Registro', l: 'Fecha y hora del ingreso', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo entró el dinero.'},
@@ -1844,7 +1968,7 @@ const FORMS = {
     {k: 'Movimiento', l: 'Tipo de retiro', ty: 'text', req: 1, list: () => ['Retiro de Cajero Automatico', 'Retiro sin tarjeta'], def: 'Retiro de Cajero Automatico'},
     {k: 'Monto_Moneda', l: 'Monto (US$)', ty: 'number', req: 1, step: '0.01', show: o => isUsdBank(o.ID_Banco) && o.Efectivo_Moneda === 'USD'},
     {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01', show: o => !(isUsdBank(o.ID_Banco) && o.Efectivo_Moneda === 'USD')},
-    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', def: () => tcFor(S.mes), hint: tcHint, show: o => isUsdBank(o.ID_Banco) && o.Efectivo_Moneda !== 'USD'}],
+    {k: 'Tipo_Cambio', l: 'Tipo de cambio de venta (C$ por US$)', ty: 'number', req: 1, step: 'any', def: () => tcFor(S.mes), hint: tcHint, show: o => isUsdBank(o.ID_Banco) && o.Efectivo_Moneda !== 'USD'}],
     label: o => ({Total: isUsdBank(o.ID_Banco) ? 'Córdobas que recibo (C$)' : 'Monto (C$)'}),
     validate: o => { if (!saldosConfigurados()) return ''; const a = availOf(o.ID_Banco, FORM.rec), m = isUsdBank(o.ID_Banco) ? retiroUsd(o) : Number(o.Total); return m > a.v + 0.005 ? `No alcanza: ${esc(a.name)} tiene ${fcur(a.v, a.cur)} y el retiro es de ${fcur(m, a.cur)}` : ''; },
     preview: o => {
@@ -1873,7 +1997,7 @@ const FORMS = {
     {k: 'Cuenta_Gastos', l: 'Registrar el gasto en la cuenta', ty: 'select', opts: () => optsCuentas(true), def: () => defaultGastoCuenta(), fillEmpty: 1, show: isBuyUsd, hint: 'Los córdobas que pasan a dólares salen de lo que puedes gastar, por eso se registran como gasto.'},
     {k: 'Descripcion', l: 'Nota', ty: 'text', list: () => [...DB.t.Items_Ingresos.map(i => i.Descripcion).filter(d => !/saldo de mes anterior|egreso/i.test(d)), ...histDesc('Movimientos_Banco', 'Descripcion')]}],
     label: o => { const u = curOf(o.ID_Banco_Destino) === 'USD' ? 'US$' : 'C$';
-      return {Descripcion: o.Tipo === 'Depósito' ? 'Concepto (salario, bono, pago recibido…)' : 'Nota', Monto_Destino: o.Tipo === 'Transferencia' ? 'Monto que entra a ' + bankName(o.ID_Banco_Destino) + ' (' + u + ')' : o.Tipo === 'Depósito' ? 'Monto a depositar (' + u + ')' : 'Monto (' + u + '), negativo para restar',
+      return {Tipo_Cambio: 'Tipo de cambio de ' + movTcKind(o) + ' (C$ por US$)', Descripcion: o.Tipo === 'Depósito' ? 'Concepto (salario, bono, pago recibido…)' : 'Nota', Monto_Destino: o.Tipo === 'Transferencia' ? 'Monto que entra a ' + bankName(o.ID_Banco_Destino) + ' (' + u + ')' : o.Tipo === 'Depósito' ? 'Monto a depositar (' + u + ')' : 'Monto (' + u + '), negativo para restar',
         ID_Banco_Destino: o.Tipo === 'Transferencia' ? 'Hacia' : o.Tipo === 'Depósito' ? 'Depositar en' : 'Cuenta'}; },
     preview: o => { const dest = Number(o.Monto_Destino) || 0; if (!dest) return '';
       const cd = curOf(o.ID_Banco_Destino);
@@ -1896,7 +2020,7 @@ const FORMS = {
       if (!isBuyUsd(o)) o.Cuenta_Gastos = ''; else if (!o.Cuenta_Gastos) o.Cuenta_Gastos = defaultGastoCuenta();
       o.Monto = movOrigen(o);
       o.Moneda = co; o.Monto_C = r2(co === 'USD' ? o.Monto * (tc || lastTC()) : o.Monto); },
-    after: o => { if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); if (o.Tipo === 'Depósito') lsSet('dep_dest', String(o.ID_Banco_Destino)); }},
+    after: o => { if (Number(o.Tipo_Cambio)) { lsSet('tc', String(o.Tipo_Cambio)); lsSet(movTcKind(o) === 'compra' ? 'tc_compra' : 'tc_venta', String(o.Tipo_Cambio)); } if (o.Tipo === 'Depósito') lsSet('dep_dest', String(o.ID_Banco_Destino)); }},
   Bancos: {t: 'cuenta de banco', g: 'a', perm: 'catalogos.editar', fields: [
     {k: 'Banco', l: 'Banco', ty: 'text', req: 1, half: 1, list: () => histDesc('Bancos', 'Banco')},
     {k: 'Moneda', l: 'Moneda', ty: 'select', half: 1, opts: () => [['NIO', 'Córdobas (C$)'], ['USD', 'Dólares (US$)']], def: 'NIO'},
@@ -1910,6 +2034,48 @@ const FORMS = {
       if (!FORM.rec && (DB.t.Bancos || []).some(b => nrm(b.Nombre) === nrm(o.Nombre))) return 'Ya existe una cuenta con ese nombre'; return ''; },
     guardDelete: rec => bankUsed(rec.ID_Banco) ? 'Esta cuenta tiene movimientos registrados. Desactívala en lugar de eliminarla.' : '',
     after: (o, ch) => { const nb = ((ch && ch.upserts && ch.upserts.Bancos) || [])[0]; if (nb && !(FORM && FORM.rec)) S.banco = String(nb.ID_Banco); }},
+  Tarjetas_Credito: {t: 'tarjeta de crédito', g: 'a', perm: 'catalogos.editar', fields: [
+    {k: 'Nombre', l: 'Nombre', ty: 'text', req: 1, hint: 'Ejemplo: GasCard VISA'},
+    {k: 'Banco', l: 'Banco', ty: 'text', half: 1, list: () => [...new Set((DB.t.Bancos || []).map(b => b.Banco).concat((DB.t.Tarjetas_Credito || []).map(t => t.Banco)).filter(Boolean))]},
+    {k: 'Ultimos4', l: 'Últimos 4 dígitos', ty: 'text', half: 1},
+    {k: 'Moneda', l: 'Moneda', ty: 'select', half: 1, opts: () => [['NIO', 'Córdobas (C$)'], ['USD', 'Dólares (US$)']], def: 'NIO'},
+    {k: 'Limite', l: 'Límite de crédito', ty: 'number', step: '0.01', half: 1},
+    {k: 'Dia_Corte', l: 'Día de corte', ty: 'number', step: '1', half: 1, hint: 'Día del mes en que cierra el estado de cuenta'},
+    {k: 'Dia_Pago', l: 'Día límite de pago', ty: 'number', step: '1', half: 1, hint: 'Día del mes para pagar sin recargo'},
+    {k: 'ID_Banco', l: 'Se paga desde', ty: 'select', num: 1, opts: () => [['', 'Elegir al pagar'], ...bancos().map(b => [b.ID_Banco, b.Nombre])]},
+    {k: 'Descuento_Pct', l: 'Descuento en compras (%)', ty: 'pct', half: 1, def: 0, hint: 'Por ejemplo 7 en combustible; negativo si cobra recargo'},
+    {k: 'Saldo_Inicial', l: 'Deuda actual', ty: 'number', step: '0.01', half: 1, def: 0, hint: 'Lo que debes hoy (míralo en la app del banco)'},
+    {k: 'Fecha_Inicial', l: 'Fecha y hora de esa deuda', ty: 'datetime', req: 1, def: nowDT, hint: 'Solo cuentan los movimientos desde ese momento'},
+    {k: 'Orden', l: 'Orden', ty: 'number', half: 1, def: () => tarjetas(true).length + 1},
+    {k: 'Activa', l: 'Activa', ty: 'bool', def: true, hint: 'Desactívala si ya no la usas: su historial se conserva'}],
+    validate: o => [o.Dia_Corte, o.Dia_Pago].some(v => v !== '' && !(Number(v) >= 1 && Number(v) <= 31)) ? 'El día de corte y el de pago van del 1 al 31' : (!FORM.rec && (DB.t.Tarjetas_Credito || []).some(t => nrm(t.Nombre) === nrm(o.Nombre)) ? 'Ya existe una tarjeta con ese nombre' : ''),
+    guardDelete: rec => (DB.t.Movimientos_Tarjeta || []).some(m => String(m.ID_Tarjeta) === String(rec.ID_Tarjeta)) || DB.t.Consumo_Combustible.some(f => String(f.ID_Tarjeta) === String(rec.ID_Tarjeta)) ? 'Esta tarjeta tiene movimientos. Desactívala en lugar de eliminarla.' : '',
+    after: (o, ch) => { const nt = ((ch && ch.upserts && ch.upserts.Tarjetas_Credito) || [])[0]; if (nt && !(FORM && FORM.rec)) S.tarjeta = String(nt.ID_Tarjeta); }},
+  Movimientos_Tarjeta: {t: 'movimiento de tarjeta', perm: 'tarjetas.editar', needsMes: 1, fields: [
+    {k: 'ID_Tarjeta', l: 'Tarjeta', ty: 'select', num: 1, opts: () => tarjetas().map(c => [c.ID_Tarjeta, c.Nombre + (c.Ultimos4 ? ' · ' + c.Ultimos4 : '')]), def: () => Number(S.tarjeta || (tarjetas()[0] || {}).ID_Tarjeta) || ''},
+    {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Compra', 'Compra'], ['Retiro de efectivo', 'Retiro de efectivo'], ['Pago', 'Pago de la tarjeta']], def: 'Compra'},
+    {k: 'Fecha', l: 'Fecha y hora', ty: 'datetime', req: 1, def: nowDT},
+    {k: 'Descripcion', l: 'Concepto', ty: 'text'},
+    {k: 'Monto', l: 'Monto', ty: 'number', req: 1, step: '0.01', half: 1},
+    {k: 'Pct_Desc', l: 'Descuento (%)', ty: 'pct', half: 1, def: () => Number((tarjeta(S.tarjeta) || tarjetas()[0] || {}).Descuento_Pct) || 0, show: o => o.Tipo === 'Compra', hint: 'El de la tarjeta; cámbialo si esta compra no lo tiene'},
+    {k: 'Cargo', l: 'Cargo por retiro', ty: 'number', step: '0.01', half: 1, show: o => o.Tipo === 'Retiro de efectivo', hint: 'Lo que cobra el banco por el retiro'},
+    {k: 'ID_Banco', l: 'Pagar desde', ty: 'select', num: 1, live: o => o.Tipo === 'Pago' ? saldoLine(o.ID_Banco, o.Monto, FORM && FORM.rec && FORM.rec.Tipo === 'Pago' ? {ID_Banco: FORM.rec.ID_Banco, Total: FORM.rec.Monto, Monto_Moneda: FORM.rec.Monto} : null) : '', opts: () => bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), def: () => Number((tarjeta(S.tarjeta) || {}).ID_Banco) || (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Pago'},
+    {k: 'Cuenta_Gastos', l: 'Cuenta del gasto', ty: 'select', combo: 1, opts: () => optsCuentas(true), def: () => defaultTarjetaCuenta(), fillEmpty: 1, show: o => o.Tipo === 'Pago', hint: 'El pago se registra como gasto del período en esta cuenta'},
+    {k: 'ID_Partida', l: 'Partida del presupuesto', ty: 'select', combo: 1, num: 1, opts: () => [], def: () => guessPartida(S.tarjeta, S.mes, defaultTarjetaCuenta()), dynOpts: o => partidaOptsFor(FORM && FORM.rec && FORM.rec.Mes_Anio || S.mes, o.Cuenta_Gastos), show: o => o.Tipo === 'Pago'}],
+    label: o => { const u = (tarjeta(o.ID_Tarjeta) || {}).Moneda === 'USD' ? 'US$' : 'C$';
+      return {Monto: (o.Tipo === 'Pago' ? 'Monto del pago' : o.Tipo === 'Retiro de efectivo' ? 'Efectivo retirado' : 'Monto de la compra') + ' (' + u + ')', Cargo: 'Cargo por retiro (' + u + ')', Descripcion: o.Tipo === 'Compra' ? 'Comercio o concepto' : 'Concepto'}; },
+    validate: o => { if (!(Number(o.Monto) > 0)) return 'El monto debe ser mayor que cero';
+      if (o.Tipo === 'Pago' && saldosConfigurados()) { const a = availOf(o.ID_Banco, FORM.rec && FORM.rec.Tipo === 'Pago' ? {ID_Banco: FORM.rec.ID_Banco, Total: FORM.rec.Monto, Monto_Moneda: FORM.rec.Monto} : null); if (Number(o.Monto) > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)}`; }
+      return ''; },
+    preview: o => { const c = tarjeta(o.ID_Tarjeta), M = Number(o.Monto) || 0; if (!c || !M) return ''; const cur = c.Moneda;
+      if (o.Tipo === 'Pago') return `Se descuentan <b>${fcur(M, cur)}</b> de ${esc(bankName(o.ID_Banco))} y baja la deuda de ${esc(c.Nombre)}. Se registra como <b>gasto</b> de ${money(M)} en ${esc(cuentaNombre(o.Cuenta_Gastos))}.`;
+      if (o.Tipo === 'Retiro de efectivo') { const cg = Number(o.Cargo) || 0; return `Entran <b>${fcur(M, cur)}</b> a tu efectivo${cur === 'USD' ? ' en dólares' : ' en mano'}. La deuda de ${esc(c.Nombre)} sube <b>${fcur(M + cg, cur)}</b>${cg ? ` (incluye el cargo de ${fcur(cg, cur)})` : ''}. No es gasto: se cuenta al pagar la tarjeta.`; }
+      const d = r2(M * (Number(o.Pct_Desc) || 0)); return `La deuda de ${esc(c.Nombre)} sube <b>${fcur(M - d, cur)}</b>${d ? ` (${fcur(M, cur)} − descuento ${fcur(d, cur)})` : ''}. No es gasto ahora: se cuenta al pagar la tarjeta.`; },
+    before: o => { o.ID_Tarjeta = Number(o.ID_Tarjeta); const M = Number(o.Monto) || 0;
+      if (o.Tipo === 'Compra') { o.Pct_Desc = Number(o.Pct_Desc) || 0; o.Descuento = r2(M * o.Pct_Desc); } else { o.Pct_Desc = ''; o.Descuento = ''; }
+      if (o.Tipo !== 'Retiro de efectivo') o.Cargo = '';
+      if (o.Tipo !== 'Pago') { o.ID_Banco = ''; o.Cuenta_Gastos = ''; o.ID_Partida = ''; } },
+    after: o => { if (o.ID_Tarjeta) S.tarjeta = String(o.ID_Tarjeta); }},
   Referencias_Tarjetas: {t: 'consumo con tarjeta', perm: 'tarjetas.editar', fields: [
     {k: 'Fecha', l: 'Fecha y hora del consumo', ty: 'datetime', req: 1, def: nowDT},
     {k: 'Moneda', l: 'Moneda', ty: 'select', opts: () => [['Córdoba', 'Córdoba'], ['Dólar', 'Dólar']], def: 'Córdoba'},
@@ -1933,12 +2099,13 @@ const FORMS = {
     {k: 'Precio_Litro', l: 'Precio por litro (C$)', ty: 'number', step: 'any', half: 1, def: () => lastFuelPrice()},
     {k: 'Costo', l: 'Total pagado (C$)', ty: 'number', step: '0.01', half: 1, hint: 'Opcional: si lo escribes, se calcula el precio por litro'},
     {k: 'Full', l: 'Tanque lleno', ty: 'bool', def: true},
+    {k: 'ID_Tarjeta', l: 'Pagado con', ty: 'select', num: 1, opts: () => [...tarjetas().map(c => [c.ID_Tarjeta, 'Tarjeta ' + c.Nombre]), ['', 'Otro medio (no se registra en tarjeta)']], def: () => { const v = lsGet('fuel_card'); if (v !== null && v !== undefined) return v === '' ? '' : Number(v); const g = tarjetas().find(c => /gas/i.test(c.Nombre)) || tarjetas()[0]; return g ? Number(g.ID_Tarjeta) : ''; }, hint: 'Con tarjeta de crédito, el costo (menos su descuento) suma a la deuda de la tarjeta'},
     {k: 'Aditivo', l: 'Se agregó aditivo de combustible', ty: 'bool', def: false},
     {k: 'Nota', l: 'Nota (opcional)', ty: 'text'}],
     preview: o => { const c = fuelCalc(o); if (!Number(o.Cantidad)) return '';
       return (c.km > 0 ? `Recorriste ${NF0.format(c.km)} km con ${c.litros.toFixed(3)} litros (${c.galones.toFixed(3)} galones): <b>${c.kml.toFixed(2)} km/L</b> y <b>${c.kmg.toFixed(2)} km/GL</b>.` : 'Primer llenado registrado: el rendimiento se calcula desde el próximo.') +
         (c.costo ? ` Costo ${money(c.costo)} (${money(c.precio)} por litro).` : '') + ' No se registra como gasto.'; },
-    before: o => { o.ID_Vehiculo = Number(o.ID_Vehiculo) || Number(curVeh()); const c = fuelCalc(o);
+    before: o => { o.ID_Vehiculo = Number(o.ID_Vehiculo) || Number(curVeh()); const tcard = tarjeta(o.ID_Tarjeta); o.Pct_Desc = tcard ? Number(tcard.Descuento_Pct) || 0 : ''; if (!tcard) o.ID_Tarjeta = ''; const c = fuelCalc(o);
       const FG = 3.78541, FM = 1.60934; o.Factor_GL = FG; o.Factor_Milla = FM;
       o.Horometro_Millas = Math.round(Number(o.Horometro_Km) / FM * 10) / 10;
       o.Litro = c.litros; o.Galon = c.galones;
@@ -1946,7 +2113,7 @@ const FORMS = {
       o.km_galon = c.kmg || ''; o.km_litros = c.kml || '';
       o.Precio_Litro = c.precio || ''; o.Costo = c.costo || '';
       if (!o.No) o.No = (c.prev ? Number(c.prev.No) || 0 : 0) + 1; },
-    after: o => { if (Number(o.Precio_Litro)) lsSet('precio_litro', String(o.Precio_Litro)); if (o.ID_Vehiculo) { S.fuelVeh = String(o.ID_Vehiculo); lsSet('fuel_veh', S.fuelVeh); } },
+    after: o => { lsSet('fuel_card', String(o.ID_Tarjeta ?? '')); if (Number(o.Precio_Litro)) lsSet('precio_litro', String(o.Precio_Litro)); if (o.ID_Vehiculo) { S.fuelVeh = String(o.ID_Vehiculo); lsSet('fuel_veh', S.fuelVeh); } },
     doneModal: 1, done: o => { if (Number(o.Km_Recorrido) > 0) showFuelResult(o); else toast('Llenado de combustible registrado'); }},
   Vehiculos: {t: 'vehículo', perm: 'combustible.editar', fields: [
     {k: 'Nombre', l: 'Nombre', ty: 'text', req: 1, hint: 'Ejemplo: Camioneta, Sedán, Moto'},
@@ -2016,7 +2183,7 @@ function optsWithCurrent(f, v) {
   return name ? [...list, [v, name]] : list;
 }
 /** Registros que se abren primero en modo consulta (con el botón Editar) */
-const VIEW_FIRST = new Set(['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Consumo_Combustible', 'Referencias_Tarjetas']);
+const VIEW_FIRST = new Set(['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Consumo_Combustible', 'Referencias_Tarjetas', 'Movimientos_Tarjeta']);
 function openForm(table, id, edit) {
   const F = FORMS[table]; if (!F) return;
   const k = DB.key(table);
@@ -2046,7 +2213,7 @@ function openForm(table, id, edit) {
   const title = rec ? (view ? F.t.charAt(0).toUpperCase() + F.t.slice(1) : (ro ? 'Ver ' : 'Editar ') + F.t) : (F.g === 'a' ? 'Nueva ' : 'Nuevo ') + F.t;
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="frm" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <h4>${esc(title)}${REL[table] ? ` <span class="pill">${esc(mesLabel(rec ? recPeriod(table, rec) : S.mes))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
-    ${auto ? (table === 'Gastos_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Gasto automático por una transferencia a la cuenta en dólares. Se cambia desde la transferencia.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir la transferencia</button></div>` : table === 'Retiros_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Retiro automático por un gasto pagado con tarjeta de débito. Se cambia desde el gasto.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el gasto</button></div>`
+    ${auto ? (table === 'Gastos_Detalle' ? `<div class="notice info" style="margin-top:0"><span>${String(rec.Origen).startsWith('TAR:') ? 'Gasto automático por un pago de tarjeta de crédito. Se cambia desde el pago, en Tarjetas.' : 'Gasto automático por una transferencia a la cuenta en dólares. Se cambia desde la transferencia.'}</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">${String(rec.Origen).startsWith('TAR:') ? 'Abrir el pago' : 'Abrir la transferencia'}</button></div>` : table === 'Retiros_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Retiro automático por un gasto pagado con tarjeta de débito. Se cambia desde el gasto.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el gasto</button></div>`
       : `<div class="notice info" style="margin-top:0"><span>Ingreso automático por una conversión de dólares. Se cambia desde el movimiento que lo generó.</span>${/^(RET|MOV):/.test(rec.Origen) ? `<button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el origen</button>` : ''}</div>`) : ro ? (noPerm ? `<div class="notice" style="margin-top:0">Tu usuario no tiene permiso para registrar o corregir esto (<code>${esc(permKey)}</code>). Pídele a un administrador que lo active en tu usuario. Si ya lo hizo, cierra sesión y vuelve a entrar.</div>` : '<div class="notice" style="margin-top:0">Solo lectura: este período está cerrado para este módulo. Ábrelo en Períodos para registrar o corregir.</div>') : ''}
     ${(() => { if (!rec || !REL[table] || auto || view) return '';
       const cur = recPeriod(table, rec), mod = REL[table].mod, tg = periodos().filter(p => truthy(p[mod]) && p.Mes_Anio !== cur).map(p => p.Mes_Anio);
@@ -2063,6 +2230,8 @@ function openForm(table, id, edit) {
 function formDynamics() {
   if (!FORM) return;
   const o = readForm(), F = FORM.F;
+  if (FORM.table === 'Movimientos_Banco') { const tcEl = $('#f_Tipo_Cambio'), k = movTcKind(o);
+    if (tcEl && FORM.tcKind !== k) { if (!FORM.tcTouched && !FORM.rec) { tcEl.value = tcFor(S.mes, k); o.Tipo_Cambio = Number(tcEl.value); } FORM.tcKind = k; const h = $('#frm [data-fk="Tipo_Cambio"] .hint'); if (h) h.textContent = tcHint(k); } }
   F.fields.forEach(f => { if (!f.dynOpts) return; const el = $('#f_' + f.k); if (!el) return;
     const list = f.dynOpts(o), html = list.map(([a, b]) => `<option value="${esc(a)}">${esc(b)}</option>`).join('');
     if (el._sig !== html) { const cur = el.value; el.innerHTML = html; el._sig = html; el.value = list.some(([a]) => String(a) === String(cur)) ? cur : ''; } });
@@ -2158,7 +2327,7 @@ function fillFormValues(o) {
 /* ---------- Eliminar con advertencia ----------
    Antes de eliminar se muestra qué saldos cambian. Si una cuenta o el efectivo quedaría en negativo (porque ese dinero
    ya se gastó o se movió) y el bloqueo está activo (Mi cuenta → Configuración), no se deja eliminar. */
-const BAL_TABLES = new Set(['Retiros_Detalle', 'Movimientos_Banco', 'Ingresos_Detalle', 'Gastos_Detalle']);
+const BAL_TABLES = new Set(['Retiros_Detalle', 'Movimientos_Banco', 'Ingresos_Detalle', 'Gastos_Detalle', 'Movimientos_Tarjeta']);
 const blockNeg = () => { const v = empresa().Bloquear_Negativos; return v === '' || v === undefined || v === null ? true : truthy(v); };
 function pocketBalances() {
   const out = {};
@@ -2231,7 +2400,7 @@ function cancelModal() { if (S.pendingGasto && FORM && FORM.table === 'Retiros_D
 /* ---------- Resumen automático ----------
    Cada acción que cambia gastos, retiros, ingresos (depósitos) o presupuesto actualiza sola la fila del período
    en la hoja Resumen. Se agrupan las acciones seguidas en una sola actualización. */
-const RESUMEN_TABLES = ['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco'];
+const RESUMEN_TABLES = ['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Movimientos_Tarjeta'];
 const resumenOpen = mes => truthy((DB.idx().periodo[mes] || {}).Guardar_Resumen);
 const resumenRow = mes => (DB.t.Resumen || []).filter(r => r.Mes_Anio === mes && truthy(r.Auto)).sort((a, b) => String(a.Hora_Registro).localeCompare(String(b.Hora_Registro)) || a.Id_Resumen - b.Id_Resumen).pop();
 function resumenPayload(mes) {
@@ -2240,7 +2409,7 @@ function resumenPayload(mes) {
   return {mes, Ingresos: t.I, Presupuesto: t.P, Gastos: t.G, Retiros: t.R, Disp_enMano: isNewPeriod(mes) ? (mes === cur ? disponible().mano : undefined) : t.mano};
 }
 function periodsOf(table, o, rec) {
-  const out = [S.mes], df = DATE_FIELD[table] || (table === 'Movimientos_Banco' ? 'Fecha' : '');
+  const out = [S.mes], df = DATE_FIELD[table] || (table === 'Movimientos_Banco' || table === 'Movimientos_Tarjeta' ? 'Fecha' : '');
   if (df && o && o[df]) out.push(periodForDate(o[df]));
   if (rec) { if (df && rec[df]) out.push(periodForDate(rec[df])); if (REL[table]) { try { out.push(recPeriod(table, rec)); } catch (e) {} } }
   return out;
@@ -2255,6 +2424,7 @@ function motivoOf(table, o, acc) {
     Retiros_Detalle: () => `Retiro: ${o.Efectivo_Moneda === 'USD' ? usd(o.Monto_Moneda) : money(o.Total)} de ${bankName(o.ID_Banco)}`,
     Ingresos_Detalle: () => `Ingreso: ${o.Descripcion || ''} ${money(o.Total)}`,
     Presupuesto_Detalle: () => `Partida: ${o.Descripcion || ''} ${money(o.Total)}`,
+    Movimientos_Tarjeta: () => `${o.Tipo === 'Pago' ? 'Pago de tarjeta' : o.Tipo === 'Compra' ? 'Compra con tarjeta' : 'Retiro con tarjeta'}: ${tarName(o.ID_Tarjeta)} ${money(o.Monto)}`,
     Movimientos_Banco: () => o.Tipo === 'Transferencia' ? `Transferencia: ${bankName(o.ID_Banco_Origen)} → ${bankName(o.ID_Banco_Destino)} ${fcur(o.Monto_Destino, d)}` : `${o.Tipo === 'Depósito' ? 'Depósito' : 'Ajuste'}: ${fcur(o.Monto_Destino, d)} en ${bankName(o.ID_Banco_Destino)}${o.Descripcion ? ' (' + o.Descripcion + ')' : ''}`
   }[table];
   return m ? pre + m().replace(/\s+/g, ' ').trim() : '';
@@ -2422,20 +2592,21 @@ document.addEventListener('click', async e => {
     if (cb && cb.classList.contains('combo-btn')) { e.preventDefault(); if (COMBO && COMBO.btn === cb) closeCombo(); else openCombo(cb); return; }
     if (cb && cb.classList.contains('combo-opt')) { e.preventDefault(); pickCombo(cb.dataset.cval); return; } }
   if (e.target.closest && e.target.closest('#fab')) return;  // el botón + tiene su propio manejador
-  const t = e.target.closest('[data-corte],[data-pgastos],[data-fveh],[data-frange],[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
+  const t = e.target.closest('[data-tarjeta],[data-corte],[data-pgastos],[data-fveh],[data-frange],[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
   if (!t) return;
   const d = t.dataset;
   if (d.close !== undefined) { if (e.target === t) cancelModal(); return; }
   if (d.user) { openUserForm(d.user); return; }
   if (d.banco) { S.banco = d.banco; render(); return; }
   if (d.gotoMes) { S.mes = d.gotoMes; if (d.stay) render(); else go('inicio'); toast('Trabajando en ' + mesLabel(d.gotoMes)); return; }
+  if (d.tarjeta && !d.go) { S.tarjeta = d.tarjeta; render(); return; }
   if (d.corte) { e.preventDefault(); const st = S.corteOpen || (S.corteOpen = new Set()); st.has(d.corte) ? st.delete(d.corte) : st.add(d.corte); render(); return; }
   if (d.pgastos) { e.preventDefault(); openPartidaGastos(d.pgastos); return; }
   if (d.fveh) { S.fuelVeh = d.fveh; lsSet('fuel_veh', d.fveh); S.fuelRange = 'all'; render(); return; }
   if (d.frange) { S.fuelRange = d.frange; render(); return; }
   if (d.funit) { S.fuelUnit = d.funit; lsSet('fuel_unit', d.funit); if (d.fres && S.fuelShown) showFuelResult(S.fuelShown.r, S.fuelShown.fromList); else render(); return; }
   if (d.fuel) { const r = DB.t.Consumo_Combustible.find(x => String(x.ID) === d.fuel); if (r) showFuelResult(r, true); return; }
-  if (d.go) { e.preventDefault(); if (d.banco) S.banco = d.banco; go(d.go); return; }
+  if (d.go) { e.preventDefault(); if (d.banco) S.banco = d.banco; if (d.tarjeta) S.tarjeta = d.tarjeta; go(d.go); return; }
   if (d.new === 'Ingresos_Detalle') return openDeposito();
   if (d.new) { const F = FORMS[d.new]; if (F && F.mod && REL[d.new] && !canEdit(F.mod) && canAdd(F.mod) && F.mod !== 'Presupuesto') ensureTarget(F.mod); if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
   if (d.edit) { if (isTmp(d.id)) { toast('Se está guardando, espera un momento'); return; } openForm(d.edit, d.id); return; }
@@ -2458,7 +2629,7 @@ document.addEventListener('click', async e => {
   if (a === 'copiar-ppto') {
     const prev = mesAnterior(S.mes), rows = detail('Presupuesto_Detalle', prev);
     const ya = detail('Presupuesto_Detalle', S.mes).length;
-    if (!confirm(`Se agregarán ${rows.length} partidas de ${mesLabel(prev)} a ${mesLabel(S.mes)}${ya ? ` (ya hay ${ya}; podrían quedar duplicadas)` : ''}. ¿Continuar?`)) return;
+    if (!confirm(`Se agregar${rows.length === 1 ? 'á' : 'án'} ${rows.length} ${rows.length === 1 ? 'partida' : 'partidas'} de ${mesLabel(prev)} a ${mesLabel(S.mes)}${ya ? ` (ya hay ${ya}; podrían quedar duplicadas)` : ''}. ¿Continuar?`)) return;
     t.disabled = true;
     try { const ch = await Backend.call('saveMany', {table: 'Presupuesto_Detalle', mes: S.mes, rows: rows.map(r => ({Cuenta_Gastos: r.Cuenta_Gastos, Total: r.Total, Cantidad: r.Cantidad, UM: r.UM, Descripcion: r.Descripcion}))}); commit(ch); queueResumen(S.mes, 'Presupuesto copiado (' + rows.length + ' partidas)'); render(); toast(rows.length + ' partidas copiadas'); }
     catch (err) { t.disabled = false; toast('No se pudo copiar: ' + err.message, true); }
@@ -2475,6 +2646,13 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'tar-new') return openForm('Tarjetas_Credito');
+  if (a === 'tar-edit') return openForm('Tarjetas_Credito', S.tarjeta, true);
+  if (a === 'tar-mov') return openForm('Movimientos_Tarjeta');
+  if (a === 'tar-pay') { const c = tarjeta(S.tarjeta); if (!c) return; const st = cardStatus(c); openForm('Movimientos_Tarjeta');
+    const set = (id, v) => { const el = $(id); if (el) el.value = v; };
+    set('#f_Tipo', 'Pago'); set('#f_Monto', st.pendiente > 0 ? st.pendiente : (st.deuda > 0 ? st.deuda : '')); if (st.cy) set('#f_Descripcion', 'Estado de cuenta al ' + fdate(isoD(st.cy.last)));
+    formDynamics(); return; }
   if (a === 'hogar-edit') { const e0 = empresa(); return openForm('Empresa', e0.Empresa, true); }
   if (a === 'form-edit') { const tb = FORM.table, id = FORM.rec[DB.key(tb)]; openForm(tb, id, true); const first = $('#frm input:not([disabled]), #frm select:not([disabled])'); if (first && matchMedia('(pointer:fine)').matches) first.focus(); return; }
   if (a === 'veh-new') return openForm('Vehiculos');
@@ -2521,7 +2699,7 @@ document.addEventListener('click', async e => {
     const upd = () => { const d = $('#fpD').value, n = sin.filter(r => String(r.Fecha).slice(0, 10) >= d).length, pz = Number($('#fpP').value) || 0; $('#fpN').textContent = n + ' llenados' + (pz ? ', costo total ' + money(sin.filter(r => String(r.Fecha).slice(0, 10) >= d).reduce((a, r) => a + (Number(r.Litro) || 0) * pz, 0)) : ''); };
     $('#fpD').oninput = upd; $('#fpP').oninput = upd; upd(); return;
   }
-  if (a === 'open-src') { const [kind, id] = String(t.dataset.src).split(':'); const tb = {GAS: 'Gastos_Detalle', RET: 'Retiros_Detalle', MOV: 'Movimientos_Banco'}[kind]; closeModal(); if (tb) openForm(tb, id); return; }
+  if (a === 'open-src') { const [kind, id] = String(t.dataset.src).split(':'); const tb = {GAS: 'Gastos_Detalle', RET: 'Retiros_Detalle', MOV: 'Movimientos_Banco', TAR: 'Movimientos_Tarjeta'}[kind]; closeModal(); if (tb) openForm(tb, id); return; }
   if (a === 'dt-set' || a === 'dt-now') { const el = $('#' + t.dataset.for), tt = $('#' + t.dataset.for + '_t'); if (!el) return;
     const d = new Date(Date.now() - (Number(t.dataset.min) || 0) * 60000); const v = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     el.value = v; if (tt) tt.value = pad(d.getHours()) + ':' + pad(d.getMinutes()); el.dispatchEvent(new Event('input', {bubbles: true})); return; }
@@ -2638,6 +2816,7 @@ document.addEventListener('input', e => {
   if (e.target.closest && e.target.closest('#frmApertura')) apTotal();
   if (FORM && (e.target.id === 'f_Costo' || e.target.id === 'f_Precio_Litro')) FORM.lastMoney = e.target.name;
   if (FORM && e.target.id === 'f_Nombre') FORM.nameTouched = true;
+  if (FORM && e.target.id === 'f_Tipo_Cambio') FORM.tcTouched = true;
   if (FORM && e.target.closest('#frm')) formDynamics();
   if (FORM && e.target.name === 'Descripcion_Gasto' && e.inputType === 'insertReplacementText') autofillFromHistory(e.target);
 });
@@ -2662,7 +2841,8 @@ document.addEventListener('change', async e => {
     const v = el.value === '' ? '' : Number(el.value), p = DB.t.Mes_Anio.find(x => String(x.ID) === el.dataset.tcpid);
     if (v !== '' && !(v > 0)) { toast('Escribe un tipo de cambio válido', true); return; }
     el.disabled = true;
-    try { const ch = await Q.run(() => Backend.call('save', {table: 'Mes_Anio', row: {ID: p.ID, Tipo_Cambio: v}})); commit(ch); toast(v ? `T/C de ${cap(p.Mes)} ${p.Anio}: ${v}` : 'T/C quitado'); }
+    const key = el.dataset.tckey || 'Tipo_Cambio', kind = key === 'Tipo_Cambio_Venta' ? 'venta' : 'compra';
+    try { const ch = await Q.run(() => Backend.call('save', {table: 'Mes_Anio', row: {ID: p.ID, [key]: v}})); commit(ch); toast(v ? `T/C de ${kind} de ${cap(p.Mes)} ${p.Anio}: ${v}` : `T/C de ${kind} quitado`); }
     catch (err) { toast(err.message, true); }
     el.disabled = false; return;
   }
@@ -2676,6 +2856,7 @@ document.addEventListener('change', async e => {
   if (b === 'cuenta' || b === 'cuentaSel' || b === 'cuentaYear' || b === 'corteYear') { S[b] = el.value; render(); return; }
   if (b === 'all') { S.all = el.checked; render(); return; }
   if (b === 'bankAll') { S.bankAll = el.checked; render(); return; }
+  if (b === 'tarAll' || b === 'tarLegacy') { S[b] = el.checked; render(); return; }
   if (el.id === 'ur' && $('#uperms')) { renderPerms(el.value, {}); return; }
   if (el.dataset.perm) { const def = roleDefaults($('#ur').value); el.closest('.perm').classList.toggle('custom', el.checked !== def[el.dataset.perm]); return; }
   if (FORM) { formDynamics(); if (FORM.F.fields.some(f => f.dep === el.name)) fillLists();

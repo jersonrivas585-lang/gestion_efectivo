@@ -89,9 +89,14 @@ La APK de PWABuilder es una *Trusted Web Activity*. Android solo la abre a panta
 
 Guarda bien el archivo `signing.keystore` y su contraseña que vienen en el ZIP de PWABuilder: los necesitas para publicar actualizaciones con la misma huella.
 
-## Tipo de cambio por período
+## Tipo de cambio por período: compra y venta
 
-En *Períodos*, la columna **T/C** guarda el tipo de cambio (C$ por US$) de cada mes. Al registrar un retiro, una compra con débito o una transferencia con la cuenta en dólares, se propone el T/C del período (puedes cambiarlo en el formulario). Si el período no tiene T/C, se usa el último que registraste. Se guarda en la hoja Mes_Anio, columna `Tipo_Cambio`.
+En *Períodos* cada mes tiene dos tasas (C$ por US$ 1):
+
+- **T/C compra** (columna `Tipo_Cambio`): lo que pagas por cada dólar cuando **compras dólares**, es decir, cuando pasas de córdobas a dólares (por ejemplo 37.15). Se usa en las transferencias de una cuenta en córdobas o del efectivo hacia la cuenta en dólares o el efectivo en dólares.
+- **T/C venta** (columna `Tipo_Cambio_Venta`): lo que recibes por cada dólar cuando **cambias dólares a córdobas** (por ejemplo 36.40). Se usa en las transferencias de dólares a córdobas, en los retiros de la cuenta en dólares recibidos en córdobas, y para valorar en córdobas los gastos, depósitos y saldos en dólares (el «≈ C$» de las tarjetas de Bancos).
+
+Cada formulario propone la tasa que corresponde y lo indica en su etiqueta («Tipo de cambio de compra» o «de venta»). En una transferencia la tasa cambia sola al elegir la dirección, salvo que hayas escrito una tasa a mano. Si el período no tiene una de las tasas, se usa la última registrada; los períodos que solo tenían una tasa la usan para las dos.
 
 ## Fecha y hora en cada movimiento
 
@@ -213,6 +218,21 @@ Al tocar **Eliminar** en un registro, la app muestra antes, dentro del formulari
 Si eliminar un retiro, depósito o transferencia dejaría una cuenta, el efectivo en mano o el efectivo en dólares **en negativo** (porque ese dinero ya se gastó o se movió), la app **no deja eliminarlo** y explica cuál quedaría en negativo: primero hay que corregir o eliminar esos gastos o movimientos. Eliminar un gasto nunca se bloquea (sube el saldo).
 
 El bloqueo se cambia en *Mi cuenta → Configuración → Bloquear eliminaciones que dejan saldos en negativo* (activo por defecto; lo cambian administradores y supervisores). Desactivado, la app solo avisa y ofrece *Eliminar de todos modos*. Se guarda en la columna `Bloquear_Negativos` de la hoja Empresa (vacío = activo) y aplica a todos los usuarios.
+
+## Tarjetas de crédito
+
+El módulo *Tarjetas* lleva cada **tarjeta de crédito** asociada a un banco: su **deuda**, su **estado de cuenta** y la **fecha límite de pago**.
+
+- **Las tarjetas:** se crearon solas a partir de las que usabas en Access (GasCard VISA, BAC American Express, LAFISE D'TODO, BAC Mariela), con su banco y su % de descuento. Con **Editar tarjeta** escribes los últimos 4 dígitos, el **límite**, el **día de corte**, el **día límite de pago**, la cuenta desde la que se paga y la **deuda actual** (con su fecha y hora). Las que ya no uses, desactívalas. Administradores y supervisores las configuran (también en *Catálogos → Tarjetas de crédito*); hoja `Tarjetas_Credito`.
+- **Movimientos** (*Registrar movimiento*, hoja `Movimientos_Tarjeta`):
+  - **Compra:** sube la deuda por el monto menos el descuento de la tarjeta (editable en cada compra; negativo si es un recargo).
+  - **Retiro de efectivo:** el dinero entra al efectivo en mano (o al efectivo en dólares si la tarjeta es en dólares) y la deuda sube por el retiro **más el cargo** que cobra el banco.
+  - **Pago** (*Pagar tarjeta* propone lo que falta pagar del estado de cuenta): baja la cuenta de banco y la deuda, y se registra como **gasto** del período en la cuenta *Tarjeta Credito* (puedes elegir la partida, por ejemplo *Pago tarjeta GasCard*). Ese gasto queda ligado al pago: se corrige o elimina desde el pago.
+- **Combustible:** el llenado tiene **Pagado con**; si eliges una tarjeta, el costo menos su descuento suma a la deuda de esa tarjeta (como antes, el combustible no se suma a Gastos: se cuenta al pagar la tarjeta).
+- **Las compras no son gasto al hacerlas**: el gasto se registra al pagar la tarjeta, así no se cuenta dos veces.
+- **Estado de cuenta:** deuda total, saldo al último corte, **por pagar antes de** la fecha límite (con los días que faltan, en rojo si faltan 5 o menos o si venció), consumos y pagos desde el corte, y disponible del límite. La lista muestra los movimientos desde el corte anterior (o todos).
+- **Inicio:** en *Dinero disponible* aparece cada tarjeta con deuda y cuánto pagar antes de qué fecha (aparte del total disponible).
+- **Historial de Access:** los consumos anteriores siguen en la misma pantalla (*Mostrar el historial de Access*).
 
 ## Importar el presupuesto desde Excel
 
