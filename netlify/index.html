@@ -314,6 +314,11 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .expand.ph{border-color:transparent;background:none;cursor:default}
 .cortes tr.sub td{background:var(--sunk);color:var(--ink2);font-size:13.5px}
 .cortes tr.sub .mcell{padding-left:44px}
+.t.estado{min-width:0;width:100%;table-layout:fixed}
+.t.estado th,.t.estado td{white-space:normal;padding:8px 10px;font-size:13.5px}
+.t.estado th.n,.t.estado td.n{width:30%;white-space:nowrap}
+@media (max-width:560px){.t.estado th,.t.estado td{padding:7px 6px;font-size:12.5px}.t.estado th.n,.t.estado td.n{width:32%;font-size:min(13px,3vw)}}
+.bankcard .bal2{margin-top:0;font-size:min(16px,calc(100cqw / (var(--n,12) * .8)));opacity:.85}
 .delbox{margin:14px 0 0;padding:12px 14px;border-radius:10px;background:var(--sunk);border:1px solid var(--line);font-size:14px}
 .delbox.block{border-color:var(--over)}
 .delbox.block > b{color:var(--over)}
@@ -472,7 +477,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.24-1215';
+const APP_VERSION = '2026.10.24-1258';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -546,7 +551,7 @@ const DB = {
       this.t[name] = tb.rows.map(r => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(r[i]) : r[i]); return o; });
     }
     if (this.t.Mes_Anio) fixPeriodRows(this.t.Mes_Anio);
-    ['Bancos', 'Movimientos_Banco', 'Vehiculos', 'Tarjetas_Credito', 'Movimientos_Tarjeta'].forEach(n => { if (!this.t[n]) { this.t[n] = []; this.cols[n] = n === 'Bancos' ? ['ID_Banco'] : n === 'Vehiculos' ? ['ID_Vehiculo', 'Nombre', 'Placa', 'Detalle', 'Activo', 'Orden'] : n === 'Tarjetas_Credito' ? ['ID_Tarjeta', 'Nombre', 'Banco', 'ID_Banco', 'Ultimos4', 'Moneda', 'Limite', 'Dia_Corte', 'Dia_Pago', 'Descuento_Pct', 'Saldo_Inicial', 'Fecha_Inicial', 'Activa', 'Orden'] : n === 'Movimientos_Tarjeta' ? ['ID_MovTar', 'ID_Tarjeta', 'Fecha', 'Tipo', 'Descripcion', 'Monto', 'Pct_Desc', 'Descuento', 'Cargo', 'ID_Banco', 'Cuenta_Gastos', 'ID_Partida', 'ID_Gasto_Auto', 'Mes_Anio', 'Usuario', 'Fecha_Registro'] : ['ID_Mov']; } });
+    ['Bancos', 'Movimientos_Banco', 'Vehiculos', 'Tarjetas_Credito', 'Movimientos_Tarjeta'].forEach(n => { if (!this.t[n]) { this.t[n] = []; this.cols[n] = n === 'Bancos' ? ['ID_Banco'] : n === 'Vehiculos' ? ['ID_Vehiculo', 'Nombre', 'Placa', 'Detalle', 'Activo', 'Orden'] : n === 'Tarjetas_Credito' ? ['ID_Tarjeta', 'Nombre', 'Banco', 'ID_Banco', 'Ultimos4', 'Moneda', 'Limite', 'Dia_Corte', 'Dia_Pago', 'Descuento_Pct', 'Saldo_Inicial', 'Fecha_Inicial', 'Activa', 'Orden', 'Saldo_Inicial_USD'] : n === 'Movimientos_Tarjeta' ? ['ID_MovTar', 'ID_Tarjeta', 'Fecha', 'Tipo', 'Descripcion', 'Monto', 'Pct_Desc', 'Descuento', 'Cargo', 'ID_Banco', 'Cuenta_Gastos', 'ID_Partida', 'ID_Gasto_Auto', 'Mes_Anio', 'Usuario', 'Fecha_Registro', 'Moneda', 'Tipo_Cambio', 'Monto_Banco', 'Monto_C'] : ['ID_Mov']; } });
     this.ver++;
   },
   key(name) { return this.cols[name][0]; },
@@ -740,29 +745,33 @@ function saldoLine(bid, monto, rec, cur0) {
 }
 const after = (fecha, start) => !start || dtKey(fecha) >= start;
 /* ===== Tarjetas de crédito =====
-   Deuda = deuda inicial + compras (menos su descuento) + combustible pagado con la tarjeta + retiros de efectivo y su cargo − pagos.
+   Cada tarjeta tiene dos deudas: en córdobas y en dólares (límite en dólares, compartido).
+   Deuda = deuda inicial + compras (menos su descuento) + combustible pagado con la tarjeta (C$) + retiros con su cargo − pagos.
    Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta. */
+const CURS = ['NIO', 'USD'];
 const tarjetas = all => (DB.t.Tarjetas_Credito || []).filter(c => all || truthy(c.Activa)).slice().sort((a, b) => (Number(a.Orden) || 0) - (Number(b.Orden) || 0));
 const tarjeta = id => (DB.t.Tarjetas_Credito || []).find(c => String(c.ID_Tarjeta) === String(id));
 const tarName = id => (tarjeta(id) || {}).Nombre || 'de crédito';
+const movCur = m => m.Moneda === 'USD' || m.Moneda === 'NIO' ? m.Moneda : 'NIO';
 const defaultTarjetaCuenta = () => ((DB.t.Cuentas || []).find(c => truthy(c.Cuenta_de_Gastos) && truthy(c.Activa) && /tarjeta/i.test(c.Cuentas)) || {}).Codigo || defaultGastoCuenta();
-function cardLedger(id) {
-  const c = tarjeta(id); if (!c) return {rows: [], deuda: 0, inicial: 0, start: ''};
-  const start = dtKey(c.Fecha_Inicial), out = [], cur = c.Moneda;
-  const add = (fecha, desc, amt, src, tipo, alt) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, alt, pre: !after(fecha, start)});
-  (DB.t.Movimientos_Tarjeta || []).filter(m => String(m.ID_Tarjeta) === String(id)).forEach(m => {
+/** Movimientos de una tarjeta en una moneda, con la deuda acumulada de esa moneda */
+function cardLedger(id, cur = 'NIO') {
+  const c = tarjeta(id); if (!c) return {rows: [], deuda: 0, inicial: 0, start: '', cur};
+  const start = dtKey(c.Fecha_Inicial), out = [], ini = Number(cur === 'USD' ? c.Saldo_Inicial_USD : c.Saldo_Inicial) || 0;
+  const add = (fecha, desc, amt, src, tipo, alt) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, alt, cur, pre: !after(fecha, start)});
+  (DB.t.Movimientos_Tarjeta || []).filter(m => String(m.ID_Tarjeta) === String(id) && movCur(m) === cur).forEach(m => {
     const src = {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, M = Number(m.Monto) || 0, cg = Number(m.Cargo) || 0, d = Number(m.Descuento) || 0;
-    if (m.Tipo === 'Pago') add(m.Fecha, 'Pago desde ' + bankName(m.ID_Banco) + (m.Descripcion ? ': ' + m.Descripcion : ''), -M, src, 'Pago');
+    if (m.Tipo === 'Pago') add(m.Fecha, 'Pago desde ' + bankName(m.ID_Banco) + (m.Descripcion ? ': ' + m.Descripcion : ''), -M, src, 'Pago', Number(m.Monto_Banco) && curOf(m.ID_Banco) !== cur ? fcur(m.Monto_Banco, curOf(m.ID_Banco)) + ' a T/C ' + m.Tipo_Cambio : '');
     else if (m.Tipo === 'Retiro de efectivo') add(m.Fecha, m.Descripcion || 'Retiro de efectivo', M + cg, src, 'Retiro de efectivo', cg ? 'incluye cargo de ' + fcur(cg, cur) : '');
     else add(m.Fecha, m.Descripcion || 'Compra', M - d, src, 'Compra', d ? 'descuento ' + fcur(d, cur) : '');
   });
-  DB.t.Consumo_Combustible.filter(f => String(f.ID_Tarjeta) === String(id) && Number(f.Costo) > 0).forEach(f => {
+  if (cur === 'NIO') DB.t.Consumo_Combustible.filter(f => String(f.ID_Tarjeta) === String(id) && Number(f.Costo) > 0).forEach(f => {
     const d = r2((Number(f.Costo) || 0) * (Number(f.Pct_Desc) || 0));
     add(f.Fecha, 'Combustible: ' + (Number(f.Litro) || 0).toFixed(2) + ' L' + (vehiculos().length > 1 ? ' (' + vehName(vehOf(f)) + ')' : ''), (Number(f.Costo) || 0) - d, {t: 'Consumo_Combustible', id: f.ID}, 'Combustible', d ? 'descuento ' + fcur(d, cur) : '');
   });
   out.sort((a, b) => a.fecha.localeCompare(b.fecha));
-  let bal = Number(c.Saldo_Inicial) || 0; out.forEach(r => { if (r.pre) { r.bal = null; return; } bal = r2(bal + r.amt); r.bal = bal; });
-  return {rows: out, deuda: bal, inicial: Number(c.Saldo_Inicial) || 0, start};
+  let bal = ini; out.forEach(r => { if (r.pre) { r.bal = null; return; } bal = r2(bal + r.amt); r.bal = bal; });
+  return {rows: out, deuda: bal, inicial: ini, start, cur};
 }
 /** Último corte, próximo corte y fecha límite de pago del último estado de cuenta */
 function cardCycle(c, now = new Date()) {
@@ -775,9 +784,8 @@ function cardCycle(c, now = new Date()) {
   return {last, next, prev, due};
 }
 const isoD = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-function cardStatus(c) {
-  const L = cardLedger(c.ID_Tarjeta), cy = cardCycle(c), lim = Number(c.Limite) || 0;
-  const st = {L, cy, deuda: L.deuda, disponible: lim ? r2(lim - L.deuda) : null, pendiente: null};
+function curStatus(L, cy) {
+  const st = {L, deuda: L.deuda, cur: L.cur, pendiente: null};
   if (!cy) return st;
   const lastK = isoD(cy.last) + ' 23:59', live = L.rows.filter(r => !r.pre);
   // si la deuda inicial se escribió después del último corte, se toma como el saldo de ese estado de cuenta
@@ -785,13 +793,21 @@ function cardStatus(c) {
   st.pagosDesde = r2(-live.filter(r => r.fecha > lastK && r.amt < 0).reduce((a, r) => a + r.amt, 0));
   st.consumosDesde = r2(live.filter(r => r.fecha > lastK && r.amt > 0).reduce((a, r) => a + r.amt, 0));
   st.pendiente = Math.max(0, r2(st.saldoCorte - st.pagosDesde));
-  if (cy.due) st.dias = Math.round((cy.due - new Date(new Date().toDateString())) / 864e5);
   return st;
 }
-function dueText(st, c) {
+/** Estado de cuenta en córdobas y en dólares; disponible del límite (US$) con la deuda en córdobas convertida al T/C de compra */
+function cardStatus(c) {
+  const cy = cardCycle(c), NIO = curStatus(cardLedger(c.ID_Tarjeta, 'NIO'), cy), USD = curStatus(cardLedger(c.ID_Tarjeta, 'USD'), cy), lim = Number(c.Limite) || 0, tc = tcFor(S.mes, 'compra');
+  const st = {cy, NIO, USD, disponible: lim ? r2(lim - USD.deuda - (tc ? NIO.deuda / tc : 0)) : null, tc};
+  st.porPagar = (NIO.pendiente || 0) > 0 || (USD.pendiente || 0) > 0;
+  if (cy && cy.due) st.dias = Math.round((cy.due - new Date(new Date().toDateString())) / 864e5);
+  return st;
+}
+const dosMonedas = (n, u) => [n ? money(n) : '', u ? usd(u) : ''].filter(Boolean).join(' y ') || money(0);
+function dueText(st) {
   if (!st.cy) return 'Sin día de corte';
-  if (!(st.pendiente > 0)) return 'Al día';
-  const p = fcur(st.pendiente, c.Moneda);
+  if (!st.porPagar) return 'Al día';
+  const p = dosMonedas(st.NIO.pendiente, st.USD.pendiente);
   if (st.cy.due && st.dias < 0) return `<span class="neg">Vencido: ${p}</span>`;
   return st.cy.due ? `<span class="${st.dias <= 5 ? 'neg' : ''}">Pagar ${p} antes del ${fdate(isoD(st.cy.due))}${st.dias <= 5 ? ` (${st.dias === 0 ? 'hoy' : st.dias === 1 ? 'mañana' : 'en ' + st.dias + ' días'})` : ''}</span>` : 'Pagar ' + p;
 }
@@ -806,6 +822,14 @@ function partidaOptsFor(mes, cuenta) {
   if (!pr.length) return [['', 'Esta cuenta no tiene partidas en ' + mesLabel(mes)]];
   return [['', 'Elegir partida…'], ['0', 'Sin partida'], ...pr.map(p => [p.ID_DetPresupuesto, p.Descripcion + ' · queda ' + money(r2((Number(p.Total) || 0) - (m.get(String(p.ID_DetPresupuesto)) || 0)))])];
 }
+/** Pago de tarjeta: lo que sale de la cuenta de banco (en su moneda) y su valor en córdobas para el gasto */
+function pagoCalc(o) {
+  const M = Number(o.Monto) || 0, pc = o.Moneda === 'USD' ? 'USD' : 'NIO', bc = curOf(o.ID_Banco), tc = Number(o.Tipo_Cambio) || 0;
+  if (pc === bc) return {banco: M, c: pc === 'NIO' ? M : r2(M * (tc || tcFor(S.mes, 'venta'))), conv: false, bc, pc};
+  if (pc === 'USD') return {banco: r2(M * tc), c: r2(M * tc), conv: true, bc, pc, kind: 'compra'};   // deuda en dólares pagada con córdobas
+  return {banco: tc ? r2(M / tc) : 0, c: M, conv: true, bc, pc, kind: 'venta'};                       // deuda en córdobas pagada con dólares
+}
+const pagoKind = o => o.Tipo === 'Pago' && o.Moneda === 'USD' && curOf(o.ID_Banco) !== 'USD' ? 'compra' : 'venta';
 function ledger(bid) {
   const b = banco(bid); if (!b) return {rows: [], saldo: 0};
   const cur = b.Moneda, start = dtKey(b.Fecha_Inicial), out = [];
@@ -821,7 +845,7 @@ function ledger(bid) {
     if (String(m.ID_Banco_Origen) === String(bid) && m.Tipo === 'Transferencia') add(m.Fecha, 'Transferencia a ' + bankName(m.ID_Banco_Destino) + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto) || 0), src, {tipo: 'Transferencia'});
     if (String(m.ID_Banco_Destino) === String(bid)) add(m.Fecha, (m.Tipo === 'Depósito' ? 'Depósito de efectivo' : 'Transferencia de ' + bankName(m.ID_Banco_Origen)) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto_Destino) || 0, src, {tipo: m.Tipo});
   });
-  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Pago' && String(m.ID_Banco) === String(bid)).forEach(m => add(m.Fecha, 'Pago de tarjeta ' + tarName(m.ID_Tarjeta) + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto) || 0), {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, {tipo: 'Pago de tarjeta'}));
+  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Pago' && String(m.ID_Banco) === String(bid)).forEach(m => add(m.Fecha, 'Pago de tarjeta ' + tarName(m.ID_Tarjeta) + ' (' + (movCur(m) === 'USD' ? 'deuda en US$' : 'deuda en C$') + ')' + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto_Banco) || Number(m.Monto) || 0), {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, {tipo: 'Pago de tarjeta'}));
   out.sort((a, b) => a.fecha.localeCompare(b.fecha));
   let bal = Number(b.Saldo_Inicial) || 0; out.forEach(r => { if (r.pre) { r.bal = null; return; } bal = r2(bal + r.amt); r.bal = bal; });
   return {rows: out, saldo: bal, inicial: Number(b.Saldo_Inicial) || 0, start, previos: out.filter(r => r.pre).length};
@@ -831,7 +855,7 @@ function cashLedger() {
   if (!start) return {rows: [], saldo: 0, inicial: 0, start: ''};
   const add = (fecha, desc, amt, src, tipo) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, pre: !after(fecha, start)});
   DB.t.Ingresos_Detalle.filter(r => noBank(r) && !r.Origen && !isCarry(r)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Total) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, 'Ingreso en efectivo'));
-  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && (tarjeta(m.ID_Tarjeta) || {}).Moneda !== 'USD').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto) || 0, {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
+  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && movCur(m) === 'NIO').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto) || 0, {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
   DB.t.Retiros_Detalle.filter(r => !r.Origen && r.Efectivo_Moneda !== 'USD').forEach(r => add(r.Fecha_Retiro, r.Movimiento + (banco(r.ID_Banco) ? ' (' + bankName(r.ID_Banco) + ')' : ''), Number(r.Total) || 0, {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, 'Retiro de efectivo'));
   DB.t.Gastos_Detalle.filter(r => noBank(r) && !r.Origen && !truthy(r.Efectivo_USD)).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(Number(r.Total) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, 'Gasto en efectivo'));
   (DB.t.Movimientos_Banco || []).filter(m => (m.Tipo === 'Depósito' || m.Tipo === 'Ajuste') && String(m.ID_Banco_Destino) === '0')
@@ -847,7 +871,7 @@ function cashUsdLedger() {
   const e = empresa(), start = dtKey(e.Fecha_Efectivo_Inicial), out = [];
   if (!start) return {rows: [], saldo: 0, inicial: 0, start: '', previos: 0};
   const add = (fecha, desc, amt, src, tipo) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, pre: !after(fecha, start)});
-  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && (tarjeta(m.ID_Tarjeta) || {}).Moneda === 'USD').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta), Number(m.Monto) || 0, {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
+  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && movCur(m) === 'USD').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta), Number(m.Monto) || 0, {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
   DB.t.Retiros_Detalle.filter(r => r.Efectivo_Moneda === 'USD' && !r.Origen).forEach(r => add(r.Fecha_Retiro, r.Movimiento + ' (' + bankName(r.ID_Banco) + ')', Number(r.Monto_Moneda) || 0, {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, 'Retiro en dólares'));
   DB.t.Gastos_Detalle.filter(r => truthy(r.Efectivo_USD) && !r.Origen).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(Number(r.Monto_Moneda) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, 'Gasto en efectivo en dólares'));
   (DB.t.Movimientos_Banco || []).forEach(m => {
@@ -986,7 +1010,7 @@ const Demo = {
     const c = tarjeta(m.ID_Tarjeta) || {}, need = m.Tipo === 'Pago' && m.ID_Banco !== '' && m.ID_Banco !== null && Number(m.Monto) > 0 && m.Mes_Anio;
     const ex = m.ID_Gasto_Auto, exists = ex && DB.t.Gastos_Detalle.some(x => String(x.ID_Detalle_Gastos) === String(ex));
     if (need) {
-      const row = {Fecha: m.Fecha, Cuenta_Gastos: m.Cuenta_Gastos || defaultTarjetaCuenta(), Descripcion_Gasto: 'Pago tarjeta ' + (c.Nombre || '') + (m.Descripcion ? ' (' + m.Descripcion + ')' : ''), Cantidad: 1, UM: 'Unidad', Total: Number(m.Monto), Precio_Unitario: Number(m.Monto), ID_Banco: m.ID_Banco, ID_Partida: m.ID_Partida || '', Origen: 'TAR:' + m.ID_MovTar, Descripcion_Adicional: 'Generado automáticamente'};
+      const row = {Fecha: m.Fecha, Cuenta_Gastos: m.Cuenta_Gastos || defaultTarjetaCuenta(), Descripcion_Gasto: 'Pago tarjeta ' + (c.Nombre || '') + (m.Moneda === 'USD' ? ' (US$ ' + Number(m.Monto).toFixed(2) + ')' : '') + (m.Descripcion ? ' (' + m.Descripcion + ')' : ''), Cantidad: 1, UM: 'Unidad', Total: Number(m.Monto_C) || Number(m.Monto), Precio_Unitario: Number(m.Monto_C) || Number(m.Monto), ID_Banco: m.ID_Banco, ID_Partida: m.ID_Partida || '', Origen: 'TAR:' + m.ID_MovTar, Descripcion_Adicional: 'Generado automáticamente'};
       if (exists) row.ID_Detalle_Gastos = ex;
       const g = this._saveDet('Gastos_Detalle', row, m.Mes_Anio, ch);
       if (String(ex) !== String(g.ID_Detalle_Gastos)) this._add(ch, 'Movimientos_Tarjeta', this._upsert('Movimientos_Tarjeta', Object.assign({}, m, {ID_Gasto_Auto: g.ID_Detalle_Gastos})));
@@ -1342,7 +1366,7 @@ V.inicio = () => {
       <button class="drow" data-go="bancos" data-banco="ef"><span>${ico('cash')}Efectivo en mano</span><b class="num ${D.mano < 0 ? 'neg' : ''}">${money(D.mano)}</b></button>
       <div class="drow total"><span>Total disponible</span><b class="num ${D.total < 0 ? 'neg' : ''}">${money(D.total)}</b></div>
       ${D.usd.map(u => `<button class="drow usd" data-go="bancos" data-banco="${u.b.ID_Banco}"><span>${esc(u.b.Nombre)}, aparte del total</span><b class="num">${usd(u.v)}</b></button>`).join('')}
-      ${tarjetas().map(c => { const st = cardStatus(c); return st.deuda > 0.004 || st.pendiente > 0 ? `<button class="drow usd" data-go="tarjetas" data-tarjeta="${c.ID_Tarjeta}"><span>Tarjeta ${esc(c.Nombre)}, deuda<br><small>${dueText(st, c)}</small></span><b class="num">${fcur(st.deuda, c.Moneda)}</b></button>` : ''; }).join('')}
+      ${tarjetas().map(c => { const st = cardStatus(c); return st.NIO.deuda > 0.004 || st.USD.deuda > 0.004 ? `<button class="drow usd" data-go="tarjetas" data-tarjeta="${c.ID_Tarjeta}"><span>Tarjeta ${esc(c.Nombre)}, deuda<br><small>${dueText(st)}</small></span><b class="num">${dosMonedas(st.NIO.deuda, st.USD.deuda)}</b></button>` : ''; }).join('')}
       ${hasUsdCash() && (D.efUsd || cashUsdLedger().rows.length) ? `<button class="drow usd" data-go="bancos" data-banco="efd"><span>Efectivo en dólares, aparte del total</span><b class="num">${usd(D.efUsd)}</b></button>` : ''}
     </div>
     ${D.configurado ? `<p class="muted" style="font-size:12.5px;margin:6px 2px 0">Saldos desde ${fdatetime(empresa().Fecha_Efectivo_Inicial)}</p>` : ''}</section>`; })()}
@@ -1749,30 +1773,33 @@ V.tarjetas = () => {
     ${rows.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Concepto</th><th class="n">Valor</th><th class="n">Descuento</th><th class="n">A pagar</th><th>Estado</th><th>Referencia de pago</th></tr></thead>
   <tbody>${rows.map(r => `<tr data-edit="Referencias_Tarjetas" data-id="${r.ID}"><td>${fdatetime(r.Fecha)}</td><td>${esc(r.Tarjeta_Credito)}</td><td>${esc(r.Observacion_Gastos)}</td><td class="n">${money(r.Valor)}</td><td class="n">${money(r.Descuento)}</td><td class="n">${money(r.Pagar)}</td><td>${truthy(r.Pagado) ? '<span class="pill open">Pagado</span>' : '<span class="pill bad">Pendiente</span>'}</td><td>${esc(r.Referencias_Pago)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>No hay consumos pendientes</b></div>'}` : ''}</section>` : '';
   if (!TL.length) return `<div class="panel empty" style="margin-top:12px"><b>Aún no hay tarjetas de crédito activas</b>${adm ? '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="tar-new">Agregar tarjeta</button></div>' : ''}</div>${legacy}`;
-  const c = tarjeta(S.tarjeta), st = cardStatus(c), cy = st.cy, cur = c.Moneda;
+  const c = tarjeta(S.tarjeta), st = cardStatus(c), cy = st.cy, N = st.NIO, U = st.USD;
   const lastK = cy ? isoD(cy.prev) : '';
-  const shown = (S.tarAll || !cy ? st.L.rows : st.L.rows.filter(r => r.fecha > lastK)).slice().reverse().slice(0, 250);
+  const all = [...N.L.rows, ...U.L.rows].sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const shown = (S.tarAll || !cy ? all : all.filter(r => r.fecha > lastK)).slice().reverse().slice(0, 250);
+  const cell = (s1, k, cur) => cy ? fcur(s1[k], cur) : '—';
+  const row = (label, k, cls) => `<tr style="cursor:default"><td>${label}</td><td class="n ${cls ? cls(N) : ''}">${cell(N, k, 'NIO')}</td><td class="n ${cls ? cls(U) : ''}">${cell(U, k, 'USD')}</td></tr>`;
+  const hot = s1 => s1.pendiente > 0 && st.dias <= 5 ? 'neg' : '';
   return `
   <section class="section"><div class="bankgrid">
-    ${TL.map(t => { const s2 = cardStatus(t); return `<button class="bankcard ${String(t.ID_Tarjeta) === S.tarjeta ? 'on' : ''}" data-tarjeta="${t.ID_Tarjeta}"><small>${esc(t.Banco || 'Tarjeta')}${t.Ultimos4 ? ' · ' + esc(t.Ultimos4) : ''}</small><b>${esc(t.Nombre)}</b><span class="num bal" style="--n:${fcur(s2.deuda, t.Moneda).length}">${fcur(s2.deuda, t.Moneda)}</span><small>${dueText(s2, t)}</small></button>`; }).join('')}
+    ${TL.map(t => { const s2 = cardStatus(t), n = money(s2.NIO.deuda), u = usd(s2.USD.deuda); return `<button class="bankcard ${String(t.ID_Tarjeta) === S.tarjeta ? 'on' : ''}" data-tarjeta="${t.ID_Tarjeta}"><small>${esc(t.Banco || 'Tarjeta')}${t.Ultimos4 ? ' · ' + esc(t.Ultimos4) : ''}</small><b>${esc(t.Nombre)}</b><span class="num bal" style="--n:${n.length}">${n}</span><span class="num bal bal2" style="--n:${u.length}">${u}</span><small>${dueText(s2)}</small></button>`; }).join('')}
   </div></section>
   ${!cy ? `<div class="notice" style="margin-top:12px"><span>Escribe el <b>día de corte</b> y el <b>día límite de pago</b> de ${esc(c.Nombre)} para ver su estado de cuenta.</span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button>' : ''}</div>` : ''}
-  <div class="figs three fuelfigs" style="margin-top:12px">
-    <div class="fig"><small>Deuda total</small><b class="num ${st.deuda > 0 ? 'neg' : ''}">${fcur(st.deuda, cur)}</b></div>
-    <div class="fig"><small>Saldo al corte${cy ? ' (' + fdate(isoD(cy.last)) + ')' : ''}</small><b class="num">${cy ? fcur(st.saldoCorte, cur) : '—'}</b></div>
-    <div class="fig"><small>Por pagar${cy && cy.due ? ' antes del ' + fdate(isoD(cy.due)) : ''}</small><b class="num ${st.pendiente > 0 && st.dias <= 5 ? 'neg' : ''}">${cy ? fcur(st.pendiente, cur) : '—'}</b></div>
-    <div class="fig"><small>Consumos desde el corte</small><b class="num">${cy ? fcur(st.consumosDesde, cur) : '—'}</b></div>
-    <div class="fig"><small>Pagado desde el corte</small><b class="num">${cy ? fcur(st.pagosDesde, cur) : '—'}</b></div>
-    <div class="fig"><small>Disponible${Number(c.Limite) ? ' de ' + fcur(c.Limite, cur) : ''}</small><b class="num">${st.disponible !== null ? fcur(st.disponible, cur) : '—'}</b></div>
-  </div>
-  ${cy ? `<p class="muted" style="font-size:12.5px;margin:8px 2px 0">Corte el día ${c.Dia_Corte} de cada mes${c.Dia_Pago ? ', pago hasta el día ' + c.Dia_Pago : ''}. Próximo corte: ${fdate(isoD(cy.next))}. ${st.pendiente > 0 && cy.due ? (st.dias < 0 ? `<b class="neg">El pago venció hace ${-st.dias} ${st.dias === -1 ? 'día' : 'días'}.</b>` : `Faltan <b>${st.dias}</b> ${st.dias === 1 ? 'día' : 'días'} para el límite de pago.`) : ''}</p>` : ''}
+  <div class="tablewrap" style="margin-top:12px"><table class="t estado"><thead><tr><th>Estado de cuenta</th><th class="n">Córdobas</th><th class="n">Dólares</th></tr></thead><tbody>
+    <tr style="cursor:default"><td><b>Deuda total</b></td><td class="n ${N.deuda > 0 ? 'neg' : ''}"><b>${money(N.deuda)}</b></td><td class="n ${U.deuda > 0 ? 'neg' : ''}"><b>${usd(U.deuda)}</b></td></tr>
+    ${row('Saldo al corte' + (cy ? ' (' + fdate(isoD(cy.last)) + ')' : ''), 'saldoCorte')}
+    ${row('<b>Por pagar</b>' + (cy && cy.due ? ' antes del ' + fdate(isoD(cy.due)) : ''), 'pendiente', hot)}
+    ${row('Consumos desde el corte', 'consumosDesde')}
+    ${row('Pagado desde el corte', 'pagosDesde')}
+  </tbody></table></div>
+  <p class="muted" style="font-size:12.5px;margin:8px 2px 0">${Number(c.Limite) ? `Límite ${usd(c.Limite)}; disponible <b>${usd(st.disponible)}</b> (lo que debes en córdobas se convierte a T/C de compra ${st.tc}). ` : ''}${cy ? `Corte el día ${c.Dia_Corte} de cada mes${c.Dia_Pago ? ', pago hasta el día ' + c.Dia_Pago : ''}. Próximo corte: ${fdate(isoD(cy.next))}. ${st.porPagar && cy.due ? (st.dias < 0 ? `<b class="neg">El pago venció hace ${-st.dias} ${st.dias === -1 ? 'día' : 'días'}.</b>` : `Faltan <b>${st.dias}</b> ${st.dias === 1 ? 'día' : 'días'} para el límite de pago.`) : ''}` : ''}</p>
   <section class="section"><h3>Movimientos de ${esc(c.Nombre)} <small>${S.tarAll || !cy ? 'todos' : 'desde el corte del ' + fdate(lastK)}</small></h3>
     <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="tarAll" ${S.tarAll ? 'checked' : ''}><span></span></span>Mostrar todos</label>
-    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="tar-mov">Registrar movimiento</button><button class="btn" data-act="tar-pay">Pagar tarjeta</button>' : ''}<span class="spacer"></span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button><button class="btn small" data-act="tar-new">Agregar tarjeta</button>' : ''}</div>
-    <p class="muted" style="font-size:12.5px;margin:0 0 10px">Suben la deuda las compras (menos su descuento), el combustible pagado con la tarjeta y los retiros de efectivo con su cargo; la bajan los pagos. Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta.</p>
+    <div class="toolbar" style="margin-top:0">${ed ? `<button class="btn primary" data-act="tar-mov">Registrar movimiento</button><button class="btn" data-act="tar-pay" data-cur="NIO">Pagar en C$</button><button class="btn" data-act="tar-pay" data-cur="USD">Pagar en US$</button>` : ''}<span class="spacer"></span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button><button class="btn small" data-act="tar-new">Agregar tarjeta</button>' : ''}</div>
+    <p class="muted" style="font-size:12.5px;margin:0 0 10px">La tarjeta lleva dos deudas: en córdobas y en dólares. Suben con las compras (menos su descuento), el combustible pagado con la tarjeta y los retiros de efectivo con su cargo; bajan con los pagos a cada una. Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta.</p>
     ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt < 0 ? 'var(--good)' : 'var(--sun)'}"></span>
-      <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)}${r.alt ? ', ' + esc(r.alt) : ''}</small></span>
-      <span class="amt num ${r.amt < 0 ? 'pos' : ''}">${r.amt > 0 ? '+' : '−'}${fcur(Math.abs(r.amt), cur)}<small>${r.pre ? 'Anterior a la deuda inicial' : 'Deuda ' + fcur(r.bal, cur)}</small></span></button>`).join('')}</div>`
+      <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)} en ${r.cur === 'USD' ? 'dólares' : 'córdobas'}${r.alt ? ', ' + esc(r.alt) : ''}</small></span>
+      <span class="amt num ${r.amt < 0 ? 'pos' : ''}">${r.amt > 0 ? '+' : '−'}${fcur(Math.abs(r.amt), r.cur)}<small>${r.pre ? 'Anterior a la deuda inicial' : 'Deuda ' + fcur(r.bal, r.cur)}</small></span></button>`).join('')}</div>`
       : `<div class="panel empty"><b>Sin movimientos ${S.tarAll || !cy ? '' : 'desde el corte'}</b>Registra compras, retiros y pagos, o paga el combustible con esta tarjeta.</div>`}
   </section>
   ${legacy}`;
@@ -2038,14 +2065,14 @@ const FORMS = {
     {k: 'Nombre', l: 'Nombre', ty: 'text', req: 1, hint: 'Ejemplo: GasCard VISA'},
     {k: 'Banco', l: 'Banco', ty: 'text', half: 1, list: () => [...new Set((DB.t.Bancos || []).map(b => b.Banco).concat((DB.t.Tarjetas_Credito || []).map(t => t.Banco)).filter(Boolean))]},
     {k: 'Ultimos4', l: 'Últimos 4 dígitos', ty: 'text', half: 1},
-    {k: 'Moneda', l: 'Moneda', ty: 'select', half: 1, opts: () => [['NIO', 'Córdobas (C$)'], ['USD', 'Dólares (US$)']], def: 'NIO'},
-    {k: 'Limite', l: 'Límite de crédito', ty: 'number', step: '0.01', half: 1},
+    {k: 'Limite', l: 'Límite de crédito (US$)', ty: 'number', step: '0.01', half: 1, hint: 'Se comparte entre lo que debes en dólares y en córdobas'},
+    {k: 'Descuento_Pct', l: 'Descuento en compras (%)', ty: 'pct', half: 1, def: 0, hint: 'Por ejemplo 7 en combustible; negativo si cobra recargo'},
     {k: 'Dia_Corte', l: 'Día de corte', ty: 'number', step: '1', half: 1, hint: 'Día del mes en que cierra el estado de cuenta'},
     {k: 'Dia_Pago', l: 'Día límite de pago', ty: 'number', step: '1', half: 1, hint: 'Día del mes para pagar sin recargo'},
     {k: 'ID_Banco', l: 'Se paga desde', ty: 'select', num: 1, opts: () => [['', 'Elegir al pagar'], ...bancos().map(b => [b.ID_Banco, b.Nombre])]},
-    {k: 'Descuento_Pct', l: 'Descuento en compras (%)', ty: 'pct', half: 1, def: 0, hint: 'Por ejemplo 7 en combustible; negativo si cobra recargo'},
-    {k: 'Saldo_Inicial', l: 'Deuda actual', ty: 'number', step: '0.01', half: 1, def: 0, hint: 'Lo que debes hoy (míralo en la app del banco)'},
-    {k: 'Fecha_Inicial', l: 'Fecha y hora de esa deuda', ty: 'datetime', req: 1, def: nowDT, hint: 'Solo cuentan los movimientos desde ese momento'},
+    {k: 'Saldo_Inicial', l: 'Deuda actual en córdobas (C$)', ty: 'number', step: '0.01', half: 1, def: 0},
+    {k: 'Saldo_Inicial_USD', l: 'Deuda actual en dólares (US$)', ty: 'number', step: '0.01', half: 1, def: 0},
+    {k: 'Fecha_Inicial', l: 'Fecha y hora de esas deudas', ty: 'datetime', req: 1, def: nowDT, hint: 'Míralas en la app del banco. Solo cuentan los movimientos desde ese momento'},
     {k: 'Orden', l: 'Orden', ty: 'number', half: 1, def: () => tarjetas(true).length + 1},
     {k: 'Activa', l: 'Activa', ty: 'bool', def: true, hint: 'Desactívala si ya no la usas: su historial se conserva'}],
     validate: o => [o.Dia_Corte, o.Dia_Pago].some(v => v !== '' && !(Number(v) >= 1 && Number(v) <= 31)) ? 'El día de corte y el de pago van del 1 al 31' : (!FORM.rec && (DB.t.Tarjetas_Credito || []).some(t => nrm(t.Nombre) === nrm(o.Nombre)) ? 'Ya existe una tarjeta con ese nombre' : ''),
@@ -2054,27 +2081,33 @@ const FORMS = {
   Movimientos_Tarjeta: {t: 'movimiento de tarjeta', perm: 'tarjetas.editar', needsMes: 1, fields: [
     {k: 'ID_Tarjeta', l: 'Tarjeta', ty: 'select', num: 1, opts: () => tarjetas().map(c => [c.ID_Tarjeta, c.Nombre + (c.Ultimos4 ? ' · ' + c.Ultimos4 : '')]), def: () => Number(S.tarjeta || (tarjetas()[0] || {}).ID_Tarjeta) || ''},
     {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Compra', 'Compra'], ['Retiro de efectivo', 'Retiro de efectivo'], ['Pago', 'Pago de la tarjeta']], def: 'Compra'},
+    {k: 'Moneda', l: 'Moneda', ty: 'select', half: 1, opts: () => [['NIO', 'Córdobas (C$)'], ['USD', 'Dólares (US$)']], def: 'NIO', fillFrom: rec => movCur(rec)},
     {k: 'Fecha', l: 'Fecha y hora', ty: 'datetime', req: 1, def: nowDT},
     {k: 'Descripcion', l: 'Concepto', ty: 'text'},
     {k: 'Monto', l: 'Monto', ty: 'number', req: 1, step: '0.01', half: 1},
     {k: 'Pct_Desc', l: 'Descuento (%)', ty: 'pct', half: 1, def: () => Number((tarjeta(S.tarjeta) || tarjetas()[0] || {}).Descuento_Pct) || 0, show: o => o.Tipo === 'Compra', hint: 'El de la tarjeta; cámbialo si esta compra no lo tiene'},
     {k: 'Cargo', l: 'Cargo por retiro', ty: 'number', step: '0.01', half: 1, show: o => o.Tipo === 'Retiro de efectivo', hint: 'Lo que cobra el banco por el retiro'},
-    {k: 'ID_Banco', l: 'Pagar desde', ty: 'select', num: 1, live: o => o.Tipo === 'Pago' ? saldoLine(o.ID_Banco, o.Monto, FORM && FORM.rec && FORM.rec.Tipo === 'Pago' ? {ID_Banco: FORM.rec.ID_Banco, Total: FORM.rec.Monto, Monto_Moneda: FORM.rec.Monto} : null) : '', opts: () => bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), def: () => Number((tarjeta(S.tarjeta) || {}).ID_Banco) || (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Pago'},
+    {k: 'ID_Banco', l: 'Pagar desde', ty: 'select', num: 1, live: o => { if (o.Tipo !== 'Pago') return ''; const pc = pagoCalc(o); return saldoLine(o.ID_Banco, pc.banco, FORM && FORM.rec && FORM.rec.Tipo === 'Pago' ? {ID_Banco: FORM.rec.ID_Banco, Total: Number(FORM.rec.Monto_Banco) || Number(FORM.rec.Monto), Monto_Moneda: Number(FORM.rec.Monto_Banco) || Number(FORM.rec.Monto)} : null); },
+      opts: () => bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), def: () => Number((tarjeta(S.tarjeta) || {}).ID_Banco) || (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Pago'},
+    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', step: 'any', half: 1, req: 1, def: () => tcFor(S.mes, 'compra'), show: o => o.Tipo === 'Pago' && pagoCalc(o).conv},
     {k: 'Cuenta_Gastos', l: 'Cuenta del gasto', ty: 'select', combo: 1, opts: () => optsCuentas(true), def: () => defaultTarjetaCuenta(), fillEmpty: 1, show: o => o.Tipo === 'Pago', hint: 'El pago se registra como gasto del período en esta cuenta'},
     {k: 'ID_Partida', l: 'Partida del presupuesto', ty: 'select', combo: 1, num: 1, opts: () => [], def: () => guessPartida(S.tarjeta, S.mes, defaultTarjetaCuenta()), dynOpts: o => partidaOptsFor(FORM && FORM.rec && FORM.rec.Mes_Anio || S.mes, o.Cuenta_Gastos), show: o => o.Tipo === 'Pago'}],
-    label: o => { const u = (tarjeta(o.ID_Tarjeta) || {}).Moneda === 'USD' ? 'US$' : 'C$';
-      return {Monto: (o.Tipo === 'Pago' ? 'Monto del pago' : o.Tipo === 'Retiro de efectivo' ? 'Efectivo retirado' : 'Monto de la compra') + ' (' + u + ')', Cargo: 'Cargo por retiro (' + u + ')', Descripcion: o.Tipo === 'Compra' ? 'Comercio o concepto' : 'Concepto'}; },
+    label: o => { const u = o.Moneda === 'USD' ? 'US$' : 'C$';
+      return {Monto: (o.Tipo === 'Pago' ? 'Monto del pago a la deuda en ' : o.Tipo === 'Retiro de efectivo' ? 'Efectivo retirado (' : 'Monto de la compra (') + (o.Tipo === 'Pago' ? u : u + ')'), Cargo: 'Cargo por retiro (' + u + ')', Descripcion: o.Tipo === 'Compra' ? 'Comercio o concepto' : 'Concepto', Tipo_Cambio: 'Tipo de cambio de ' + pagoKind(o) + ' (C$ por US$)'}; },
     validate: o => { if (!(Number(o.Monto) > 0)) return 'El monto debe ser mayor que cero';
-      if (o.Tipo === 'Pago' && saldosConfigurados()) { const a = availOf(o.ID_Banco, FORM.rec && FORM.rec.Tipo === 'Pago' ? {ID_Banco: FORM.rec.ID_Banco, Total: FORM.rec.Monto, Monto_Moneda: FORM.rec.Monto} : null); if (Number(o.Monto) > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)}`; }
+      if (o.Tipo === 'Pago') { const pc = pagoCalc(o); if (pc.conv && !(Number(o.Tipo_Cambio) > 0)) return 'Escribe el tipo de cambio';
+        if (saldosConfigurados()) { const a = availOf(o.ID_Banco, FORM.rec && FORM.rec.Tipo === 'Pago' ? {ID_Banco: FORM.rec.ID_Banco, Total: Number(FORM.rec.Monto_Banco) || Number(FORM.rec.Monto), Monto_Moneda: Number(FORM.rec.Monto_Banco) || Number(FORM.rec.Monto)} : null); if (pc.banco > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)} y el pago necesita ${fcur(pc.banco, a.cur)}`; } }
       return ''; },
-    preview: o => { const c = tarjeta(o.ID_Tarjeta), M = Number(o.Monto) || 0; if (!c || !M) return ''; const cur = c.Moneda;
-      if (o.Tipo === 'Pago') return `Se descuentan <b>${fcur(M, cur)}</b> de ${esc(bankName(o.ID_Banco))} y baja la deuda de ${esc(c.Nombre)}. Se registra como <b>gasto</b> de ${money(M)} en ${esc(cuentaNombre(o.Cuenta_Gastos))}.`;
-      if (o.Tipo === 'Retiro de efectivo') { const cg = Number(o.Cargo) || 0; return `Entran <b>${fcur(M, cur)}</b> a tu efectivo${cur === 'USD' ? ' en dólares' : ' en mano'}. La deuda de ${esc(c.Nombre)} sube <b>${fcur(M + cg, cur)}</b>${cg ? ` (incluye el cargo de ${fcur(cg, cur)})` : ''}. No es gasto: se cuenta al pagar la tarjeta.`; }
-      const d = r2(M * (Number(o.Pct_Desc) || 0)); return `La deuda de ${esc(c.Nombre)} sube <b>${fcur(M - d, cur)}</b>${d ? ` (${fcur(M, cur)} − descuento ${fcur(d, cur)})` : ''}. No es gasto ahora: se cuenta al pagar la tarjeta.`; },
-    before: o => { o.ID_Tarjeta = Number(o.ID_Tarjeta); const M = Number(o.Monto) || 0;
+    preview: o => { const c = tarjeta(o.ID_Tarjeta), M = Number(o.Monto) || 0; if (!c || !M) return ''; const cur = o.Moneda === 'USD' ? 'USD' : 'NIO', deu = cur === 'USD' ? 'la deuda en dólares' : 'la deuda en córdobas';
+      if (o.Tipo === 'Pago') { const pc = pagoCalc(o); if (pc.conv && !Number(o.Tipo_Cambio)) return 'Escribe el tipo de cambio para calcular cuánto sale de la cuenta.';
+        return `Baja ${deu} de ${esc(c.Nombre)} en <b>${fcur(M, cur)}</b>. Se descuentan <b>${fcur(pc.banco, pc.bc)}</b> de ${esc(bankName(o.ID_Banco))}${pc.conv ? ` (${pc.pc === 'USD' ? fcur(M, 'USD') + ' × T/C ' + o.Tipo_Cambio : fcur(M, 'NIO') + ' ÷ T/C ' + o.Tipo_Cambio})` : ''}. Se registra como <b>gasto</b> de ${money(pc.c)} en ${esc(cuentaNombre(o.Cuenta_Gastos))}.`; }
+      if (o.Tipo === 'Retiro de efectivo') { const cg = Number(o.Cargo) || 0; return `Entran <b>${fcur(M, cur)}</b> a tu efectivo${cur === 'USD' ? ' en dólares' : ' en mano'}. ${deu.charAt(0).toUpperCase() + deu.slice(1)} de ${esc(c.Nombre)} sube <b>${fcur(M + cg, cur)}</b>${cg ? ` (incluye el cargo de ${fcur(cg, cur)})` : ''}. No es gasto: se cuenta al pagar la tarjeta.`; }
+      const d = r2(M * (Number(o.Pct_Desc) || 0)); return `${deu.charAt(0).toUpperCase() + deu.slice(1)} de ${esc(c.Nombre)} sube <b>${fcur(M - d, cur)}</b>${d ? ` (${fcur(M, cur)} − descuento ${fcur(d, cur)})` : ''}. No es gasto ahora: se cuenta al pagar la tarjeta.`; },
+    before: o => { o.ID_Tarjeta = Number(o.ID_Tarjeta); o.Moneda = o.Moneda === 'USD' ? 'USD' : 'NIO'; const M = Number(o.Monto) || 0;
       if (o.Tipo === 'Compra') { o.Pct_Desc = Number(o.Pct_Desc) || 0; o.Descuento = r2(M * o.Pct_Desc); } else { o.Pct_Desc = ''; o.Descuento = ''; }
       if (o.Tipo !== 'Retiro de efectivo') o.Cargo = '';
-      if (o.Tipo !== 'Pago') { o.ID_Banco = ''; o.Cuenta_Gastos = ''; o.ID_Partida = ''; } },
+      if (o.Tipo === 'Pago') { const pc = pagoCalc(o); o.Monto_Banco = pc.banco; o.Monto_C = pc.c; if (!pc.conv) o.Tipo_Cambio = o.Moneda === 'USD' ? tcFor(S.mes, 'venta') : ''; }
+      else { o.ID_Banco = ''; o.Cuenta_Gastos = ''; o.ID_Partida = ''; o.Tipo_Cambio = ''; o.Monto_Banco = ''; o.Monto_C = ''; } },
     after: o => { if (o.ID_Tarjeta) S.tarjeta = String(o.ID_Tarjeta); }},
   Referencias_Tarjetas: {t: 'consumo con tarjeta', perm: 'tarjetas.editar', fields: [
     {k: 'Fecha', l: 'Fecha y hora del consumo', ty: 'datetime', req: 1, def: nowDT},
@@ -2230,7 +2263,7 @@ function openForm(table, id, edit) {
 function formDynamics() {
   if (!FORM) return;
   const o = readForm(), F = FORM.F;
-  if (FORM.table === 'Movimientos_Banco') { const tcEl = $('#f_Tipo_Cambio'), k = movTcKind(o);
+  if (FORM.table === 'Movimientos_Banco' || FORM.table === 'Movimientos_Tarjeta') { const tcEl = $('#f_Tipo_Cambio'), k = FORM.table === 'Movimientos_Tarjeta' ? pagoKind(o) : movTcKind(o);
     if (tcEl && FORM.tcKind !== k) { if (!FORM.tcTouched && !FORM.rec) { tcEl.value = tcFor(S.mes, k); o.Tipo_Cambio = Number(tcEl.value); } FORM.tcKind = k; const h = $('#frm [data-fk="Tipo_Cambio"] .hint'); if (h) h.textContent = tcHint(k); } }
   F.fields.forEach(f => { if (!f.dynOpts) return; const el = $('#f_' + f.k); if (!el) return;
     const list = f.dynOpts(o), html = list.map(([a, b]) => `<option value="${esc(a)}">${esc(b)}</option>`).join('');
@@ -2424,7 +2457,7 @@ function motivoOf(table, o, acc) {
     Retiros_Detalle: () => `Retiro: ${o.Efectivo_Moneda === 'USD' ? usd(o.Monto_Moneda) : money(o.Total)} de ${bankName(o.ID_Banco)}`,
     Ingresos_Detalle: () => `Ingreso: ${o.Descripcion || ''} ${money(o.Total)}`,
     Presupuesto_Detalle: () => `Partida: ${o.Descripcion || ''} ${money(o.Total)}`,
-    Movimientos_Tarjeta: () => `${o.Tipo === 'Pago' ? 'Pago de tarjeta' : o.Tipo === 'Compra' ? 'Compra con tarjeta' : 'Retiro con tarjeta'}: ${tarName(o.ID_Tarjeta)} ${money(o.Monto)}`,
+    Movimientos_Tarjeta: () => `${o.Tipo === 'Pago' ? 'Pago de tarjeta' : o.Tipo === 'Compra' ? 'Compra con tarjeta' : 'Retiro con tarjeta'}: ${tarName(o.ID_Tarjeta)} ${fcur(o.Monto, o.Moneda === 'USD' ? 'USD' : 'NIO')}`,
     Movimientos_Banco: () => o.Tipo === 'Transferencia' ? `Transferencia: ${bankName(o.ID_Banco_Origen)} → ${bankName(o.ID_Banco_Destino)} ${fcur(o.Monto_Destino, d)}` : `${o.Tipo === 'Depósito' ? 'Depósito' : 'Ajuste'}: ${fcur(o.Monto_Destino, d)} en ${bankName(o.ID_Banco_Destino)}${o.Descripcion ? ' (' + o.Descripcion + ')' : ''}`
   }[table];
   return m ? pre + m().replace(/\s+/g, ' ').trim() : '';
@@ -2649,9 +2682,11 @@ document.addEventListener('click', async e => {
   if (a === 'tar-new') return openForm('Tarjetas_Credito');
   if (a === 'tar-edit') return openForm('Tarjetas_Credito', S.tarjeta, true);
   if (a === 'tar-mov') return openForm('Movimientos_Tarjeta');
-  if (a === 'tar-pay') { const c = tarjeta(S.tarjeta); if (!c) return; const st = cardStatus(c); openForm('Movimientos_Tarjeta');
+  if (a === 'tar-pay') { const c = tarjeta(S.tarjeta); if (!c) return; const cur = t.dataset.cur === 'USD' ? 'USD' : 'NIO', st = cardStatus(c), cs = st[cur]; openForm('Movimientos_Tarjeta');
     const set = (id, v) => { const el = $(id); if (el) el.value = v; };
-    set('#f_Tipo', 'Pago'); set('#f_Monto', st.pendiente > 0 ? st.pendiente : (st.deuda > 0 ? st.deuda : '')); if (st.cy) set('#f_Descripcion', 'Estado de cuenta al ' + fdate(isoD(st.cy.last)));
+    set('#f_Tipo', 'Pago'); set('#f_Moneda', cur); set('#f_Monto', cs.pendiente > 0 ? cs.pendiente : (cs.deuda > 0 ? cs.deuda : ''));
+    if (cur === 'USD') { const ub = bancos().find(b => b.Moneda === 'USD'); if (ub && !(curOf((tarjeta(S.tarjeta) || {}).ID_Banco) === 'USD')) set('#f_ID_Banco', ub.ID_Banco); }
+    if (st.cy) set('#f_Descripcion', 'Estado de cuenta al ' + fdate(isoD(st.cy.last)));
     formDynamics(); return; }
   if (a === 'hogar-edit') { const e0 = empresa(); return openForm('Empresa', e0.Empresa, true); }
   if (a === 'form-edit') { const tb = FORM.table, id = FORM.rec[DB.key(tb)]; openForm(tb, id, true); const first = $('#frm input:not([disabled]), #frm select:not([disabled])'); if (first && matchMedia('(pointer:fine)').matches) first.focus(); return; }

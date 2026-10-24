@@ -221,17 +221,17 @@ El bloqueo se cambia en *Mi cuenta → Configuración → Bloquear eliminaciones
 
 ## Tarjetas de crédito
 
-El módulo *Tarjetas* lleva cada **tarjeta de crédito** asociada a un banco: su **deuda**, su **estado de cuenta** y la **fecha límite de pago**.
+El módulo *Tarjetas* lleva cada **tarjeta de crédito** asociada a un banco. Cada tarjeta tiene **dos deudas**, una en **córdobas** y otra en **dólares**, y un **límite de crédito en dólares** que comparten las dos.
 
-- **Las tarjetas:** se crearon solas a partir de las que usabas en Access (GasCard VISA, BAC American Express, LAFISE D'TODO, BAC Mariela), con su banco y su % de descuento. Con **Editar tarjeta** escribes los últimos 4 dígitos, el **límite**, el **día de corte**, el **día límite de pago**, la cuenta desde la que se paga y la **deuda actual** (con su fecha y hora). Las que ya no uses, desactívalas. Administradores y supervisores las configuran (también en *Catálogos → Tarjetas de crédito*); hoja `Tarjetas_Credito`.
-- **Movimientos** (*Registrar movimiento*, hoja `Movimientos_Tarjeta`):
-  - **Compra:** sube la deuda por el monto menos el descuento de la tarjeta (editable en cada compra; negativo si es un recargo).
-  - **Retiro de efectivo:** el dinero entra al efectivo en mano (o al efectivo en dólares si la tarjeta es en dólares) y la deuda sube por el retiro **más el cargo** que cobra el banco.
-  - **Pago** (*Pagar tarjeta* propone lo que falta pagar del estado de cuenta): baja la cuenta de banco y la deuda, y se registra como **gasto** del período en la cuenta *Tarjeta Credito* (puedes elegir la partida, por ejemplo *Pago tarjeta GasCard*). Ese gasto queda ligado al pago: se corrige o elimina desde el pago.
-- **Combustible:** el llenado tiene **Pagado con**; si eliges una tarjeta, el costo menos su descuento suma a la deuda de esa tarjeta (como antes, el combustible no se suma a Gastos: se cuenta al pagar la tarjeta).
-- **Las compras no son gasto al hacerlas**: el gasto se registra al pagar la tarjeta, así no se cuenta dos veces.
-- **Estado de cuenta:** deuda total, saldo al último corte, **por pagar antes de** la fecha límite (con los días que faltan, en rojo si faltan 5 o menos o si venció), consumos y pagos desde el corte, y disponible del límite. La lista muestra los movimientos desde el corte anterior (o todos).
-- **Inicio:** en *Dinero disponible* aparece cada tarjeta con deuda y cuánto pagar antes de qué fecha (aparte del total disponible).
+- **Las tarjetas:** se crearon solas a partir de las que usabas en Access (GasCard VISA, BAC American Express, LAFISE D'TODO, BAC Mariela), con su banco y su % de descuento. Con **Editar tarjeta** escribes los últimos 4 dígitos, el **límite (US$)**, el **día de corte**, el **día límite de pago**, la cuenta desde la que se paga y la **deuda actual en córdobas y en dólares** (con su fecha y hora). Las que ya no uses, desactívalas. Hojas `Tarjetas_Credito` y `Movimientos_Tarjeta`.
+- **Movimientos** (*Registrar movimiento*), cada uno en **córdobas o en dólares**:
+  - **Compra:** sube la deuda de esa moneda por el monto menos el descuento de la tarjeta (editable; negativo si es un recargo).
+  - **Retiro de efectivo:** entra al efectivo en mano (o al efectivo en dólares) y la deuda sube por el retiro **más el cargo**.
+  - **Pago:** **Pagar en C$** o **Pagar en US$** propone lo que falta pagar de esa deuda. Se puede pagar desde una cuenta en la misma moneda o en la otra: la deuda en dólares pagada desde córdobas usa el **T/C de compra** (US$ 100 × 37.15 = C$ 3,715 que salen del banco) y la deuda en córdobas pagada desde dólares usa el de **venta**. El pago baja la cuenta de banco y se registra como **gasto** del período en *Tarjeta Credito* por su valor en córdobas (la deuda en dólares pagada desde la cuenta en dólares se valora al T/C de venta). El gasto queda ligado al pago.
+- **Combustible:** el llenado tiene **Pagado con**; con una tarjeta, el costo menos su descuento suma a su deuda en córdobas.
+- **Las compras no son gasto al hacerlas**: el gasto se registra al pagar la tarjeta.
+- **Estado de cuenta** (tabla con columnas *Córdobas* y *Dólares*): deuda total, saldo al último corte, **por pagar antes de** la fecha límite (en rojo si faltan 5 días o menos o si venció), consumos y pagos desde el corte. Debajo, el **disponible del límite** en dólares (lo que debes en córdobas se convierte al T/C de compra).
+- **Inicio:** en *Dinero disponible* aparece cada tarjeta con su deuda en C$ y US$ y cuánto pagar antes de qué fecha.
 - **Historial de Access:** los consumos anteriores siguen en la misma pantalla (*Mostrar el historial de Access*).
 
 ## Importar el presupuesto desde Excel
