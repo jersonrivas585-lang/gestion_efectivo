@@ -477,7 +477,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.24-2042';
+const APP_VERSION = '2026.10.25-0129';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1799,7 +1799,7 @@ V.tarjetas = () => {
   <p class="muted" style="font-size:12.5px;margin:8px 2px 0">${Number(c.Limite) ? `Límite ${usd(c.Limite)}; disponible <b>${usd(st.disponible)}</b> (lo que debes en córdobas se convierte a T/C de compra ${st.tc}). ` : ''}${cy ? `Corte el día ${c.Dia_Corte} de cada mes${c.Dia_Pago ? ', pago hasta el día ' + c.Dia_Pago : ''}. Próximo corte: ${fdate(isoD(cy.next))}. ${st.porPagar && cy.due ? (st.dias < 0 ? `<b class="neg">El pago venció hace ${-st.dias} ${st.dias === -1 ? 'día' : 'días'}.</b>` : `Faltan <b>${st.dias}</b> ${st.dias === 1 ? 'día' : 'días'} para el límite de pago.`) : ''}` : ''}</p>
   <section class="section"><h3>Movimientos de ${esc(c.Nombre)} <small>${S.tarAll || !cy ? 'todos' : 'desde el corte del ' + fdate(lastK)}</small></h3>
     <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="tarAll" ${S.tarAll ? 'checked' : ''}><span></span></span>Mostrar todos</label>
-    <div class="toolbar" style="margin-top:0">${ed ? `<button class="btn primary" data-act="tar-mov">Registrar movimiento</button><button class="btn" data-act="tar-pay">Pagar tarjeta</button>` : ''}<span class="spacer"></span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button><button class="btn small" data-act="tar-new">Agregar tarjeta</button>' : ''}</div>
+    <div class="toolbar" style="margin-top:0">${ed ? `<button class="btn primary" data-act="tar-mov">Registrar movimiento</button>` : ''}<span class="spacer"></span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button><button class="btn small" data-act="tar-new">Agregar tarjeta</button>' : ''}</div>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">La tarjeta lleva dos deudas: en córdobas y en dólares. Suben con las compras (menos su descuento), el combustible pagado con la tarjeta, los retiros de efectivo con su cargo y los cargos del banco (intereses o comisiones); bajan con los pagos y con los reembolsos o bonificaciones. Al recibir el estado de cuenta, agrega sus cargos y reembolsos para que la deuda coincida con la del banco. Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta.</p>
     ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt < 0 ? 'var(--good)' : 'var(--sun)'}"></span>
       <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)} en ${r.cur === 'USD' ? 'dólares' : 'córdobas'}${r.alt ? ', ' + esc(r.alt) : ''}</small></span>
@@ -2915,7 +2915,11 @@ document.addEventListener('change', async e => {
     }
     if (FORM.table === 'Consumo_Combustible' && el.name === 'ID_Tarjeta' && !FORM.pctTouched) { const t = tarjeta(el.value), pe = $('#f_Pct_Desc'); if (t && pe) { pe.value = r2((Number(t.Descuento_Pct) || 0) * 100); formDynamics(); } }
     if (FORM.table === 'Movimientos_Tarjeta' && !FORM.rec && !FORM.montoTouched && (el.name === 'Moneda' || el.name === 'Tipo' || el.name === 'ID_Tarjeta') && $('#f_Tipo').value === 'Pago') {
-      const c = tarjeta($('#f_ID_Tarjeta').value); if (c) { const st = cardStatus(c), cs = st[$('#f_Moneda').value === 'USD' ? 'USD' : 'NIO']; $('#f_Monto').value = cs.pendiente > 0 ? cs.pendiente : (cs.deuda > 0 ? cs.deuda : ''); formDynamics(); }
+      const c = tarjeta($('#f_ID_Tarjeta').value); if (c) { const st = cardStatus(c);
+        if (el.name === 'Tipo' && $('#f_Moneda').value !== 'USD' && !(st.NIO.pendiente > 0) && (st.USD.pendiente > 0 || (!(st.NIO.deuda > 0) && st.USD.deuda > 0))) $('#f_Moneda').value = 'USD';   // si solo se debe en dólares
+        const cs = st[$('#f_Moneda').value === 'USD' ? 'USD' : 'NIO']; $('#f_Monto').value = cs.pendiente > 0 ? cs.pendiente : (cs.deuda > 0 ? cs.deuda : '');
+        const d = $('#f_Descripcion'); if (d && !d.value.trim() && st.cy) d.value = 'Estado de cuenta al ' + fdate(isoD(st.cy.last));
+        formDynamics(); }
     }
     if (el.id === 'f__periodo') return; if (el.name === 'ID_Partida') prefillFromPartida(el); if (el.name === 'Descripcion_Gasto') autofillFromHistory(el); return; }
   if (el.dataset.flag) {
