@@ -207,6 +207,8 @@ La barra de abajo tiene, en este orden, **Inicio, Bancos, Retiros, Gastos, Presu
 
 ## Consultar y editar registros
 
+**Las ventanas no se cierran al tocar fuera.** Para no perder lo que estás escribiendo, tocar el fondo oscuro alrededor de una ventana ya no la cierra (la ventana hace un pequeño rebote). Se cierra con **×**, **Cancelar** o **Cerrar**, o con la tecla Escape en la computadora.
+
 Al tocar un gasto, retiro, depósito, transferencia, partida del presupuesto, llenado o consumo con tarjeta, se abre **en modo consulta**: se ven todos los datos sin poder cambiarlos, con los botones **Cerrar** y **Editar**. *Editar* aparece solo si el período del registro está abierto para ese módulo y tu usuario tiene permiso; al tocarlo, el formulario pasa a modo edición (con *Guardar cambios* y *Eliminar*). Si el período está cerrado, se ve el aviso correspondiente y no hay botón *Editar*. Los catálogos (cuentas, unidades, vehículos, cuentas de banco) se siguen abriendo directamente para editar.
 
 **Listas compactas:** en el gasto y en el presupuesto (*Cuenta* y *Partida del presupuesto*), en el filtro de cuenta de *Gastos* y en *Análisis por cuenta* se usa una lista propia, más compacta que la del celular, con filas bajas y un buscador cuando hay más de 8 opciones (por ejemplo, escribe «medic» para encontrar *Medicamentos y Consultas*). Se cierra al elegir, al tocar fuera o con Escape.
