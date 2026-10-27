@@ -339,6 +339,8 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .combo-q{margin:6px;min-height:36px;padding:6px 10px;font-size:14px;width:auto}
 .combo-list{overflow:auto;overscroll-behavior:contain}
 .combo-opt{display:block;width:100%;min-height:34px;padding:7px 12px;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);font:inherit;font-size:14.5px;text-align:left;cursor:pointer}
+.combo-opt[hidden]{display:none}
+.combo-none{padding:10px 12px;color:var(--muted);font-size:13.5px}
 .combo-opt:first-child{border-top:0}
 .combo-opt:hover{background:var(--sunk)}
 .combo-opt.on{background:var(--teal-soft);font-weight:700}
@@ -480,7 +482,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.25-0249';
+const APP_VERSION = '2026.10.27-0236';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -925,6 +927,8 @@ const Auth = {
   set(session, user) { lsSet('session', session); if (user) lsSet('user', JSON.stringify(user)); },
   clear() { lsSet('session', null); lsSet('user', null); }
 };
+/** Error de conexión (no de los datos): lo que se registró se queda pendiente y se reintenta */
+const netErr = msg => { const e = new Error(msg || 'Sin conexión. Esta acción necesita internet.'); e.net = true; return e; };
 const Backend = {
   mode: 'demo',
   get online() { return this.mode === 'gas' || this.mode === 'http'; },
@@ -935,10 +939,12 @@ const Backend = {
   },
   call(action, payload = {}) {
     let pr;
+    if (this.online && navigator.onLine === false) return Promise.reject(netErr());
     const p = this.online ? Object.assign({}, payload, {_s: Auth.s}) : payload;
-    if (this.mode === 'gas') pr = new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).api(action, p));
-    else if (this.mode === 'http') pr = fetch(apiUrl(), {method: 'POST', redirect: 'follow', headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: JSON.stringify({action, payload: p})})
-      .then(r => r.json(), () => { throw new Error('No hay conexión con el servidor. Revisa tu internet.'); });
+    if (this.mode === 'gas') pr = new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(err => rej(netErr(String(err && err.message || err)))).api(action, p));
+    else if (this.mode === 'http') { const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, tm = ctl ? setTimeout(() => ctl.abort(), 30000) : 0;
+      pr = fetch(apiUrl(), {method: 'POST', redirect: 'follow', headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: JSON.stringify({action, payload: p}), signal: ctl ? ctl.signal : undefined})
+        .then(r => { clearTimeout(tm); return r.json().catch(() => { throw netErr('El servidor no respondió bien; se volverá a intentar.'); }); }, () => { clearTimeout(tm); throw netErr(); }); }
     else pr = Promise.resolve(Demo[action] ? Demo[action](payload) : {error: 'Acción no disponible en la demostración'});
     return pr.then(r => { if (r && r.error) { const e = new Error(r.error); e.code = r.code; throw e; } return r; })
       .catch(e => { if ((e.code === 'AUTH' || e.code === 'PWD') && action !== 'login' && action !== 'changePassword') { Auth.clear(); Store.clear(); showLogin(e.code === 'PWD' ? 'Entra de nuevo para crear tu contraseña.' : 'Tu sesión terminó. Vuelve a entrar.'); e.code = 'AUTH'; } throw e; });
@@ -1011,6 +1017,7 @@ const Demo = {
     const saved = this._saveDet(p.table, row, p.mes, ch);
     if (p.table === 'Movimientos_Banco') this._syncGastoMov(saved, ch);
     if (p.table === 'Movimientos_Tarjeta') this._syncGastoTar(saved, ch);
+    ch.saved = saved[DB.key(p.table)];
     return ch;
   },
   _syncGastoTar(m, ch) {
@@ -1093,7 +1100,7 @@ const Demo = {
     const P = p.Presupuesto !== undefined ? r2(p.Presupuesto) : sum(detail('Presupuesto_Detalle', p.mes)), G = p.Gastos !== undefined ? r2(p.Gastos) : sum(detail('Gastos_Detalle', p.mes)), I = r2(p.Ingresos), R = r2(p.Retiros);
     const mano = p.Disp_enMano !== undefined ? r2(p.Disp_enMano) : (ex ? Number(ex.Disp_enMano) : r2(R - G));
     if (ex && [['Total_Ingresos', I], ['Total_Presupuesto', P], ['Total_Gastos', G], ['Total_Ret_Efectivo', R], ['Disp_enMano', mano]].every(([k, v]) => Math.abs(Number(ex[k]) - v) < 0.005)) return ch;
-    const row = {Fecha_Registro: todayISO(), Hora_Registro: nowISO(), Total_Ingresos: I, Total_Presupuesto: P, Total_Gastos: G, Total_Ret_Efectivo: R, Disp_enMano: mano,
+    const row = {Fecha_Registro: p.at ? String(p.at).slice(0, 10) : todayISO(), Hora_Registro: p.at || nowISO(), Total_Ingresos: I, Total_Presupuesto: P, Total_Gastos: G, Total_Ret_Efectivo: R, Disp_enMano: mano,
       Dif_Ing_Presupuesto: r2(I - P), Dif_Ing_Gastos: r2(I - G), Dif_Ing_RetEfectivo: r2(I - R), Mes_Anio: p.mes, Anio: Number(p.mes.split('-')[1]), Disp_Jerson: 0, Disp_Mariela: 0, Auto: true, Motivo: String(p.motivo || '').slice(0, 200)};
     ch.upserts.Resumen = [this._upsert('Resumen', row)];
     const removed = DB.t.Consolidado.filter(c => c.Mes_Anio === p.mes).map(c => c.Id_Consolidado);
@@ -1127,17 +1134,22 @@ const unpack = async r => r && r.gz ? gunzipB64(r.gz) : r;
 const Sync = {
   seq: 0, busy: false, timer: null, saveT: null,
   status(msg, err) { const el = $('#sync'); if (!el) return; el.hidden = !msg; el.textContent = msg || ''; el.classList.toggle('err', !!err); },
-  refresh() { const n = Q.n; this.status(n ? (n === 1 ? 'Guardando…' : 'Guardando ' + n + '…') : this.busy ? 'Actualizando…' : '', false); },
+  refresh() { const n = Q.n, p = Outbox.ops.filter(o => o.action !== 'autoResumen').length, off = sinSenal();
+    if (p) return this.status((off ? 'Sin conexión · ' : Outbox.busy ? 'Enviando · ' : 'Por enviar · ') + p + (p === 1 ? ' pendiente' : ' pendientes'), off);
+    if (off) return this.status('Sin conexión', true);
+    this.status(n ? (n === 1 ? 'Guardando…' : 'Guardando ' + n + '…') : this.busy ? 'Actualizando…' : '', false); },
   persist() { if (!Backend.online || Q.n) return; clearTimeout(this.saveT); this.saveT = setTimeout(() => Store.set('db', {user: (Auth.user || {}).usuario, seq: this.seq, at: Date.now(), t: DB.t, cols: DB.cols}), 800); },
   after(ch) { if (!ch || !Backend.online) return; if (ch.seq) { if (ch.seq === this.seq + 1) this.seq = ch.seq; else this.soon(); } this.persist(); },
   async full(tables) {
     const r = await unpack(await Backend.call('getAll', {gz: canGz(), tables}));
     if (r.partial) { Object.entries(r.tables).forEach(([n, tb]) => { DB.cols[n] = tb.cols; DB.t[n] = tb.rows.map(x => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(x[i]) : x[i]); return o; }); }); DB.ver++; }
     else DB.load(r);
+    Outbox.reapply();
     this.seq = r.seq || 0; lsSet('full_at', String(Date.now())); this.persist(); return r;
   },
   run() {
     if (!Backend.online || !DB.t.Cuentas) return Promise.resolve();
+    if (Outbox.ops.length) return Outbox.flush().then(() => { if (!Outbox.ops.length) this.soon(); });   // primero se envía lo pendiente
     if (this.busy || Q.n) { this.again = true; return this.p || Promise.resolve(); }
     this.p = this._run().then(() => { if (this.again && !Q.n) { this.again = false; return this.run(); } });
     return this.p;
@@ -1165,16 +1177,122 @@ const Sync = {
   soon() { clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 400); },
   start() { clearInterval(this.iv); this.iv = setInterval(() => { if (document.visibilityState === 'visible') this.run(); }, 60000); }
 };
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Sync.soon(); });
-window.addEventListener('online', () => Sync.soon());
-window.addEventListener('beforeunload', e => { if (Q.n) { e.preventDefault(); e.returnValue = ''; } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { Outbox.flush(); Sync.soon(); } });
+window.addEventListener('online', () => { Sync.refresh(); Outbox.flush(); Sync.soon(); });
+window.addEventListener('offline', () => Sync.refresh());
+window.addEventListener('beforeunload', e => { if (Q.n && !Outbox.busy) { e.preventDefault(); e.returnValue = ''; } });
 /* Cola de escritura: una petición a la vez, en el orden en que se hicieron */
 const Q = { n: 0, chain: Promise.resolve(),
   run(fn) { this.n++; Sync.refresh(); const p = this.chain.then(fn); this.chain = p.catch(() => {}).then(() => { this.n--; Sync.refresh(); if (!this.n) { Sync.persist(); Sync.soon(); } }); return p; } };
 function commit(ch) { DB.apply(ch); Sync.after(ch); }
 let TMP = 0;
 const isTmp = id => String(id).startsWith('tmp');
+const newTmp = () => 'tmp' + Date.now().toString(36) + (++TMP);
 
+/* ---------- Bandeja de salida: registrar sin conexión ----------
+   Gastos, retiros, ingresos, depósitos y transferencias, combustible, movimientos de tarjeta y partidas se guardan
+   primero en el teléfono (se ven al instante) y se envían en orden. Si no hay señal quedan pendientes, aunque se cierre
+   la app, y se envían solos al volver la conexión. Cada envío lleva un código para que el servidor no lo guarde dos
+   veces. Los números provisionales (tmp…) se cambian por los reales al llegar la respuesta. Si el servidor rechaza un
+   registro, se deshace en el teléfono y queda en «pendientes con problema» para corregirlo o descartarlo. */
+const OFFLINE_TABLES = new Set(['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Consumo_Combustible', 'Movimientos_Tarjeta', 'Referencias_Tarjetas']);
+let resBusy = false; const resQ = [];
+const sinSenal = () => Backend.online && navigator.onLine === false;
+const Outbox = {
+  ops: [], fails: [], map: {}, busy: false, sending: null,
+  load() { try { const x = JSON.parse(lsGet('outbox') || 'null') || {}; this.ops = x.ops || []; this.fails = x.fails || []; this.map = x.map || {}; } catch (e) {} },
+  save() { try { lsSet('outbox', JSON.stringify({ops: this.ops, fails: this.fails, map: this.map})); } catch (e) {} },
+  push(op) { op.id = 'op' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); op.at = op.at || nowISO(); this.ops.push(op); this.save(); Sync.persist(); Sync.refresh(); this.flush(); return op; },
+  remap(v) { return typeof v === 'string' && isTmp(v) && this.map[v] !== undefined ? this.map[v] : v; },
+  prep(op) {
+    const p = JSON.parse(JSON.stringify(op.payload || {}));
+    if (p.row) { Object.keys(p.row).forEach(c => { p.row[c] = this.remap(p.row[c]); }); const key = DB.key(op.table); if (key && isTmp(p.row[key])) delete p.row[key]; const rel = REL[op.table]; if (rel && isTmp(p.row[rel.fk])) delete p.row[rel.fk]; }
+    if (p.id !== undefined) p.id = this.remap(p.id);
+    if (p.prev) Object.keys(p.prev).forEach(c => { p.prev[c] = this.remap(p.prev[c]); });
+    p._op = op.id; return p;
+  },
+  /** Cambia un número provisional por el real en los datos del teléfono y en los envíos que siguen */
+  relink(tmp, real) {
+    Object.keys(DB.t).forEach(t => { if (!OFFLINE_TABLES.has(t) && !REL_HEADERS.has(t)) return; const ch = []; (DB.t[t] || []).forEach(r => { let hit = false; const o2 = Object.assign({}, r); Object.keys(o2).forEach(c => { if (c !== DB.key(t) && o2[c] === tmp) { o2[c] = real; hit = true; } }); if (hit) ch.push(o2); }); if (ch.length) DB.apply({upserts: {[t]: ch}}); });
+    const a = JSON.stringify(tmp), b = JSON.stringify(real);
+    this.ops.forEach(o => ['payload', 'loc', 'undo'].forEach(f => { if (o[f]) o[f] = JSON.parse(JSON.stringify(o[f]).split(a).join(b)); }));
+  },
+  async flush() {
+    if (this.busy || !this.ops.length) return;
+    if (sinSenal()) { Sync.refresh(); return; }
+    this.busy = true; resBusy = true; Sync.refresh();
+    try {
+      while (this.ops.length) {
+        const op = this.ops[0]; let ch; this.sending = op.id;
+        try {
+          const p = this.prep(op);
+          if (op.action === 'remove' && isTmp(p.id)) ch = {upserts: {}, deletes: {}};
+          else ch = await Q.run(() => Backend.call(op.action, p));
+        } catch (e) {
+          this.sending = null;
+          if (e.net || e.code === 'AUTH') break;                  // sin señal o sesión vencida: queda pendiente
+          this.ops.shift(); this.save(); this.reject(op, e); continue;
+        }
+        this.sending = null; this.ops.shift(); this.save(); this.done(op, ch || {});
+      }
+    } finally { this.busy = false; resBusy = false; this.sending = null; this.save(); Sync.refresh(); if (!FORM && DB.t.Cuentas) render(); }
+  },
+  done(op, ch) {
+    const sv = ch.saved;
+    if (op.tmp && sv !== undefined && sv !== null && sv !== '') { this.map[op.tmp] = sv; this.relink(op.tmp, sv); }
+    (op.hdrs || []).forEach(h => { const real = ((ch.upserts || {})[h.t] || []).find(x => x.Mes_Anio === h.mes) || DB.t[h.t].find(x => x.Mes_Anio === h.mes && !isTmp(x[DB.key(h.t)])); if (real) { this.map[h.k] = real[DB.key(h.t)]; this.relink(h.k, real[DB.key(h.t)]); } });
+    if (op.tmps) DB.apply({deletes: op.tmps});
+    commit(ch);
+    if (ch.dup && (ch.big || (op.tmp && sv === undefined))) Sync.soon();
+    this.save();
+  },
+  reject(op, e) {
+    if (op.undo) DB.apply(op.undo);
+    if (op.tmps) DB.apply({deletes: op.tmps});
+    if (op.action === 'autoResumen') return;
+    const quick = op.t0 && Date.now() - op.t0 < 60000 && !FORM && op.form;
+    if (quick) { toast(op.label + ' no se guardó: ' + e.message, true); openForm(op.table, op.form.id && !isTmp(op.form.id) ? op.form.id : undefined, true); fillFormValues(op.form.o); }
+    else { this.fails.push({id: op.id, label: op.label, msg: e.message, at: op.at, table: op.table, form: op.form, action: op.action}); toast('No se pudo enviar «' + op.label + '»: ' + e.message, true); }
+    this.save();
+  },
+  /** Después de descargar todo de nuevo, se vuelven a mostrar los registros que aún no se envían */
+  reapply() { this.ops.forEach(op => { if (op.loc) DB.apply(op.loc); }); },
+  drop(id) { this.fails = this.fails.filter(f => f.id !== id); this.save(); }
+};
+/** Encabezado del período en el teléfono (si aún no existe, uno provisional) */
+function localHeader(table, mes, hdrs, loc, tmps) {
+  const rel = REL[table], h = header(table, mes); if (h) return h;
+  const prev = ((loc.upserts || {})[rel.header] || []).find(x => x.Mes_Anio === mes); if (prev) return prev;
+  const k = newTmp(), hr = {[rel.hkey]: k, Mes_Anio: mes, Total: 0, Fecha_Registro: todayISO(), _pending: true};
+  (loc.upserts[rel.header] = loc.upserts[rel.header] || []).push(hr); (tmps[rel.header] = tmps[rel.header] || []).push(k); hdrs.push({t: rel.header, k, mes});
+  return hr;
+}
+/** Gasto automático provisional del pago de tarjeta o de la compra de dólares (el servidor manda el definitivo) */
+function provAuto(table, r, rec, loc, undo, tmps, hdrs, mes) {
+  if (table !== 'Movimientos_Tarjeta' && table !== 'Movimientos_Banco') return;
+  let need = null;
+  if (table === 'Movimientos_Tarjeta' && r.Tipo === 'Pago' && hasId(r.ID_Banco) && Number(r.Monto) > 0) need = {Cuenta_Gastos: r.Cuenta_Gastos || defaultTarjetaCuenta(), Descripcion_Gasto: 'Pago tarjeta ' + tarName(r.ID_Tarjeta), Total: Number(r.Monto_C) || Number(r.Monto), ID_Banco: r.ID_Banco, ID_Partida: r.ID_Partida || '', Origen: 'TAR:' + r.ID_MovTar};
+  if (table === 'Movimientos_Banco' && r.Tipo === 'Transferencia' && curOf(r.ID_Banco_Origen) !== 'USD' && isUsdDest(r.ID_Banco_Destino)) need = {Cuenta_Gastos: r.Cuenta_Gastos || defaultGastoCuenta(), Descripcion_Gasto: 'Compra de dólares: ' + bankName(r.ID_Banco_Destino), Total: Number(r.Monto) || 0, ID_Banco: String(r.ID_Banco_Origen) === '0' ? '' : r.ID_Banco_Origen, Origen: 'MOV:' + r.ID_Mov};
+  const key = DB.key(table), exId = (rec && rec.ID_Gasto_Auto) || r.ID_Gasto_Auto;
+  const ex = (exId && DB.t.Gastos_Detalle.find(g => String(g.ID_Detalle_Gastos) === String(exId))) || DB.t.Gastos_Detalle.find(g => g._provFor !== undefined && String(g._provFor) === String(r[key]));
+  const U = (o2, t, row) => (o2.upserts[t] = o2.upserts[t] || []).push(row);
+  if (need) {
+    const g = Object.assign({}, ex || {}, need, {Fecha: r.Fecha, Cantidad: 1, UM: 'Unidad', Precio_Unitario: need.Total, Descripcion_Adicional: 'Generado automáticamente'});
+    if (!ex) { g.ID_Detalle_Gastos = newTmp(); g._provFor = r[key]; g._pending = true; g.ID_Gastos = localHeader('Gastos_Detalle', r.Mes_Anio || mes, hdrs, loc, tmps).ID_Gastos; (tmps.Gastos_Detalle = tmps.Gastos_Detalle || []).push(g.ID_Detalle_Gastos); }
+    else U(undo, 'Gastos_Detalle', Object.assign({}, ex));
+    U(loc, 'Gastos_Detalle', g);
+  } else if (ex) { (loc.deletes.Gastos_Detalle = loc.deletes.Gastos_Detalle || []).push(ex.ID_Detalle_Gastos); U(undo, 'Gastos_Detalle', Object.assign({}, ex)); }
+}
+const obPend = () => Outbox.ops.filter(o => o.action !== 'autoResumen').length;
+const enTelefono = () => sinSenal() ? ': se enviará al volver la conexión' : '';
+function openFails() {
+  const F = Outbox.fails;
+  $('#modal').innerHTML = `<div class="scrim" data-close="1"><div class="sheet" role="dialog" aria-modal="true" aria-label="Pendientes con problema">
+    <h4>Pendientes con problema<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
+    <p class="muted" style="margin:0 0 10px">Se registraron sin conexión, pero al enviarlos el servidor no los aceptó. Corrígelos y guárdalos de nuevo, o descártalos.</p>
+    ${F.length ? F.map(f => `<div class="pgrow" style="cursor:default"><span><b>${esc(f.label)}</b><br><small>${esc(f.msg)} · ${fdatetime(f.at)}</small></span><span class="row" style="gap:6px;flex-wrap:nowrap">${f.form ? `<button type="button" class="btn small" data-act="ob-fix" data-id="${f.id}">Corregir</button>` : ''}<button type="button" class="btn small" data-act="ob-drop" data-id="${f.id}">Descartar</button></span></div>`).join('') : '<p class="muted">No hay pendientes con problema.</p>'}
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn primary" data-close="1">Cerrar</button></div></div></div>`;
+}
 /* ---------- Estado y navegación ---------- */
 const S = {view: 'inicio', mes: null, q: '', cuenta: '', all: false, tab: '', anio: null, cuentaSel: 'C014', rango: 12, pend: false};
 const VIEWS = {
@@ -1237,6 +1355,7 @@ function render() {
   const fn = V[S.view] || V.inicio;
   COMBO = null;
   $('#view').innerHTML = fn(); syncCombos();
+  if (Outbox.fails.length) $('#view').insertAdjacentHTML('afterbegin', `<div class="notice" style="margin-top:0"><span><b>${Outbox.fails.length} ${Outbox.fails.length === 1 ? 'registro no se pudo enviar' : 'registros no se pudieron enviar'}.</b> Se hicieron sin conexión y el servidor no los aceptó.</span><button class="btn small" data-act="ob-fails">Revisar</button></div>`);
   const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Movimientos_Banco', bancos: 'Movimientos_Banco', combustible: 'Consumo_Combustible', tarjetas: 'Movimientos_Tarjeta'}[S.view];
   const fabOk = fabFor && (REL[fabFor] ? canAdd(REL[fabFor].mod) : can(FORMS[fabFor].perm));
   fab.hidden = !fabOk; fab.dataset.new = fabFor || ''; fab.dataset.dep = S.view === 'ingresos' ? '1' : '';
@@ -1897,6 +2016,7 @@ V.conexion = () => {
     <p class="muted" style="margin:0">Versión de la app: <b>${APP_VERSION}</b>. Tablas cargadas: ${Object.keys(DB.t).length}. Movimientos de gasto: ${NF.format(DB.t.Gastos_Detalle.length).replace('.00', '')}.</p>
     <div class="row" style="margin-top:12px"><button class="btn" data-act="reload">Recargar datos</button></div></div></section>
   ${accountSection()}
+  ${Backend.online ? `<section class="section"><h3>Envíos</h3><div class="panel"><div class="row" style="align-items:center;flex-wrap:nowrap"><span style="flex:1">${obPend() ? `<b>${obPend()} ${obPend() === 1 ? 'registro por enviar' : 'registros por enviar'}</b> ${sinSenal() ? '(sin conexión: se enviarán al volver la señal)' : ''}` : 'Todo está enviado.'}${Outbox.fails.length ? `<br><span class="neg">${Outbox.fails.length} con problema</span>` : ''}<br><small class="muted">Gastos, retiros, depósitos, transferencias, combustible, tarjetas y partidas se pueden registrar sin conexión.</small></span>${obPend() && !sinSenal() ? '<button class="btn small" data-act="ob-send">Enviar ahora</button>' : ''}${Outbox.fails.length ? '<button class="btn small" data-act="ob-fails">Revisar</button>' : ''}</div></div></section>` : ''}
   <section class="section"><h3>Configuración</h3><div class="panel">
     <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start;flex-wrap:nowrap"><span class="toggle" style="flex:none;margin-top:2px"><input type="checkbox" data-cfg="Bloquear_Negativos" ${blockNeg() ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></span>
       <span><b>Bloquear eliminaciones que dejan saldos en negativo</b><br><small class="muted">Si eliminar un retiro, depósito o transferencia dejaría una cuenta o el efectivo en negativo (porque ese dinero ya se gastó o se movió), la app no lo deja. Desactivado, solo avisa y pide confirmar. Antes de eliminar siempre se muestra qué saldos cambian.${can('periodos.gestionar') ? '' : ' Solo un administrador o supervisor puede cambiarlo.'}</small></span></label>
@@ -2211,7 +2331,9 @@ function openCombo(btn) {
     + `<div class="combo-list" role="listbox">${opts.map(([v, l]) => `<button type="button" class="combo-opt ${v === sel.value ? 'on' : ''}" data-cval="${esc(v)}" role="option" aria-selected="${v === sel.value}">${esc(l)}</button>`).join('')}</div>`;
   btn.parentElement.appendChild(pop); btn.setAttribute('aria-expanded', 'true'); COMBO = {btn, sel, pop};
   const q = pop.querySelector('.combo-q');
-  if (q) { q.addEventListener('input', () => { const t = nrm(q.value); pop.querySelectorAll('.combo-opt').forEach(b => { b.hidden = !!t && !nrm(b.textContent).includes(t); }); }); if (matchMedia('(pointer:fine)').matches) setTimeout(() => q.focus(), 20); }
+  if (q) { q.addEventListener('input', () => { const t = nrm(q.value); let n = 0; pop.querySelectorAll('.combo-opt').forEach(b => { b.hidden = !!t && !nrm(b.textContent).includes(t); if (!b.hidden) n++; });
+      let none = pop.querySelector('.combo-none'); if (!n && !none) { none = document.createElement('div'); none.className = 'combo-none'; none.textContent = 'Sin resultados'; pop.querySelector('.combo-list').appendChild(none); } if (none) none.hidden = !!n; });
+    q.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); const first = pop.querySelector('.combo-opt:not([hidden])'); if (first) pickCombo(first.dataset.cval); } }); if (matchMedia('(pointer:fine)').matches) setTimeout(() => q.focus(), 20); }
   const on = pop.querySelector('.combo-opt.on'); if (on) on.scrollIntoView({block: 'nearest'});
 }
 function pickCombo(v) { if (!COMBO) return; const sel = COMBO.sel; sel.value = v; closeCombo(); sel.dispatchEvent(new Event('change', {bubbles: true})); syncCombos(); }
@@ -2303,7 +2425,7 @@ function readForm() {
     if (f.ty === 'bool') o[f.k] = el.checked;
     else if (f.ty === 'number') o[f.k] = el.value === '' ? '' : Number(el.value);
     else if (f.ty === 'pct') o[f.k] = el.value === '' ? 0 : Number(el.value) / 100;
-    else if (f.ty === 'select' && f.num) o[f.k] = el.value === '' ? '' : Number(el.value);
+    else if (f.ty === 'select' && f.num) o[f.k] = el.value === '' ? '' : isTmp(el.value) ? el.value : Number(el.value);   // un número provisional (aún sin enviar) se conserva tal cual
     else if (f.ty === 'select' && f.k === 'ID_Banco') o[f.k] = el.value === '' ? '' : el.value === EFUSD ? EFUSD : Number(el.value);
     else if (f.ty === 'datetime') { const tm = ($('#f_' + f.k + '_t') || {}).value || '00:00'; o[f.k] = el.value ? el.value + ' ' + tm.slice(0, 5) : ''; }
     else o[f.k] = el.value.trim(); });
@@ -2321,7 +2443,8 @@ function autofillFromHistory(el) {
   const um = $('#f_UM'); if (um && last.UM) um.value = last.UM;
   const tot = $('#f_Total'); if (tot && !tot.value) { const q = Number($('#f_Cantidad').value) || 1; tot.value = r2(q * (Number(last.Precio_Unitario) || 0)) || ''; if (tot.value) tot.select(); }
 }
-const OPTIMISTIC = ['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Referencias_Tarjetas', 'Consumo_Combustible'];
+const OPTIMISTIC = ['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Referencias_Tarjetas', 'Consumo_Combustible', 'Movimientos_Tarjeta'];
+const REL_HEADERS = new Set(Object.values(REL).map(r => r.header));
 async function submitForm() {
   const o = readForm();
   for (const f of FORM.F.fields) if (f.req && fieldVisible(f) && (o[f.k] === '' || o[f.k] === undefined || (f.ty === 'number' && isNaN(o[f.k])))) { toast('Completa el campo ' + f.l.replace(/ \(.*\)/, '').toLowerCase(), true); const el = $('#f_' + f.k); el && el.focus(); return; }
@@ -2335,25 +2458,27 @@ async function submitForm() {
   if (movePer || dated) { const h2 = header(table, mes || movePer); if (h2) o[rel.fk] = h2[rel.hkey]; }
   const row = Object.assign({}, o); if (!rec) delete row[k];
   const label = cap(F.t.toUpperCase());
-  // Vista inmediata: se muestra el cambio y se envía en segundo plano
+  // Vista inmediata: se guarda en el teléfono, se muestra y se envía por la bandeja de salida (también sin conexión)
   const h = rel ? header(table, mes || S.mes) : null;
-  const optimistic = OPTIMISTIC.includes(table) && (rec || !rel || h);
+  const optimistic = OPTIMISTIC.includes(table);
   if (optimistic) {
-    let undo;
-    if (rec) { const prev = Object.assign({}, rec); DB.apply({upserts: {[table]: [o]}}); undo = () => DB.apply({upserts: {[table]: [prev]}}); }
-    else { const tmp = Object.assign({}, o, {[k]: 'tmp' + (++TMP), _pending: true}); if (rel) tmp[rel.fk] = h[rel.hkey]; if (F.needsMes) tmp.Mes_Anio = S.mes; DB.apply({upserts: {[table]: [tmp]}}); undo = () => DB.apply({deletes: {[table]: [tmp[k]]}}); o.__tmp = tmp[k]; }
+    const loc = {upserts: {}, deletes: {}}, undo = {upserts: {}, deletes: {}}, tmps = {}, hdrs = [];
+    let tmpKey = null;
+    if (rec) { loc.upserts[table] = [Object.assign({}, rec, o)]; undo.upserts[table] = [Object.assign({}, rec)]; }
+    else {
+      tmpKey = newTmp(); const trow = Object.assign({}, o, {[k]: tmpKey, _pending: true});
+      if (rel) trow[rel.fk] = (h || localHeader(table, mes || S.mes, hdrs, loc, tmps))[rel.hkey];
+      if (F.needsMes) trow.Mes_Anio = S.mes;
+      loc.upserts[table] = [trow]; tmps[table] = [tmpKey]; o.__tmp = tmpKey;
+    }
+    provAuto(table, Object.assign({}, rec || {}, o, tmpKey ? {[k]: tmpKey, Mes_Anio: o.Mes_Anio || S.mes} : {}), rec, loc, undo, tmps, hdrs, mes || S.mes);
+    DB.apply(loc);
     if (F.after) F.after(o);
     closeModal(); render();
-    if (F.done) F.done(Object.assign({}, o, {ID: rec ? rec[k] : 'tmp'}));
-    Q.run(() => Backend.call('save', {table, row, mes})).then(ch => {
-      if (o.__tmp) DB.apply({deletes: {[table]: [o.__tmp]}});
-      commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, o, rec), motivoOf(table, o, rec ? 'edit' : 'new')); if (!FORM) render();
-    }).catch(e => {
-      undo(); render();
-      toast(label + ' no se guardó: ' + e.message, true);
-      if (!FORM && e.code !== 'AUTH') { openForm(table, rec ? rec[k] : undefined, true); fillFormValues(o); }
-    });
-    if (!F.doneModal) toast(label + (rec ? ' actualizad' : ' registrad') + (F.g || 'o'));
+    if (F.done) F.done(Object.assign({}, o, {ID: rec ? rec[k] : tmpKey}));
+    Outbox.push({action: 'save', table, payload: Object.assign({table, row, mes}, F.payload ? F.payload(o, rec) : {}), tmp: tmpKey, loc, undo, tmps, hdrs, label: motivoOf(table, o, rec ? 'edit' : 'new') || (label + (rec ? ' (corrección)' : '')), t0: Date.now(), form: {id: rec ? rec[k] : undefined, o}});
+    if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, o, rec), motivoOf(table, o, rec ? 'edit' : 'new'));
+    if (!F.doneModal) toast(label + (rec ? ' actualizad' : ' registrad') + (F.g || 'o') + enTelefono());
     return;
   }
   const btn = $('#frm button[type=submit]'); btn.disabled = true; btn.textContent = 'Guardando…';
@@ -2409,6 +2534,22 @@ function askDelete() {
 }
 async function deleteRecord() {
   const table = FORM.table, k = DB.key(table), prev = Object.assign({}, FORM.rec), F = FORM.F, label = cap(F.t.toUpperCase()), g = F.g || 'o';
+  if (OFFLINE_TABLES.has(table)) {
+    const loc = {upserts: {}, deletes: {[table]: [prev[k]]}}, undo = {upserts: {[table]: [prev]}, deletes: {}};
+    const autos = DB.t.Gastos_Detalle.filter(x => (prev.ID_Gasto_Auto && String(x.ID_Detalle_Gastos) === String(prev.ID_Gasto_Auto)) || (x._provFor !== undefined && String(x._provFor) === String(prev[k])));
+    if (autos.length) { loc.deletes.Gastos_Detalle = autos.map(x => x.ID_Detalle_Gastos); undo.upserts.Gastos_Detalle = autos.map(x => Object.assign({}, x)); }
+    DB.apply(loc); closeModal(); render();
+    // si nunca se envió, se cancela su envío y no hace falta avisar al servidor
+    const create = isTmp(prev[k]) ? Outbox.ops.find(o => o.tmp === prev[k] && o.id !== Outbox.sending) : null;
+    if (create) {
+      Outbox.ops = Outbox.ops.filter(o => !(o.id !== Outbox.sending && (o.tmp === prev[k] || (o.payload && o.payload.row && o.payload.row[k] === prev[k])))); Outbox.save(); Sync.persist(); Sync.refresh();
+      if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, prev, prev), motivoOf(table, prev, 'del'));
+      toast(label + ' eliminad' + g + ' (no se había enviado)'); return;
+    }
+    Outbox.push({action: 'remove', table, payload: Backend.online ? {table, id: prev[k]} : {table, id: prev[k], prev}, loc, undo, label: motivoOf(table, prev, 'del') || (label + ' (eliminar)'), t0: Date.now()});
+    if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, prev, prev), motivoOf(table, prev, 'del'));
+    toast(label + ' eliminad' + g + enTelefono()); return;
+  }
   DB.apply({deletes: {[table]: [prev[k]]}}); closeModal(); render(); toast(label + ' eliminad' + g);
   Q.run(() => Backend.call('remove', Backend.online ? {table, id: prev[k]} : {table, id: prev[k], prev})).then(ch => { commit(ch); if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, prev, prev), motivoOf(table, prev, 'del')); if (!FORM) render(); })
     .catch(e => { DB.apply({upserts: {[table]: [prev]}}); render(); toast(label + ' no se eliminó: ' + e.message, true); });
@@ -2475,17 +2616,11 @@ function motivoOf(table, o, acc) {
   }[table];
   return m ? pre + m().replace(/\s+/g, ' ').trim() : '';
 }
-/* Cada acción deja su propio corte: se toma la foto de los totales en ese momento y se envía en orden */
-const resQ = []; let resBusy = false;
+/* Cada acción deja su propio corte: se toma la foto de los totales en ese momento (en el teléfono) y se envía en orden */
 function queueResumen(ms, motivo) {
-  [...new Set([].concat(ms).flat().filter(Boolean))].forEach(mes => { if (resumenOpen(mes)) resQ.push(Object.assign(resumenPayload(mes), {motivo: motivo || ''})); });
-  flushResumen();
+  [...new Set([].concat(ms).flat().filter(Boolean))].forEach(mes => { if (resumenOpen(mes)) Outbox.push({action: 'autoResumen', table: 'Resumen', payload: Object.assign(resumenPayload(mes), {motivo: motivo || '', at: nowISO()}), label: 'Corte del resumen'}); });
 }
-async function flushResumen() {
-  if (resBusy) return; resBusy = true;
-  try { while (resQ.length) { const pl = resQ.shift(); try { const ch = await Q.run(() => Backend.call('autoResumen', pl)); if (ch && ch.upserts && Object.keys(ch.upserts).length) commit(ch); } catch (e) { /* se reintenta con la próxima acción */ } } }
-  finally { resBusy = false; if (!FORM && (S.view === 'inicio' || S.view === 'cortes')) render(); }
-}
+async function flushResumen() { await Outbox.flush(); while (Outbox.busy) await new Promise(r => setTimeout(r, 60)); }
 function openResumen() {
   const t = totals(S.mes), D = disponible(), abierto = resumenOpen(S.mes), a = resumenRow(S.mes), nuevo = isNewPeriod(S.mes);
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><div class="sheet" role="dialog" aria-modal="true" aria-label="Resumen del período">
@@ -2659,7 +2794,7 @@ document.addEventListener('click', async e => {
   if (d.go) { e.preventDefault(); if (d.banco) S.banco = d.banco; if (d.tarjeta) S.tarjeta = d.tarjeta; go(d.go); return; }
   if (d.new === 'Ingresos_Detalle') return openDeposito();
   if (d.new) { const F = FORMS[d.new]; if (F && F.mod && REL[d.new] && !canEdit(F.mod) && canAdd(F.mod) && F.mod !== 'Presupuesto') ensureTarget(F.mod); if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
-  if (d.edit) { if (isTmp(d.id)) { toast('Se está guardando, espera un momento'); return; } openForm(d.edit, d.id); return; }
+  if (d.edit) { openForm(d.edit, d.id); return; }
   if (d.cuenta) { S.cuenta = d.cuenta; S.q = ''; S.all = false; go('gastos'); return; }
   if (d.anio) { S.anio = d.anio; render(); return; }
   if (d.tab) { S.tab = d.tab; render(); return; }
@@ -2692,10 +2827,16 @@ document.addEventListener('click', async e => {
   }
   if (a === 'reload') { await boot(true); if (DB.t.Cuentas) toast('Datos actualizados desde Google Sheets'); return; }
   if (a === 'logout') {
+    if (obPend() && !confirm(`Hay ${obPend()} ${obPend() === 1 ? 'registro' : 'registros'} sin enviar. Si cierras sesión ahora se perderán. ¿Cerrar sesión de todos modos?`)) return;
+    Outbox.ops = []; Outbox.fails = []; Outbox.map = {}; Outbox.save();
     try { await Backend.call('logout'); } catch (err) {}
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'ob-fails') return openFails();
+  if (a === 'ob-drop') { Outbox.drop(t.dataset.id); render(); if (Outbox.fails.length) openFails(); else closeModal(); return; }
+  if (a === 'ob-fix') { const f = Outbox.fails.find(x => x.id === t.dataset.id); if (!f) return; Outbox.drop(f.id); closeModal(); render(); openForm(f.table, f.form.id && !isTmp(f.form.id) ? f.form.id : undefined, true); fillFormValues(f.form.o); return; }
+  if (a === 'ob-send') { Outbox.flush(); return; }
   if (a === 'tar-new') return openForm('Tarjetas_Credito');
   if (a === 'tar-edit') return openForm('Tarjetas_Credito', S.tarjeta, true);
   if (a === 'tar-mov') return openForm('Movimientos_Tarjeta');
@@ -2779,7 +2920,7 @@ document.addEventListener('submit', e => {
     if (!u || !c) { $('#loginMsg').textContent = 'Escribe tu usuario y contraseña.'; return; }
     b.disabled = true; b.textContent = 'Entrando…'; $('#loginMsg').textContent = '';
     try { const r = await Backend.call('login', {usuario: u, clave: c}); Auth.set(r.session, r.user); lsSet('last_user', u);
-      if (r.user.debeCambiar) { S.tmpPwd = c; showNewPwd(r.user); } else { hideLogin(); await boot(); } }
+      if (r.user.debeCambiar) { S.tmpPwd = c; showNewPwd(r.user); } else { hideLogin(); await boot(); Outbox.flush(); } }
     catch (err) { $('#loginMsg').textContent = err.message; $('#lp').select(); }
     b.disabled = false; b.textContent = 'Entrar';
   })();
@@ -2974,7 +3115,7 @@ async function boot(force) {
     if (Backend.online && !force) {
       const c = await Store.get('db');
       if (c && c.t && c.user === (Auth.user || {}).usuario) {
-        DB.t = c.t; DB.cols = c.cols; DB.ver++; Sync.seq = c.seq || 0;
+        DB.t = c.t; DB.cols = c.cols; DB.ver++; Sync.seq = c.seq || 0; Outbox.reapply();
         hideLogin(); pickMes(); render(); $('#loading').style.display = 'none';
         Sync.start(); Sync.soon(); checkTZ(); refreshMe(true); return;
       }
@@ -2993,7 +3134,7 @@ async function boot(force) {
   }
   $('#loading').style.display = 'none';
 }
-applyTheme(); Backend.detect(); boot();
+applyTheme(); Backend.detect(); Outbox.load(); boot().then(() => Outbox.flush());
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('/sw.js', {updateViaCache: 'none'}).then(r => r.update()).catch(() => {});
   // Versión nueva publicada en Netlify: se recarga sola si no hay nada pendiente, si no avisa

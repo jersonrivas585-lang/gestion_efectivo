@@ -205,13 +205,25 @@ En *Mi cuenta → Hogar* los **administradores** tienen el botón **Editar** par
 
 La barra de abajo tiene, en este orden, **Inicio, Bancos, Retiros, Gastos, Presupuesto y Combustible**, y se **desliza** hacia la derecha para ver las que no caben; un desvanecido en el borde indica que hay más. **Más** queda fijo a la derecha y lleva a las demás secciones (Ingresos, Histórico, Análisis por cuenta, Tarjetas, Cortes, Catálogos, Períodos y Mi cuenta). La sección en la que estás siempre queda a la vista y resaltada.
 
+## Registrar sin conexión
+
+Sin señal puedes **registrar, corregir y eliminar** gastos, retiros, ingresos, depósitos y transferencias, llenados de combustible, movimientos de tarjeta y partidas del presupuesto. Se guardan primero en el teléfono, se ven al instante (saldos, presupuesto y tarjetas incluidos) y quedan en una **bandeja de salida** que sobrevive aunque cierres la app o se apague el teléfono.
+
+- **Indicador:** arriba dice *Sin conexión · N pendientes*; al volver la señal, *Enviando…*, y desaparece cuando todo se envió. En *Mi cuenta → Envíos* ves cuántos hay y puedes tocar **Enviar ahora**.
+- **Al volver la conexión** se envían solos y en el orden en que los hiciste. Los registros nuevos usan un número provisional que se cambia por el real al enviarse; si mientras tanto los corregiste, los vinculaste (por ejemplo, un gasto a una partida creada sin conexión) o los eliminaste, todo se resuelve bien. Si eliminas algo que nunca se envió, simplemente no se envía.
+- **Sin duplicados:** cada envío lleva un código; si la respuesta del servidor se pierde y la app reintenta, el servidor no lo guarda dos veces.
+- **Gastos automáticos:** el del pago de tarjeta y el de la compra de dólares se calculan en el teléfono de forma provisional y se reemplazan por los del servidor al enviarse. Los **cortes del resumen** se envían con la hora en que hiciste cada movimiento.
+- **Pendientes con problema:** si al enviarse el servidor no acepta un registro (por ejemplo, alguien cerró el período mientras estabas sin señal), se deshace en el teléfono y aparece un aviso *N registros no se pudieron enviar → Revisar*: puedes **Corregir** (abre el formulario con lo que habías escrito) o **Descartar**.
+- **Necesitan conexión:** iniciar sesión, contraseña, usuarios y permisos, datos del hogar, configuración, catálogos (cuentas, tarjetas, vehículos, bancos), abrir o cerrar períodos y tipos de cambio, importar o copiar el presupuesto, mover registros de período, saldos actuales y reparar. Sin señal avisan «Esta acción necesita internet».
+- **Ten en cuenta:** sin señal ves lo último sincronizado; si otra persona registró algo desde otro equipo, los saldos se completan al sincronizar. Si cierras sesión con registros sin enviar, la app avisa porque se perderían.
+
 ## Consultar y editar registros
 
 **Las ventanas no se cierran al tocar fuera.** Para no perder lo que estás escribiendo, tocar el fondo oscuro alrededor de una ventana ya no la cierra (la ventana hace un pequeño rebote). Se cierra con **×**, **Cancelar** o **Cerrar**, o con la tecla Escape en la computadora.
 
 Al tocar un gasto, retiro, depósito, transferencia, partida del presupuesto, llenado o consumo con tarjeta, se abre **en modo consulta**: se ven todos los datos sin poder cambiarlos, con los botones **Cerrar** y **Editar**. *Editar* aparece solo si el período del registro está abierto para ese módulo y tu usuario tiene permiso; al tocarlo, el formulario pasa a modo edición (con *Guardar cambios* y *Eliminar*). Si el período está cerrado, se ve el aviso correspondiente y no hay botón *Editar*. Los catálogos (cuentas, unidades, vehículos, cuentas de banco) se siguen abriendo directamente para editar.
 
-**Listas compactas:** en el gasto y en el presupuesto (*Cuenta* y *Partida del presupuesto*), en el filtro de cuenta de *Gastos* y en *Análisis por cuenta* se usa una lista propia, más compacta que la del celular, con filas bajas y un buscador cuando hay más de 8 opciones (por ejemplo, escribe «medic» para encontrar *Medicamentos y Consultas*). Se cierra al elegir, al tocar fuera o con Escape.
+**Listas compactas:** en el gasto y en el presupuesto (*Cuenta* y *Partida del presupuesto*), en el filtro de cuenta de *Gastos* y en *Análisis por cuenta* se usa una lista propia, más compacta que la del celular, con filas bajas y un buscador cuando hay más de 8 opciones: al escribir se filtran las cuentas (por ejemplo, «medic» deja solo *Medicamentos y Consultas*) y **Enter** elige la primera; si no hay coincidencias dice *Sin resultados*. Se cierra al elegir, al tocar fuera o con Escape.
 
 ## Eliminar con advertencia y bloqueo de saldos negativos
 
