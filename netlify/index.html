@@ -325,6 +325,10 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .t.cat td.acts,.t.cat th.acts{width:1%;white-space:nowrap;text-align:right;position:sticky;right:0;background:var(--surface);padding-left:6px}
 .t.cat thead th.acts{background:var(--sunk)}
 .t.cat tbody tr:hover td.acts{background:var(--sunk)}
+.thsort{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:0;font:inherit;font-weight:600;color:inherit;cursor:pointer;text-align:left}
+.thsort .ar{font-size:10.5px;color:var(--muted);opacity:.7}
+.thsort.on .ar{color:var(--teal);opacity:1}
+.thsort:hover .ar{opacity:1}
 .iconbtn{display:inline-grid;place-items:center;width:38px;height:28px;margin-left:6px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink2);cursor:pointer;vertical-align:middle}
 .iconbtn:first-child{margin-left:0}
 .iconbtn:hover{background:var(--sunk);color:var(--ink)}
@@ -507,7 +511,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.30-0223';
+const APP_VERSION = '2026.10.30-0246';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -2006,7 +2010,7 @@ V.cortes = () => {
 const CATS = {
   Tarjetas_Credito: {t: 'Tarjetas de crédito', cols: [['Nombre', 'Nombre'], ['Banco', 'Banco'], ['Dia_Corte', 'Corte'], ['Dia_Pago', 'Pago'], ['Saldo_Inicial', 'Deuda inicial', 'n'], ['Activa', 'Activa', 'b']]},
   Bancos: {t: 'Cuentas de banco', cols: [['Nombre', 'Nombre'], ['Banco', 'Banco'], ['Moneda', 'Moneda'], ['Saldo_Inicial', 'Saldo inicial', 'n'], ['Fecha_Inicial', 'Desde', 'd'], ['Activa', 'Activa', 'b']]},
-  Cuentas: {t: 'Cuentas', cols: [['Codigo', 'Código'], ['Cuentas', 'Nombre'], ['Cuenta_de_Gastos', 'Gasto', 'b'], ['Cuenta_de_Ingresos', 'Ingreso', 'b'], ['Activa', 'Activa', 'b']]},
+  Cuentas: {t: 'Cuentas', cols: [['Codigo', 'Código'], ['Cuentas', 'Nombre'], ['Cuenta_de_Gastos', 'Gasto/Presupuesto', 'b'], ['Cuenta_de_Ingresos', 'Ingreso', 'b'], ['Activa', 'Activa', 'b']]},
   Items: {t: 'Conceptos de gastos y presupuesto', cols: [['Descripcion', 'Descripción'], ['Cuenta', 'Cuenta', 'c'], ['UM', 'Unidad', 'u']]},
   Items_Ingresos: {t: 'Conceptos de ingresos', cols: [['Descripcion', 'Descripción'], ['Cuenta', 'Cuenta', 'c']]},
   UM: {t: 'Unidades', cols: [['UM', 'Unidad']]},
@@ -2019,11 +2023,16 @@ const ICO_DEL = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" str
 V.catalogos = () => {
   if (!S.tab || !CATS[S.tab]) S.tab = 'Cuentas';
   if (!DB.t[S.tab]) DB.t[S.tab] = [];
-  const c = CATS[S.tab], rows = DB.t[S.tab], k = DB.key(S.tab), ed = can('catalogos.editar');
+  const c = CATS[S.tab], k = DB.key(S.tab), ed = can('catalogos.editar');
+  // orden por columna: se toca el título (ascendente / descendente); se recuerda por sección
+  const so = (S.catSort || (S.catSort = {}))[S.tab] || null;
+  const sval = (r, [f, , ty]) => ty === 'n' ? Number(r[f]) || 0 : ty === 'd' ? dtKey(r[f]) : ty === 'b' ? (truthy(r[f]) ? 1 : 0) : ty === 'c' ? nrm(cuentaNombre(r[f])) : ty === 'u' ? nrm(DB.idx().umById[r[f]] || r[f]) : (typeof r[f] === 'number' ? r[f] : nrm(r[f]));
+  const rows = DB.t[S.tab].slice();
+  if (so) { const col = c.cols.find(x => x[0] === so.col); if (col) rows.sort((a, b) => { const x = sval(a, col), y = sval(b, col); const r0 = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'es', {numeric: true}); return so.dir === 'desc' ? -r0 : r0; }); }
   const cell = (r, [f, , ty]) => ty === 'n' ? fcur(r[f], r.Moneda) : ty === 'd' ? fdate(r[f]) : ty === 'b' ? (truthy(r[f]) ? 'Sí' : 'No') : ty === 'c' ? esc(cuentaNombre(r[f])) : ty === 'u' ? esc(DB.idx().umById[r[f]] || r[f]) : esc(r[f]);
   return `<div class="tabs">${Object.entries(CATS).map(([n, v]) => `<button class="tab" data-tab="${n}" aria-pressed="${n === S.tab}">${v.t}</button>`).join('')}</div>
   <div class="toolbar"><span class="muted">${rows.length} registros</span><span class="spacer"></span>${can('catalogos.editar') ? `<button class="btn primary" data-new="${S.tab}">Agregar</button>` : ''}</div>
-  <div class="tablewrap"><table class="t cat"><thead><tr>${c.cols.map(x => `<th>${x[1]}</th>`).join('')}${ed ? '<th class="acts"><span class="sr">Acciones</span></th>' : ''}</tr></thead><tbody>${rows.map(r => { const nm = esc(String(r[c.cols[0][0]] ?? ''));
+  <div class="tablewrap"><table class="t cat"><thead><tr>${c.cols.map(x => { const on = so && so.col === x[0]; return `<th aria-sort="${on ? (so.dir === 'desc' ? 'descending' : 'ascending') : 'none'}"><button type="button" class="thsort ${on ? 'on' : ''}" data-sort="${x[0]}" title="Ordenar por ${esc(x[1])}">${x[1]}<span class="ar" aria-hidden="true">${on ? (so.dir === 'desc' ? '▼' : '▲') : '↕'}</span></button></th>`; }).join('')}${ed ? '<th class="acts"><span class="sr">Acciones</span></th>' : ''}</tr></thead><tbody>${rows.map(r => { const nm = esc(String(r[c.cols[0][0]] ?? ''));
     return `<tr data-edit="${S.tab}" data-id="${esc(r[k])}">${c.cols.map(x => `<td>${cell(r, x)}</td>`).join('')}${ed ? `<td class="acts"><button type="button" class="iconbtn" data-act="cat-edit" data-t="${S.tab}" data-id="${esc(r[k])}" title="Editar" aria-label="Editar ${nm}">${ICO_EDIT}</button><button type="button" class="iconbtn del" data-act="cat-del" data-t="${S.tab}" data-id="${esc(r[k])}" title="Eliminar" aria-label="Eliminar ${nm}">${ICO_DEL}</button></td>` : ''}</tr>`; }).join('')}</tbody></table></div>`;
 };
 
@@ -2357,7 +2366,7 @@ const FORMS = {
   Cuentas: {t: 'cuenta', g: 'a', perm: 'catalogos.editar', fields: [
     {k: 'Codigo', l: 'Código', ty: 'text', keyEdit: 1, auto: 1, def: () => nextCodigo(), hint: 'Se numera solo. Si dos personas crean una cuenta a la vez, el servidor asigna el siguiente libre.'},
     {k: 'Cuentas', l: 'Nombre', ty: 'text', req: 1},
-    {k: 'Cuenta_de_Gastos', l: 'Cuenta de gastos', ty: 'bool', def: true},
+    {k: 'Cuenta_de_Gastos', l: 'Cuenta de gasto/presupuesto', ty: 'bool', def: true, hint: 'Se puede elegir al registrar gastos y al armar el presupuesto'},
     {k: 'Cuenta_de_Ingresos', l: 'Cuenta de ingresos', ty: 'bool', def: false},
     {k: 'Activa', l: 'Activa', ty: 'bool', def: true}],
     before: o => { if (!FORM.rec) o.Codigo = ''; o.Cuentas_Gastos = o.Codigo ? o.Codigo + '-' + o.Cuentas : ''; }},
@@ -2858,7 +2867,7 @@ document.addEventListener('click', async e => {
     if (cb && cb.classList.contains('combo-btn')) { e.preventDefault(); if (COMBO && COMBO.btn === cb) closeCombo(); else openCombo(cb); return; }
     if (cb && cb.classList.contains('combo-opt')) { e.preventDefault(); pickCombo(cb.dataset.cval); return; } }
   if (e.target.closest && e.target.closest('#fab')) return;  // el botón + tiene su propio manejador
-  const t = e.target.closest('[data-tarjeta],[data-corte],[data-pgastos],[data-fveh],[data-frange],[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
+  const t = e.target.closest('[data-sort],[data-tarjeta],[data-corte],[data-pgastos],[data-fveh],[data-frange],[data-goto-mes],[data-funit],[data-fuel],[data-banco],[data-user],[data-go],[data-new],[data-edit],[data-act],[data-cuenta],[data-anio],[data-tab],[data-rango],[data-pend],[data-mes],[data-buscar],[data-theme-set],[data-close]');
   if (!t) return;
   const d = t.dataset;
   if (d.close !== undefined) {
@@ -2869,6 +2878,7 @@ document.addEventListener('click', async e => {
   if (d.user) { openUserForm(d.user); return; }
   if (d.banco) { S.banco = d.banco; render(); return; }
   if (d.gotoMes) { S.mes = d.gotoMes; if (d.stay) render(); else go('inicio'); toast('Trabajando en ' + mesLabel(d.gotoMes)); return; }
+  if (d.sort) { const cs = S.catSort || (S.catSort = {}), cur = cs[S.tab]; cs[S.tab] = cur && cur.col === d.sort ? (cur.dir === 'asc' ? {col: d.sort, dir: 'desc'} : null) : {col: d.sort, dir: 'asc'}; render(); return; }
   if (d.tarjeta && !d.go) { S.tarjeta = d.tarjeta; render(); return; }
   if (d.corte) { e.preventDefault(); const st = S.corteOpen || (S.corteOpen = new Set()); st.has(d.corte) ? st.delete(d.corte) : st.add(d.corte); render(); return; }
   if (d.pgastos) { e.preventDefault(); openPartidaGastos(d.pgastos); return; }
