@@ -81,8 +81,8 @@ a{color:var(--teal)}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--paper)}
 .top h2{margin:0;font-size:17px;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .monthpick{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
-.monthpick button{border:0;background:none;width:30px;height:30px;border-radius:50%;cursor:pointer;display:grid;place-items:center;color:var(--ink2)}
-.monthpick button:hover{background:var(--sunk)}
+.monthpick > button{border:0;background:none;width:30px;height:30px;border-radius:50%;cursor:pointer;display:grid;place-items:center;color:var(--ink2)}
+.monthpick > button:hover{background:var(--sunk)}
 .monthpick select{border:0;background:none;font-weight:600;padding:4px 2px;cursor:pointer}
 .monthpick .yearsel{color:var(--muted);border-right:1px solid var(--line);padding-right:6px;margin-right:2px}
 @media (max-width:420px){.top h2{display:none}.monthpick{margin-left:auto}}
@@ -330,6 +330,17 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .combo{position:relative}
 .combo-inline{display:inline-block;flex:1 1 230px;min-width:200px;max-width:420px}
 .combo-inline .combo-pop{min-width:240px}
+.combo-inline.combo-sm{flex:0 0 auto;min-width:0;width:auto}
+.combo-inline.combo-sm .combo-btn{width:auto;min-width:110px;gap:6px}
+.combo-inline.combo-sm .combo-pop{min-width:170px;right:auto}
+.combo-inline.combo-full{display:block;flex:none;width:100%;max-width:none;min-width:0}
+.monthpick .combo-mp .combo-btn{width:auto;height:30px;min-height:0;border:0;border-radius:999px;background:none;padding:0 4px 0 8px;font:inherit;font-weight:600;color:var(--ink);display:flex}
+.monthpick .combo-mp .combo-btn:hover{background:var(--sunk)}
+.monthpick .combo-mp .combo-btn.yearsel{color:var(--muted);border-right:1px solid var(--line);border-radius:999px 0 0 999px;margin-right:2px}
+.monthpick .combo-mp .combo-btn::after{width:6px;height:6px;margin-left:8px}
+.monthpick .combo-mp .combo-pop{left:auto;right:0;min-width:210px;top:calc(100% + 8px)}
+.monthpick .combo-yr .combo-pop{right:auto;left:0;min-width:130px}
+.combo-opt:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
 .combo-native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:0;top:0}
 .combo-btn{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;cursor:pointer;color:var(--ink)}
 .combo-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -339,7 +350,11 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .combo-q{margin:6px;min-height:36px;padding:6px 10px;font-size:14px;width:auto}
 .combo-list{overflow:auto;overscroll-behavior:contain}
 .combo-opt{display:block;width:100%;min-height:34px;padding:7px 12px;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);font:inherit;font-size:14.5px;text-align:left;cursor:pointer}
-.combo-opt[hidden]{display:none}
+.combo-opt[hidden],.combo-head[hidden]{display:none}
+.combo-pop.up{top:auto;bottom:calc(100% + 4px)}
+.combo-head{padding:9px 12px 5px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--sunk);border-top:1px solid var(--line)}
+.combo-head:first-child{border-top:0}
+.combo-head + .combo-opt{border-top:0}
 .combo-none{padding:10px 12px;color:var(--muted);font-size:13.5px}
 .combo-opt:first-child{border-top:0}
 .combo-opt:hover{background:var(--sunk)}
@@ -464,8 +479,8 @@ button.drow:hover{background:var(--sunk)}
       <span class="sync" id="sync" hidden role="status" aria-live="polite"></span>
       <div class="monthpick" id="mp">
         <button type="button" data-act="mes-prev" aria-label="Mes anterior"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <select id="anioSel" class="yearsel" aria-label="Año"></select>
-        <select id="mesSel" aria-label="Período"></select>
+        <div class="combo combo-mp combo-yr"><select id="anioSel" class="combo-native" tabindex="-1" aria-hidden="true"></select><button type="button" class="combo-btn mp-btn yearsel" data-combo="anioSel" aria-label="Año" aria-haspopup="listbox"><span></span></button></div>
+        <div class="combo combo-mp"><select id="mesSel" class="combo-native" tabindex="-1" aria-hidden="true"></select><button type="button" class="combo-btn mp-btn" data-combo="mesSel" aria-label="Período" aria-haspopup="listbox"><span></span></button></div>
         <button type="button" data-act="mes-next" aria-label="Mes siguiente"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></button>
       </div>
     </header>
@@ -482,7 +497,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.27-0236';
+const APP_VERSION = '2026.10.30-0053';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -754,6 +769,20 @@ const after = (fecha, start) => !start || dtKey(fecha) >= start;
    Deuda = deuda inicial + compras (menos su descuento) + combustible pagado con la tarjeta (C$) + retiros con su cargo − pagos.
    Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta. */
 const CURS = ['NIO', 'USD'];
+/** Cómo se pagó un llenado: T:<tarjeta>, B:<cuenta de banco>, E (efectivo en mano) o vacío (otro medio) */
+const fuelPay = f => { const v = String(f.Pagado_Con || ''); return v || (hasId(f.ID_Tarjeta) && Number(f.ID_Tarjeta) ? 'T:' + f.ID_Tarjeta : ''); };
+const combustibleCuenta = () => ((DB.t.Cuentas || []).find(c => truthy(c.Cuenta_de_Gastos) && truthy(c.Activa) && /combustible/i.test(c.Cuentas)) || {}).Codigo || defaultGastoCuenta();
+function fuelPayDefault() {
+  const v = lsGet('fuel_pay'), ok = x => x === '' || x === 'E' || (x.startsWith('T:') && tarjeta(x.slice(2)) && truthy(tarjeta(x.slice(2)).Activa)) || (x.startsWith('B:') && banco(x.slice(2)));
+  if (v !== null && v !== undefined && ok(v)) return v;
+  const c = fuelCardDefault(); return c === '' ? '' : 'T:' + c;
+}
+/** Opciones de «Pagado con», agrupadas (el tercer valor marca un título de grupo) */
+const fuelPayOpts = () => [
+  ...(tarjetas().length ? [['', 'Tarjetas de crédito', 'h'], ...tarjetas().map(c => ['T:' + c.ID_Tarjeta, c.Nombre + (c.Ultimos4 ? ' ·' + c.Ultimos4 : '')])] : []),
+  ['', 'Cuentas de banco', 'h'], ...bancos().filter(b => b.Moneda === 'NIO').map(b => ['B:' + b.ID_Banco, b.Nombre]),
+  ['', 'Efectivo', 'h'], ['E', 'Efectivo en mano'],
+  ['', 'Otro', 'h'], ['', 'Otro medio (no se registra)']];
 /** Tarjeta que se propone al registrar combustible: la última usada o la que dice «gas» */
 const fuelCardDefault = () => { const v = lsGet('fuel_card'); if (v !== null && v !== undefined) return v === '' ? '' : Number(v); const g = tarjetas().find(c => /gas/i.test(c.Nombre)) || tarjetas()[0]; return g ? Number(g.ID_Tarjeta) : ''; };
 const tarjetas = all => (DB.t.Tarjetas_Credito || []).filter(c => all || truthy(c.Activa)).slice().sort((a, b) => (Number(a.Orden) || 0) - (Number(b.Orden) || 0));
@@ -854,6 +883,7 @@ function ledger(bid) {
     if (String(m.ID_Banco_Origen) === String(bid) && m.Tipo === 'Transferencia') add(m.Fecha, 'Transferencia a ' + bankName(m.ID_Banco_Destino) + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto) || 0), src, {tipo: 'Transferencia'});
     if (String(m.ID_Banco_Destino) === String(bid)) add(m.Fecha, (m.Tipo === 'Depósito' ? 'Depósito de efectivo' : 'Transferencia de ' + bankName(m.ID_Banco_Origen)) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto_Destino) || 0, src, {tipo: m.Tipo});
   });
+  DB.t.Consumo_Combustible.filter(f => fuelPay(f) === 'B:' + bid && Number(f.Costo) > 0).forEach(f => add(f.Fecha, 'Combustible: ' + (Number(f.Litro) || 0).toFixed(2) + ' L', -(Number(f.Costo) || 0), {t: 'Consumo_Combustible', id: f.ID}, {tipo: 'Combustible'}));
   (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Pago' && String(m.ID_Banco) === String(bid)).forEach(m => add(m.Fecha, 'Pago de tarjeta ' + tarName(m.ID_Tarjeta) + ' (' + (movCur(m) === 'USD' ? 'deuda en US$' : 'deuda en C$') + ')' + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto_Banco) || Number(m.Monto) || 0), {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, {tipo: 'Pago de tarjeta'}));
   out.sort((a, b) => a.fecha.localeCompare(b.fecha));
   let bal = Number(b.Saldo_Inicial) || 0; out.forEach(r => { if (r.pre) { r.bal = null; return; } bal = r2(bal + r.amt); r.bal = bal; });
@@ -864,6 +894,7 @@ function cashLedger() {
   if (!start) return {rows: [], saldo: 0, inicial: 0, start: ''};
   const add = (fecha, desc, amt, src, tipo) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, pre: !after(fecha, start)});
   DB.t.Ingresos_Detalle.filter(r => noBank(r) && !r.Origen && !isCarry(r)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Total) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, 'Ingreso en efectivo'));
+  DB.t.Consumo_Combustible.filter(f => fuelPay(f) === 'E' && Number(f.Costo) > 0).forEach(f => add(f.Fecha, 'Combustible: ' + (Number(f.Litro) || 0).toFixed(2) + ' L', -(Number(f.Costo) || 0), {t: 'Consumo_Combustible', id: f.ID}, 'Combustible'));
   (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && movCur(m) === 'NIO').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto) || 0, {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
   DB.t.Retiros_Detalle.filter(r => !r.Origen && r.Efectivo_Moneda !== 'USD').forEach(r => add(r.Fecha_Retiro, r.Movimiento + (banco(r.ID_Banco) ? ' (' + bankName(r.ID_Banco) + ')' : ''), Number(r.Total) || 0, {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, 'Retiro de efectivo'));
   DB.t.Gastos_Detalle.filter(r => noBank(r) && !r.Origen && !truthy(r.Efectivo_USD)).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(Number(r.Total) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, 'Gasto en efectivo'));
@@ -1017,8 +1048,19 @@ const Demo = {
     const saved = this._saveDet(p.table, row, p.mes, ch);
     if (p.table === 'Movimientos_Banco') this._syncGastoMov(saved, ch);
     if (p.table === 'Movimientos_Tarjeta') this._syncGastoTar(saved, ch);
+    if (p.table === 'Consumo_Combustible' && p.mesGasto) this._syncGastoFuel(saved, p.mesGasto, ch);
     ch.saved = saved[DB.key(p.table)];
     return ch;
+  },
+  _syncGastoFuel(m, mes, ch) {
+    const pv = String(m.Pagado_Con || ''), need = (pv.startsWith('B:') || pv === 'E') && Number(m.Costo) > 0;
+    const ex = m.ID_Gasto_Auto, exists = ex && DB.t.Gastos_Detalle.some(x => String(x.ID_Detalle_Gastos) === String(ex));
+    if (need) {
+      const row = {Fecha: m.Fecha, Cuenta_Gastos: combustibleCuenta(), Descripcion_Gasto: 'Combustible: ' + (Number(m.Litro) || 0).toFixed(2) + ' L', Cantidad: 1, UM: 'Unidad', Total: r2(Number(m.Costo)), Precio_Unitario: r2(Number(m.Costo)), ID_Banco: pv === 'E' ? '' : Number(pv.slice(2)), Origen: 'FUE:' + m.ID, Descripcion_Adicional: 'Generado automáticamente'};
+      if (exists) row.ID_Detalle_Gastos = ex;
+      const g = this._saveDet('Gastos_Detalle', row, mes, ch);
+      if (String(ex) !== String(g.ID_Detalle_Gastos)) this._add(ch, 'Consumo_Combustible', this._upsert('Consumo_Combustible', Object.assign({}, m, {ID_Gasto_Auto: g.ID_Detalle_Gastos})));
+    } else if (ex) { this._removeDet('Gastos_Detalle', ex, ch); this._add(ch, 'Consumo_Combustible', this._upsert('Consumo_Combustible', Object.assign({}, m, {ID_Gasto_Auto: ''}))); }
   },
   _syncGastoTar(m, ch) {
     const c = tarjeta(m.ID_Tarjeta) || {}, need = m.Tipo === 'Pago' && m.ID_Banco !== '' && m.ID_Banco !== null && Number(m.Monto) > 0 && m.Mes_Anio;
@@ -1269,8 +1311,9 @@ function localHeader(table, mes, hdrs, loc, tmps) {
 }
 /** Gasto automático provisional del pago de tarjeta o de la compra de dólares (el servidor manda el definitivo) */
 function provAuto(table, r, rec, loc, undo, tmps, hdrs, mes) {
-  if (table !== 'Movimientos_Tarjeta' && table !== 'Movimientos_Banco') return;
+  if (table !== 'Movimientos_Tarjeta' && table !== 'Movimientos_Banco' && table !== 'Consumo_Combustible') return;
   let need = null;
+  if (table === 'Consumo_Combustible') { const pv = String(r.Pagado_Con || ''); if ((pv.startsWith('B:') || pv === 'E') && Number(r.Costo) > 0) need = {Cuenta_Gastos: combustibleCuenta(), Descripcion_Gasto: 'Combustible: ' + (Number(r.Litro) || 0).toFixed(2) + ' L', Total: r2(Number(r.Costo)), ID_Banco: pv === 'E' ? '' : Number(pv.slice(2)), Origen: 'FUE:' + r.ID}; mes = periodForDate(r.Fecha); }
   if (table === 'Movimientos_Tarjeta' && r.Tipo === 'Pago' && hasId(r.ID_Banco) && Number(r.Monto) > 0) need = {Cuenta_Gastos: r.Cuenta_Gastos || defaultTarjetaCuenta(), Descripcion_Gasto: 'Pago tarjeta ' + tarName(r.ID_Tarjeta), Total: Number(r.Monto_C) || Number(r.Monto), ID_Banco: r.ID_Banco, ID_Partida: r.ID_Partida || '', Origen: 'TAR:' + r.ID_MovTar};
   if (table === 'Movimientos_Banco' && r.Tipo === 'Transferencia' && curOf(r.ID_Banco_Origen) !== 'USD' && isUsdDest(r.ID_Banco_Destino)) need = {Cuenta_Gastos: r.Cuenta_Gastos || defaultGastoCuenta(), Descripcion_Gasto: 'Compra de dólares: ' + bankName(r.ID_Banco_Destino), Total: Number(r.Monto) || 0, ID_Banco: String(r.ID_Banco_Origen) === '0' ? '' : r.ID_Banco_Origen, Origen: 'MOV:' + r.ID_Mov};
   const key = DB.key(table), exId = (rec && rec.ID_Gasto_Auto) || r.ID_Gasto_Auto;
@@ -1552,7 +1595,7 @@ V.gastos = () => {
   ${S.all && !q && !S.cuenta ? '<div class="panel empty"><b>Busca en todo el historial</b>Escribe una descripción o elige una cuenta para buscar desde 2018.</div>' :
     n ? `<div class="list">${listGrouped(shown, 'Fecha', r => `
       <button class="item ${r._pending ? 'pending' : ''}" data-edit="Gastos_Detalle" data-id="${r.ID_Detalle_Gastos}">
-        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${hasTime(r.Fecha) ? ftime(r.Fecha) + ', ' : ''}${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.ID_Banco !== '' && r.ID_Banco !== undefined && banco(r.ID_Banco) ? (r.Origen ? (String(r.Origen).startsWith('TAR:') ? ', pago de tarjeta desde ' : ', compra de dólares desde ') : ', débito ') + esc(bankName(r.ID_Banco)) + (Number(r.Monto_Moneda) ? ' ' + usd(r.Monto_Moneda) : '') : truthy(r.Efectivo_USD) ? ', efectivo en dólares ' + usd(r.Monto_Moneda) : ''}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${hasId(r.ID_Partida) && Number(r.ID_Partida) && PD.get(String(r.ID_Partida)) ? ', partida ' + esc(PD.get(String(r.ID_Partida))) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
+        <span class="tx"><b>${esc(r.Descripcion_Gasto)}</b><small>${hasTime(r.Fecha) ? ftime(r.Fecha) + ', ' : ''}${esc(cuentaNombre(r.Cuenta_Gastos))}, ${Number(r.Cantidad) || 1} ${esc(r.UM || '')}${r.ID_Banco !== '' && r.ID_Banco !== undefined && banco(r.ID_Banco) ? (r.Origen ? (String(r.Origen).startsWith('FUE:') ? ', combustible pagado desde ' : String(r.Origen).startsWith('TAR:') ? ', pago de tarjeta desde ' : ', compra de dólares desde ') : ', débito ') + esc(bankName(r.ID_Banco)) + (Number(r.Monto_Moneda) ? ' ' + usd(r.Monto_Moneda) : '') : truthy(r.Efectivo_USD) ? ', efectivo en dólares ' + usd(r.Monto_Moneda) : ''}${r.Descripcion_Adicional ? ', ' + esc(r.Descripcion_Adicional) : ''}${hasId(r.ID_Partida) && Number(r.ID_Partida) && PD.get(String(r.ID_Partida)) ? ', partida ' + esc(PD.get(String(r.ID_Partida))) : ''}${r._mes ? ', ' + esc(mesLabel(r._mes)) : ''}</small></span>
         <span class="amt num">${money(r.Total)}${Number(r.Cantidad) > 1 ? `<small>${money(r.Precio_Unitario)} c/u</small>` : ''}</span>
       </button>`)}</div>` : `<div class="panel empty"><b>No hay gastos${q || S.cuenta ? ' con ese filtro' : ' en este mes'}</b>${canEdit('Gastos') ? 'Usa Registrar gasto para agregar el primero.' : ''}</div>`}`;
 };
@@ -1706,7 +1749,7 @@ V.cuenta = () => {
   const tg = G.reduce((a, b) => a + b, 0), tp = P.reduce((a, b) => a + b, 0), act = G.filter(v => v > 0).length;
   return `
   <div class="toolbar">${comboize(`<select class="input" data-bind="cuentaSel" aria-label="Cuenta">${ctas.map(c => `<option value="${c.Codigo}" ${c.Codigo === S.cuentaSel ? 'selected' : ''}>${esc(c.Cuentas)}</option>`).join('')}</select>`, 'selCuentaAnalisis')}
-    <select class="input" data-bind="cuentaYear" aria-label="Año"><option value="all" ${yr === 'all' ? 'selected' : ''}>Todos los años</option>${years.map(y => `<option value="${y}" ${y === yr ? 'selected' : ''}>${y}</option>`).join('')}</select>
+    ${comboize(`<select class="input" data-bind="cuentaYear" aria-label="Año"><option value="all" ${yr === 'all' ? 'selected' : ''}>Todos los años</option>${years.map(y => `<option value="${y}" ${y === yr ? 'selected' : ''}>${y}</option>`).join('')}</select>`, 'selCuentaYear', 'combo-sm')}
     <div class="tabs" style="margin:0">${[[1, 'Último mes'], [6, '6 meses'], [12, '12 meses'], [24, '24 meses'], [0, yr === 'all' ? 'Todo' : 'Todo el año']].map(([v, l]) => `<button class="tab" data-rango="${v}" aria-pressed="${S.rango === v}">${l}</button>`).join('')}</div></div>
   <p class="muted" style="font-size:13px;margin:0 2px 4px">Mostrando <b>${esc(cuentaNombre(S.cuentaSel))}</b>: ${esc(rangeTxt)} (${sel.length} ${sel.length === 1 ? 'mes' : 'meses'}${byYear ? ', el gráfico se agrupa por año' : ''}).</p>
   <div class="figs three n3m">
@@ -1851,12 +1894,12 @@ V.combustible = () => {
   </section>
   ${vcur.Placa || vcur.Detalle ? `<p class="muted" style="font-size:13px;margin:6px 2px 0">${esc([vcur.Placa, vcur.Detalle].filter(Boolean).join(' · '))}</p>` : ''}
   <section class="panel fuelfilter" aria-label="Filtros de combustible">
-    <label class="ff"><span>Año</span><select class="input" id="fYear"><option value="all" ${F.y === 'all' ? 'selected' : ''}>Todos los años</option>${ysel}</select></label>
+    <label class="ff"><span>Año</span>${comboize(`<select class="input" id="fYear"><option value="all" ${F.y === 'all' ? 'selected' : ''}>Todos los años</option>${ysel}</select>`, '', 'combo-sm')}</label>
     <div class="tabs" style="margin:0">
       <button type="button" class="tab" data-frange="all" aria-pressed="${F.rg === 'all'}">${F.y === 'all' ? 'Todo el historial' : 'Todo el año'}</button>
       <button type="button" class="tab" data-frange="6m" aria-pressed="${F.rg === '6m'}">Últimos 6 meses</button>
     </div>
-    <select class="input ${F.rg.startsWith('m:') ? 'on' : ''}" id="fMonth" aria-label="Un mes en específico"><option value="">Un mes en específico…</option>${msel}</select>
+    ${comboize(`<select class="input ${F.rg.startsWith('m:') ? 'on' : ''}" id="fMonth" aria-label="Un mes en específico"><option value="">Un mes en específico…</option>${msel}</select>`, '', 'combo-sm')}
   </section>
   <p class="muted" style="font-size:13px;margin:8px 2px 0">Mostrando <b>${esc(vehName(F.veh))}</b>, <b>${esc(F.label)}</b>: ${rows.length} llenados, ${NF0.format(kmTot)} km. Odómetro actual: <b>${lastR ? NF0.format(lastR.Horometro_Km) : '—'} km</b>.</p>
   ${rows.length ? '' : '<div class="panel empty" style="margin-top:12px"><b>No hay llenados en este período</b>Elige otro año o período.</div>'}
@@ -1941,7 +1984,7 @@ V.cortes = () => {
   const groups = [...by.entries()].map(([m, rs]) => [m, rs.sort((a, b) => tm(b).localeCompare(tm(a)))]).sort((a, b) => mesNum(b[0]) - mesNum(a[0]));
   const open = S.corteOpen || (S.corteOpen = new Set()), nCortes = groups.reduce((a, [, rs]) => a + rs.length, 0);
   const cells = r => `<td>${fdate(r.Fecha_Registro)} ${String(r.Hora_Registro).slice(11, 16)}${truthy(r.Auto) ? ' <span class="pill open">automático</span>' : ''}</td><td class="motivo">${r.Motivo ? esc(r.Motivo) : `<span class="muted">${truthy(r.Auto) ? '—' : 'Corte guardado'}</span>`}</td><td class="n">${money(r.Total_Ingresos)}</td><td class="n">${money(r.Total_Presupuesto)}</td><td class="n">${money(r.Total_Gastos)}</td><td class="n">${money(r.Total_Ret_Efectivo)}</td><td class="n ${r.Disp_enMano < 0 ? 'neg' : ''}">${money(r.Disp_enMano)}</td><td class="n">${money(r.Dif_Ing_Gastos)}</td>`;
-  return `<div class="toolbar" style="margin-top:0"><label class="ff" style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px;color:var(--ink2)"><span>Año</span><select class="input" data-bind="corteYear" style="width:auto"><option value="all" ${y === 'all' ? 'selected' : ''}>Todos los años</option>${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+  return `<div class="toolbar" style="margin-top:0"><label class="ff" style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px;color:var(--ink2)"><span>Año</span>${comboize(`<select class="input" data-bind="corteYear" style="width:auto"><option value="all" ${y === 'all' ? 'selected' : ''}>Todos los años</option>${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select>`, 'selCorteYear', 'combo-sm')}</label>
     <span class="spacer"></span><span class="muted" style="font-size:13px">${groups.length} ${groups.length === 1 ? 'mes' : 'meses'}, ${nCortes} cortes</span></div>
   <p class="muted" style="margin:6px 2px 12px">Se muestra el <b>último corte de cada mes</b>. Toca <b>+</b> para ver todos los cortes del mes: cada gasto, retiro, depósito o cambio del presupuesto deja su propio corte automático, con el movimiento que lo generó.</p>
   ${groups.length ? `<div class="tablewrap"><table class="t cortes"><thead><tr><th>Mes</th><th>Actualizado</th><th>Movimiento</th><th class="n">Ingresos</th><th class="n">Presupuesto</th><th class="n">Gastos</th><th class="n">Retiros</th><th class="n">En mano</th><th class="n">Ing − gastos</th></tr></thead>
@@ -1980,7 +2023,7 @@ V.periodos = () => {
   <p class="muted" style="font-size:13px;margin:0 0 10px"><b>T/C compra</b>: córdobas que pagas por US$ 1 cuando compras dólares (de córdobas a dólares). <b>T/C venta</b>: córdobas que recibes por US$ 1 cuando cambias dólares a córdobas; también se usa para valorar en córdobas los saldos, retiros, gastos y depósitos en dólares. Cada movimiento propone la que le corresponde.</p>
   <p class="muted">Cada período va del día ${D} de su mes al ${D - 1 || 'último'} del mes siguiente (cobras el ${D}). Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
   ${can('periodos.gestionar') ? `<div class="row" style="margin:0 0 12px;gap:10px"><label for="diaIni" style="font-weight:600;font-size:14px">El período empieza el día</label>
-    <select class="input" id="diaIni" style="width:auto">${Array.from({length: 28}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === D ? 'selected' : ''}>${n}</option>`).join('')}</select>
+    ${comboize(`<select class="input" id="diaIni" style="width:auto">${Array.from({length: 28}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === D ? 'selected' : ''}>${n}</option>`).join('')}</select>`, '', 'combo-sm')}
     <span class="muted" style="font-size:13px">Hoy corresponde a <b>${esc(mesLabel(hoyP))}</b>.</span></div>` : ''}
   ${Backend.online && can('periodos.gestionar') ? '<div class="notice info"><span>Si un período aparece como fecha (por ejemplo 2026 09) o con datos en cero, revisa la hoja.</span><button class="btn small" data-act="repair">Revisar y reparar períodos</button></div>' : ''}
   <div class="toolbar"><div class="tabs" style="margin:0">${years.map(y => `<button class="tab" data-anio="${y}" aria-pressed="${String(y) === String(S.anio)}">${y}</button>`).join('')}</div><span class="spacer"></span>${can('periodos.gestionar') ? `<button class="btn" data-act="add-year">Crear año ${Math.max(...years) + 1}</button>` : ''}</div>
@@ -2261,14 +2304,16 @@ const FORMS = {
     {k: 'Precio_Litro', l: 'Precio por litro (C$)', ty: 'number', step: 'any', half: 1, def: () => lastFuelPrice()},
     {k: 'Costo', l: 'Total pagado (C$)', ty: 'number', step: '0.01', half: 1, hint: 'Se calcula con la cantidad y el precio por litro. Si escribes el total, se calcula el precio'},
     {k: 'Full', l: 'Tanque lleno', ty: 'bool', def: true},
-    {k: 'ID_Tarjeta', l: 'Pagado con', ty: 'select', num: 1, half: 1, opts: () => [...tarjetas().map(c => [c.ID_Tarjeta, 'Tarjeta ' + c.Nombre]), ['', 'Otro medio (no se registra en tarjeta)']], def: fuelCardDefault},
-    {k: 'Pct_Desc', l: 'Descuento de la tarjeta (%)', ty: 'pct', half: 1, def: () => Number((tarjeta(fuelCardDefault()) || {}).Descuento_Pct) || 0, show: o => !!tarjeta(o.ID_Tarjeta), hint: 'El que aplica en este llenado: por ejemplo 4, o 0 si no hay descuento'},
+    {k: 'Pagado_Con', l: 'Pagado con', ty: 'select', combo: 1, opts: fuelPayOpts, def: fuelPayDefault, fillFrom: rec => fuelPay(rec),
+      live: o => { const v = String(o.Pagado_Con || ''); if (v.startsWith('B:')) return saldoLine(Number(v.slice(2)), fuelCalc(o).costo, FORM && FORM.rec && fuelPay(FORM.rec) === v ? {ID_Banco: Number(v.slice(2)), Total: FORM.rec.Costo} : null); if (v === 'E') return saldoLine(0, fuelCalc(o).costo, FORM && FORM.rec && fuelPay(FORM.rec) === 'E' ? {ID_Banco: '', Total: FORM.rec.Costo} : null); return ''; }},
+    {k: 'Pct_Desc', l: 'Descuento de la tarjeta (%)', ty: 'pct', half: 1, def: () => { const v = fuelPayDefault(); return v.startsWith('T:') ? Number((tarjeta(v.slice(2)) || {}).Descuento_Pct) || 0 : 0; }, show: o => String(o.Pagado_Con || '').startsWith('T:'), hint: 'El que aplica en este llenado: por ejemplo 4, o 0 si no hay descuento'},
     {k: 'Aditivo', l: 'Se agregó aditivo de combustible', ty: 'bool', def: false},
     {k: 'Nota', l: 'Nota (opcional)', ty: 'text'}],
+    validate: o => { const v = String(o.Pagado_Con || ''), cst = fuelCalc(o).costo; if ((v.startsWith('B:') || v === 'E') && cst > 0 && saldosConfigurados()) { const a = availOf(v === 'E' ? 0 : Number(v.slice(2)), FORM.rec && fuelPay(FORM.rec) === v ? {ID_Banco: v === 'E' ? '' : Number(v.slice(2)), Total: FORM.rec.Costo} : null); if (cst > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)}`; } return ''; },
     preview: o => { const c = fuelCalc(o); if (!Number(o.Cantidad)) return '';
       return (c.km > 0 ? `Recorriste ${NF0.format(c.km)} km con ${c.litros.toFixed(3)} litros (${c.galones.toFixed(3)} galones): <b>${c.kml.toFixed(2)} km/L</b> y <b>${c.kmg.toFixed(2)} km/GL</b>.` : 'Primer llenado registrado: el rendimiento se calcula desde el próximo.') +
-        (c.costo ? ` Costo ${money(c.costo)} (${money(c.precio)} por litro).` : '') + (() => { const t = tarjeta(o.ID_Tarjeta); if (!t || !c.costo) return ' No se registra como gasto.'; const d = r2(c.costo * (Number(o.Pct_Desc) || 0)); return ` Suma <b>${money(c.costo - d)}</b> a la deuda de ${esc(t.Nombre)}${d ? ` (${money(c.costo)} − ${r2((Number(o.Pct_Desc) || 0) * 100)} % = descuento ${money(d)})` : ''}. No es gasto ahora: se cuenta al pagar la tarjeta.`; })(); },
-    before: o => { o.ID_Vehiculo = Number(o.ID_Vehiculo) || Number(curVeh()); const tcard = tarjeta(o.ID_Tarjeta); o.Pct_Desc = tcard ? Number(o.Pct_Desc) || 0 : ''; if (!tcard) o.ID_Tarjeta = ''; const c = fuelCalc(o);
+        (c.costo ? ` Costo ${money(c.costo)} (${money(c.precio)} por litro).` : '') + (() => { const v = String(o.Pagado_Con || ''); if ((v.startsWith('B:') || v === 'E') && c.costo) return ` Se registra como <b>gasto</b> de ${money(c.costo)} en ${esc(cuentaNombre(combustibleCuenta()))}, pagado ${v === 'E' ? 'con efectivo en mano' : 'desde ' + esc(bankName(Number(v.slice(2))))}.`; const t = v.startsWith('T:') ? tarjeta(v.slice(2)) : null; if (!t || !c.costo) return ' No se registra como gasto.'; const d = r2(c.costo * (Number(o.Pct_Desc) || 0)); return ` Suma <b>${money(c.costo - d)}</b> a la deuda de ${esc(t.Nombre)}${d ? ` (${money(c.costo)} − ${r2((Number(o.Pct_Desc) || 0) * 100)} % = descuento ${money(d)})` : ''}. No es gasto ahora: se cuenta al pagar la tarjeta.`; })(); },
+    before: o => { o.ID_Vehiculo = Number(o.ID_Vehiculo) || Number(curVeh()); const pv = String(o.Pagado_Con || ''), tcard = pv.startsWith('T:') ? tarjeta(pv.slice(2)) : null; o.ID_Tarjeta = tcard ? Number(tcard.ID_Tarjeta) : ''; o.Pct_Desc = tcard ? Number(o.Pct_Desc) || 0 : ''; if (pv.startsWith('B:') && !banco(pv.slice(2))) o.Pagado_Con = ''; const c = fuelCalc(o);
       const FG = 3.78541, FM = 1.60934; o.Factor_GL = FG; o.Factor_Milla = FM;
       o.Horometro_Millas = Math.round(Number(o.Horometro_Km) / FM * 10) / 10;
       o.Litro = c.litros; o.Galon = c.galones;
@@ -2276,7 +2321,8 @@ const FORMS = {
       o.km_galon = c.kmg || ''; o.km_litros = c.kml || '';
       o.Precio_Litro = c.precio || ''; o.Costo = c.costo || '';
       if (!o.No) o.No = (c.prev ? Number(c.prev.No) || 0 : 0) + 1; },
-    after: o => { lsSet('fuel_card', String(o.ID_Tarjeta ?? '')); if (Number(o.Precio_Litro)) lsSet('precio_litro', String(o.Precio_Litro)); if (o.ID_Vehiculo) { S.fuelVeh = String(o.ID_Vehiculo); lsSet('fuel_veh', S.fuelVeh); } },
+    payload: o => ({mesGasto: periodForDate(o.Fecha)}),
+    after: o => { lsSet('fuel_pay', String(o.Pagado_Con ?? '')); lsSet('fuel_card', String(o.ID_Tarjeta ?? '')); if (Number(o.Precio_Litro)) lsSet('precio_litro', String(o.Precio_Litro)); if (o.ID_Vehiculo) { S.fuelVeh = String(o.ID_Vehiculo); lsSet('fuel_veh', S.fuelVeh); } },
     doneModal: 1, done: o => { if (Number(o.Km_Recorrido) > 0) showFuelResult(o); else toast('Llenado de combustible registrado'); }},
   Vehiculos: {t: 'vehículo', perm: 'combustible.editar', fields: [
     {k: 'Nombre', l: 'Nombre', ty: 'text', req: 1, hint: 'Ejemplo: Camioneta, Sedán, Moto'},
@@ -2319,19 +2365,22 @@ let FORM = null;
 /* Lista compacta propia (la del celular la dibuja el sistema y no se puede achicar): filas bajas y búsqueda */
 let COMBO = null;
 /** Convierte un <select> de una pantalla en la lista compacta */
-const comboize = (html, id) => `<div class="combo combo-inline">${html.replace('<select class="input"', `<select class="input combo-native" id="${id}" tabindex="-1" aria-hidden="true"`)}<button type="button" class="input combo-btn" data-combo="${id}" aria-haspopup="listbox"><span></span></button></div>`;
+const comboize = (html, id, cls = '') => { const m = html.match(/^<select[^>]*?\sid="([^"]+)"/), sid = m ? m[1] : id;
+  const sel = html.replace(/^<select class="input/, `<select${m ? '' : ` id="${sid}"`} tabindex="-1" aria-hidden="true" class="input combo-native`);
+  return `<div class="combo combo-inline ${cls}">${sel}<button type="button" class="input combo-btn" data-combo="${sid}" aria-haspopup="listbox"><span></span></button></div>`; };
 function syncCombos() { document.querySelectorAll('.combo-btn').forEach(b => { const sel = document.getElementById(b.dataset.combo); if (sel && b.firstElementChild) b.firstElementChild.textContent = (sel.selectedOptions[0] || {}).textContent || ''; }); }
 function closeCombo() { if (COMBO) { COMBO.pop.remove(); COMBO.btn.setAttribute('aria-expanded', 'false'); COMBO = null; } }
 function openCombo(btn) {
   closeCombo();
   const sel = document.getElementById(btn.dataset.combo); if (!sel || sel.disabled || btn.disabled) return;
-  const opts = [...sel.options].map(o => [o.value, o.textContent]);
+  const opts = [...sel.options].map(o => [o.value, o.textContent, o.dataset.h === '1']);
   const pop = document.createElement('div'); pop.className = 'combo-pop';
   pop.innerHTML = (opts.length > 8 ? '<input class="input combo-q" type="search" placeholder="Buscar…" aria-label="Buscar en la lista" autocomplete="off">' : '')
-    + `<div class="combo-list" role="listbox">${opts.map(([v, l]) => `<button type="button" class="combo-opt ${v === sel.value ? 'on' : ''}" data-cval="${esc(v)}" role="option" aria-selected="${v === sel.value}">${esc(l)}</button>`).join('')}</div>`;
+    + `<div class="combo-list" role="listbox">${opts.map(([v, l, h]) => h ? `<div class="combo-head" role="presentation">${esc(l)}</div>` : `<button type="button" class="combo-opt ${v === sel.value && sel.selectedOptions[0] && sel.selectedOptions[0].textContent === l ? 'on' : ''}" data-cval="${esc(v)}" role="option" aria-selected="${v === sel.value}">${esc(l)}</button>`).join('')}</div>`;
   btn.parentElement.appendChild(pop); btn.setAttribute('aria-expanded', 'true'); COMBO = {btn, sel, pop};
+  { const r = btn.getBoundingClientRect(), below = window.innerHeight - r.bottom; if (below < 300 && r.top > below) pop.classList.add('up'); }   // sin espacio abajo: se abre hacia arriba
   const q = pop.querySelector('.combo-q');
-  if (q) { q.addEventListener('input', () => { const t = nrm(q.value); let n = 0; pop.querySelectorAll('.combo-opt').forEach(b => { b.hidden = !!t && !nrm(b.textContent).includes(t); if (!b.hidden) n++; });
+  if (q) { q.addEventListener('input', () => { const t = nrm(q.value); let n = 0; pop.querySelectorAll('.combo-opt').forEach(b => { b.hidden = !!t && !nrm(b.textContent).includes(t); if (!b.hidden) n++; }); pop.querySelectorAll('.combo-head').forEach(hd => { hd.hidden = !!t; });
       let none = pop.querySelector('.combo-none'); if (!n && !none) { none = document.createElement('div'); none.className = 'combo-none'; none.textContent = 'Sin resultados'; pop.querySelector('.combo-list').appendChild(none); } if (none) none.hidden = !!n; });
     q.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); const first = pop.querySelector('.combo-opt:not([hidden])'); if (first) pickCombo(first.dataset.cval); } }); if (matchMedia('(pointer:fine)').matches) setTimeout(() => q.focus(), 20); }
   const on = pop.querySelector('.combo-opt.on'); if (on) on.scrollIntoView({block: 'nearest'});
@@ -2366,25 +2415,25 @@ function openForm(table, id, edit) {
   const fieldHtml = f => {
     const v = o[f.k] ?? '', dis = lock || (rec && f.keyEdit) || f.auto ? 'disabled' : '', idf = 'f_' + f.k;
     let inp;
-    if (f.ty === 'select') inp = `<select class="input" id="${idf}" name="${f.k}" ${dis} ${f.req ? 'required' : ''}>${(f.dynOpts ? f.dynOpts(o) : optsWithCurrent(f, v)).map(([a, b]) => `<option value="${esc(a)}" ${String(a) === String(v) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
+    if (f.ty === 'select') inp = `<select class="input" id="${idf}" name="${f.k}" ${dis} ${f.req ? 'required' : ''}>${(f.dynOpts ? f.dynOpts(o) : optsWithCurrent(f, v)).map(([a, b, h]) => h ? `<option disabled data-h="1">${esc(b)}</option>` : `<option value="${esc(a)}" ${String(a) === String(v) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
     else if (f.ty === 'bool') return `<div class="field" data-fk="${f.k}"><div class="field check" style="padding:0"><label for="${idf}">${f.l}</label><label class="toggle"><input type="checkbox" id="${idf}" name="${f.k}" ${truthy(v) ? 'checked' : ''} ${dis}><span></span></label></div>${f.hint ? `<span class="hint">${f.hint}</span>` : ''}</div>`;
     else if (f.ty === 'pct') inp = `<input class="input" id="${idf}" name="${f.k}" type="number" step="any" inputmode="decimal" value="${v === '' ? '' : r2(Number(v) * 100)}" ${dis}>`;
     else if (f.ty === 'datetime') { const dv = toDTL(v); inp = `<div class="dtrow"><input class="input" id="${idf}" name="${f.k}" type="date" aria-label="Fecha" value="${esc(dv.slice(0, 10))}" ${dis} ${f.req ? 'required' : ''}><input class="input dt-time" id="${idf}_t" type="time" aria-label="Hora" value="${esc(dv.slice(11, 16))}" ${dis}></div>
       ${dis ? '' : `<div class="dtchips">${[['Ahora', 0], ['Hace 1 h', 60], ['Hace 3 h', 180], ['Ayer', 1440]].map(([l, m]) => `<button type="button" class="chip" data-act="dt-set" data-for="${idf}" data-min="${m}">${l}</button>`).join('')}</div>`}`; }
     else inp = `<input class="input" id="${idf}" name="${f.k}" type="${f.ty === 'number' ? 'number' : f.ty}" ${f.ty === 'number' ? `inputmode="decimal" step="${f.step || 'any'}"` : ''} value="${esc(f.ty === 'date' ? String(v).slice(0, 10) : v)}" ${f.list ? `list="dl_${f.k}" autocomplete="off"` : ''} ${dis} ${f.req ? 'required' : ''}>${f.list ? `<datalist id="dl_${f.k}"></datalist>` : ''}`;
-    if (f.combo && f.ty === 'select') inp = `<div class="combo">${inp.replace('<select class="input"', '<select class="input combo-native" tabindex="-1" aria-hidden="true"')}<button type="button" class="input combo-btn" data-combo="${idf}" ${dis} aria-haspopup="listbox"><span></span></button></div>`;
+    if (f.ty === 'select' && f.combo !== 0) inp = `<div class="combo">${inp.replace('<select class="input"', '<select class="input combo-native" tabindex="-1" aria-hidden="true"')}<button type="button" class="input combo-btn" data-combo="${idf}" ${dis} aria-haspopup="listbox"><span></span></button></div>`;
     return `<div class="field ${f.half ? 'half' : ''}" data-fk="${f.k}"><label for="${idf}">${f.l}</label>${inp}${f.live ? `<div class="saldo" data-live="${f.k}"></div>` : ''}${f.hint ? `<span class="hint">${typeof f.hint === 'function' ? f.hint() : f.hint}</span>` : ''}</div>`;
   };
   const title = rec ? (view ? F.t.charAt(0).toUpperCase() + F.t.slice(1) : (ro ? 'Ver ' : 'Editar ') + F.t) : (F.g === 'a' ? 'Nueva ' : 'Nuevo ') + F.t;
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="frm" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <h4>${esc(title)}${REL[table] ? ` <span class="pill">${esc(mesLabel(rec ? recPeriod(table, rec) : S.mes))}</span>` : ''}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
-    ${auto ? (table === 'Gastos_Detalle' ? `<div class="notice info" style="margin-top:0"><span>${String(rec.Origen).startsWith('TAR:') ? 'Gasto automático por un pago de tarjeta de crédito. Se cambia desde el pago, en Tarjetas.' : 'Gasto automático por una transferencia a la cuenta en dólares. Se cambia desde la transferencia.'}</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">${String(rec.Origen).startsWith('TAR:') ? 'Abrir el pago' : 'Abrir la transferencia'}</button></div>` : table === 'Retiros_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Retiro automático por un gasto pagado con tarjeta de débito. Se cambia desde el gasto.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el gasto</button></div>`
+    ${auto ? (table === 'Gastos_Detalle' ? `<div class="notice info" style="margin-top:0"><span>${String(rec.Origen).startsWith('FUE:') ? 'Gasto automático por un llenado de combustible. Se cambia desde Combustible.' : String(rec.Origen).startsWith('TAR:') ? 'Gasto automático por un pago de tarjeta de crédito. Se cambia desde el pago, en Tarjetas.' : 'Gasto automático por una transferencia a la cuenta en dólares. Se cambia desde la transferencia.'}</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">${String(rec.Origen).startsWith('FUE:') ? 'Abrir el llenado' : String(rec.Origen).startsWith('TAR:') ? 'Abrir el pago' : 'Abrir la transferencia'}</button></div>` : table === 'Retiros_Detalle' ? `<div class="notice info" style="margin-top:0"><span>Retiro automático por un gasto pagado con tarjeta de débito. Se cambia desde el gasto.</span><button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el gasto</button></div>`
       : `<div class="notice info" style="margin-top:0"><span>Ingreso automático por una conversión de dólares. Se cambia desde el movimiento que lo generó.</span>${/^(RET|MOV):/.test(rec.Origen) ? `<button type="button" class="btn small" data-act="open-src" data-src="${esc(rec.Origen)}">Abrir el origen</button>` : ''}</div>`) : ro ? (noPerm ? `<div class="notice" style="margin-top:0">Tu usuario no tiene permiso para registrar o corregir esto (<code>${esc(permKey)}</code>). Pídele a un administrador que lo active en tu usuario. Si ya lo hizo, cierra sesión y vuelve a entrar.</div>` : '<div class="notice" style="margin-top:0">Solo lectura: este período está cerrado para este módulo. Ábrelo en Períodos para registrar o corregir.</div>') : ''}
     ${(() => { if (!rec || !REL[table] || auto || view) return '';
       const cur = recPeriod(table, rec), mod = REL[table].mod, tg = periodos().filter(p => truthy(p[mod]) && p.Mes_Anio !== cur).map(p => p.Mes_Anio);
       if (!can(MOD_PERM[mod])) return '';
       if (ro) return tg.length ? `<div class="notice info" style="margin-top:0"><span>Registrado en <b>${esc(mesLabel(cur))}</b>. ¿Corresponde a otro período?</span>${tg.slice(-2).map(m => `<button type="button" class="btn small" data-act="move-period" data-to="${m}">Mover a ${esc(mesLabel(m))}</button>`).join('')}</div>` : '';
-      return `<div class="field"><label for="f__periodo">Período</label><select class="input" id="f__periodo">${[cur, ...tg].map(m => `<option value="${m}" ${m === cur ? 'selected' : ''}>${esc(mesLabel(m))}${m === cur ? ' (actual)' : ''}</option>`).join('')}</select><span class="hint">Cámbialo si este movimiento pertenece a otro período abierto.</span></div>`; })()}
+      return `<div class="field"><label for="f__periodo">Período</label>${comboize(`<select class="input" id="f__periodo">${[cur, ...tg].map(m => `<option value="${m}" ${m === cur ? 'selected' : ''}>${esc(mesLabel(m))}${m === cur ? ' (actual)' : ''}</option>`).join('')}</select>`, '', 'combo-full')}<span class="hint">Cámbialo si este movimiento pertenece a otro período abierto.</span></div>`; })()}
     <div class="fgrid">${F.fields.map(fieldHtml).join('')}<div class="fpreview" id="fpreview"></div></div>
     <div class="actions">${view ? '<span class="spacer"></span><button type="button" class="btn" data-close="1">Cerrar</button><button type="button" class="btn primary" data-act="form-edit">Editar</button>' : `${rec && !ro ? '<button type="button" class="btn danger" data-act="del">Eliminar</button>' : ''}<span class="spacer"></span><button type="button" class="btn" data-close="1">${ro ? 'Cerrar' : 'Cancelar'}</button>${ro ? '' : `<button type="submit" class="btn primary">${rec ? 'Guardar cambios' : F.t.length > 14 ? 'Guardar' : 'Guardar ' + F.t}</button>`}`}</div>
   </form></div>`;
@@ -2498,7 +2547,7 @@ function fillFormValues(o) {
 /* ---------- Eliminar con advertencia ----------
    Antes de eliminar se muestra qué saldos cambian. Si una cuenta o el efectivo quedaría en negativo (porque ese dinero
    ya se gastó o se movió) y el bloqueo está activo (Mi cuenta → Configuración), no se deja eliminar. */
-const BAL_TABLES = new Set(['Retiros_Detalle', 'Movimientos_Banco', 'Ingresos_Detalle', 'Gastos_Detalle', 'Movimientos_Tarjeta']);
+const BAL_TABLES = new Set(['Retiros_Detalle', 'Movimientos_Banco', 'Ingresos_Detalle', 'Gastos_Detalle', 'Movimientos_Tarjeta', 'Consumo_Combustible']);
 const blockNeg = () => { const v = empresa().Bloquear_Negativos; return v === '' || v === undefined || v === null ? true : truthy(v); };
 function pocketBalances() {
   const out = {};
@@ -2587,7 +2636,7 @@ function cancelModal() { if (S.pendingGasto && FORM && FORM.table === 'Retiros_D
 /* ---------- Resumen automático ----------
    Cada acción que cambia gastos, retiros, ingresos (depósitos) o presupuesto actualiza sola la fila del período
    en la hoja Resumen. Se agrupan las acciones seguidas en una sola actualización. */
-const RESUMEN_TABLES = ['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Movimientos_Tarjeta'];
+const RESUMEN_TABLES = ['Gastos_Detalle', 'Retiros_Detalle', 'Ingresos_Detalle', 'Presupuesto_Detalle', 'Movimientos_Banco', 'Movimientos_Tarjeta', 'Consumo_Combustible'];
 const resumenOpen = mes => truthy((DB.idx().periodo[mes] || {}).Guardar_Resumen);
 const resumenRow = mes => (DB.t.Resumen || []).filter(r => r.Mes_Anio === mes && truthy(r.Auto)).sort((a, b) => String(a.Hora_Registro).localeCompare(String(b.Hora_Registro)) || a.Id_Resumen - b.Id_Resumen).pop();
 function resumenPayload(mes) {
@@ -2596,7 +2645,7 @@ function resumenPayload(mes) {
   return {mes, Ingresos: t.I, Presupuesto: t.P, Gastos: t.G, Retiros: t.R, Disp_enMano: isNewPeriod(mes) ? (mes === cur ? disponible().mano : undefined) : t.mano};
 }
 function periodsOf(table, o, rec) {
-  const out = [S.mes], df = DATE_FIELD[table] || (table === 'Movimientos_Banco' || table === 'Movimientos_Tarjeta' ? 'Fecha' : '');
+  const out = [S.mes], df = DATE_FIELD[table] || (table === 'Movimientos_Banco' || table === 'Movimientos_Tarjeta' || table === 'Consumo_Combustible' ? 'Fecha' : '');
   if (df && o && o[df]) out.push(periodForDate(o[df]));
   if (rec) { if (df && rec[df]) out.push(periodForDate(rec[df])); if (REL[table]) { try { out.push(recPeriod(table, rec)); } catch (e) {} } }
   return out;
@@ -2611,6 +2660,7 @@ function motivoOf(table, o, acc) {
     Retiros_Detalle: () => `Retiro: ${o.Efectivo_Moneda === 'USD' ? usd(o.Monto_Moneda) : money(o.Total)} de ${bankName(o.ID_Banco)}`,
     Ingresos_Detalle: () => `Ingreso: ${o.Descripcion || ''} ${money(o.Total)}`,
     Presupuesto_Detalle: () => `Partida: ${o.Descripcion || ''} ${money(o.Total)}`,
+    Consumo_Combustible: () => `Combustible: ${(Number(o.Litro) || 0).toFixed(2)} L ${money(o.Costo)}${String(o.Pagado_Con || '').startsWith('B:') ? ' desde ' + bankName(Number(String(o.Pagado_Con).slice(2))) : o.Pagado_Con === 'E' ? ' en efectivo' : ''}`,
     Movimientos_Tarjeta: () => `${({Pago: 'Pago de tarjeta', Compra: 'Compra con tarjeta', Cargo: 'Cargo de tarjeta', Reembolso: 'Reembolso de tarjeta'})[o.Tipo] || 'Retiro con tarjeta'}: ${tarName(o.ID_Tarjeta)} ${fcur(o.Monto, o.Moneda === 'USD' ? 'USD' : 'NIO')}`,
     Movimientos_Banco: () => o.Tipo === 'Transferencia' ? `Transferencia: ${bankName(o.ID_Banco_Origen)} → ${bankName(o.ID_Banco_Destino)} ${fcur(o.Monto_Destino, d)}` : `${o.Tipo === 'Depósito' ? 'Depósito' : 'Ajuste'}: ${fcur(o.Monto_Destino, d)} en ${bankName(o.ID_Banco_Destino)}${o.Descripcion ? ' (' + o.Descripcion + ')' : ''}`
   }[table];
@@ -2655,13 +2705,13 @@ function openUserForm(usuario) {
   sheetModal('frmUser', u ? 'Editar usuario' : 'Nuevo usuario', `<div class="fgrid">
     <div class="field half"><label for="uu">Usuario</label><input class="input" id="uu" autocapitalize="none" value="${esc(u ? u.usuario : '')}" ${u ? 'disabled' : ''} placeholder="nombre.apellido"><span class="hint">Minúsculas, sin espacios.</span></div>
     <div class="field half"><label for="un">Nombre</label><input class="input" id="un" value="${esc(u ? u.nombre : '')}"></div>
-    <div class="field half"><label for="ur">Rol</label><select class="input" id="ur">${roles.map(r => `<option value="${esc(r.id)}" ${r.id === rol ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}</select></div>
+    <div class="field half"><label for="ur">Rol</label>${comboize(`<select class="input" id="ur">${roles.map(r => `<option value="${esc(r.id)}" ${r.id === rol ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}</select>`, '', 'combo-full')}</div>
     <div class="field half check" style="align-self:center"><label for="ua">Activo</label><label class="toggle"><input type="checkbox" id="ua" ${!u || u.activo ? 'checked' : ''}><span></span></label></div>
     <div class="field"><label for="uc">${u ? 'Nueva contraseña' : 'Contraseña inicial'}</label><input class="input" id="uc" type="password" autocomplete="new-password"><span class="hint">${u ? 'Déjala vacía para no cambiarla.' : 'Mínimo 8 caracteres. Compártela en persona.'}</span></div>
     <div class="field check"><label for="ud">Pedir que cree su propia contraseña al entrar</label><label class="toggle"><input type="checkbox" id="ud" ${!u || u.debeCambiar ? 'checked' : ''}><span></span></label></div>
     <div class="field"><label>Permisos</label><div class="perms" id="uperms"></div><span class="hint">Vienen del rol. Si marcas o desmarcas alguno, se guarda en PermisosPersonalizados solo para este usuario.</span></div>
     ${u ? `<p class="muted field" style="font-size:12.5px;margin:0">Alta ${u.alta ? fdate(isoLocal(u.alta)) : '—'}${u.altaPor ? ' por ' + esc(u.altaPor) : ''}. Último acceso: ${u.ultimo ? isoLocal(u.ultimo) : 'nunca'}.</p>` : ''}</div>`, u ? 'Guardar cambios' : 'Crear usuario');
-  renderPerms(rol, u ? u.personalizados : {});
+  renderPerms(rol, u ? u.personalizados : {}); syncCombos();
 }
 function roleDefaults(rol) { const r = (S.roles || []).find(x => x.id === rol); const out = {}; (S.permisos || []).forEach(p => out[p.id] = !!r && r.permisos.includes(p.id)); return out; }
 function renderPerms(rol, custom) {
@@ -2892,7 +2942,7 @@ document.addEventListener('click', async e => {
     const upd = () => { const d = $('#fpD').value, n = sin.filter(r => String(r.Fecha).slice(0, 10) >= d).length, pz = Number($('#fpP').value) || 0; $('#fpN').textContent = n + ' llenados' + (pz ? ', costo total ' + money(sin.filter(r => String(r.Fecha).slice(0, 10) >= d).reduce((a, r) => a + (Number(r.Litro) || 0) * pz, 0)) : ''); };
     $('#fpD').oninput = upd; $('#fpP').oninput = upd; upd(); return;
   }
-  if (a === 'open-src') { const [kind, id] = String(t.dataset.src).split(':'); const tb = {GAS: 'Gastos_Detalle', RET: 'Retiros_Detalle', MOV: 'Movimientos_Banco', TAR: 'Movimientos_Tarjeta'}[kind]; closeModal(); if (tb) openForm(tb, id); return; }
+  if (a === 'open-src') { const [kind, id] = String(t.dataset.src).split(':'); const tb = {GAS: 'Gastos_Detalle', RET: 'Retiros_Detalle', MOV: 'Movimientos_Banco', TAR: 'Movimientos_Tarjeta', FUE: 'Consumo_Combustible'}[kind]; closeModal(); if (tb) openForm(tb, id); return; }
   if (a === 'dt-set' || a === 'dt-now') { const el = $('#' + t.dataset.for), tt = $('#' + t.dataset.for + '_t'); if (!el) return;
     const d = new Date(Date.now() - (Number(t.dataset.min) || 0) * 60000); const v = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     el.value = v; if (tt) tt.value = pad(d.getHours()) + ':' + pad(d.getMinutes()); el.dispatchEvent(new Event('input', {bubbles: true})); return; }
@@ -3061,7 +3111,7 @@ document.addEventListener('change', async e => {
       if (el.value === 'Transferencia' && o && d && [...o.options].some(x => x.value === c)) { o.value = c; const other = [...d.options].find(x => x.value !== c); if (other && d.value === c) d.value = other.value; }
       formDynamics();
     }
-    if (FORM.table === 'Consumo_Combustible' && el.name === 'ID_Tarjeta' && !FORM.pctTouched) { const t = tarjeta(el.value), pe = $('#f_Pct_Desc'); if (t && pe) { pe.value = r2((Number(t.Descuento_Pct) || 0) * 100); formDynamics(); } }
+    if (FORM.table === 'Consumo_Combustible' && el.name === 'Pagado_Con' && !FORM.pctTouched) { const t = String(el.value).startsWith('T:') ? tarjeta(String(el.value).slice(2)) : null, pe = $('#f_Pct_Desc'); if (t && pe) { pe.value = r2((Number(t.Descuento_Pct) || 0) * 100); formDynamics(); } }
     if (FORM.table === 'Movimientos_Tarjeta' && !FORM.rec && !FORM.montoTouched && (el.name === 'Moneda' || el.name === 'Tipo' || el.name === 'ID_Tarjeta') && $('#f_Tipo').value === 'Pago') {
       const c = tarjeta($('#f_ID_Tarjeta').value); if (c) { const st = cardStatus(c);
         if (el.name === 'Tipo' && $('#f_Moneda').value !== 'USD' && !(st.NIO.pendiente > 0) && (st.USD.pendiente > 0 || (!(st.NIO.deuda > 0) && st.USD.deuda > 0))) $('#f_Moneda').value = 'USD';   // si solo se debe en dólares
@@ -3078,7 +3128,11 @@ document.addEventListener('change', async e => {
     el.disabled = false; renderMonthPicker();
   }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && COMBO) { closeCombo(); return; } if (e.key === 'Escape' && $('#modal').innerHTML) cancelModal(); });
+document.addEventListener('keydown', e => {
+  if (COMBO && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); const ops = [...COMBO.pop.querySelectorAll('.combo-opt:not([hidden])')]; if (!ops.length) return;
+    const i = ops.indexOf(document.activeElement), on = ops.findIndex(b => b.classList.contains('on')); const n = i < 0 ? (on >= 0 ? on : (e.key === 'ArrowDown' ? -1 : ops.length)) + (e.key === 'ArrowDown' ? (i < 0 && on >= 0 ? 0 : 1) : -1) : i + (e.key === 'ArrowDown' ? 1 : -1);
+    const t = ops[Math.max(0, Math.min(ops.length - 1, n))]; t.focus(); t.scrollIntoView({block: 'nearest'}); return; }
+  if (e.key === 'Escape' && COMBO) { const b = COMBO.btn; closeCombo(); b.focus(); return; } if (e.key === 'Escape' && $('#modal').innerHTML) cancelModal(); });
 $('#fab').addEventListener('click', () => { const n = $('#fab').dataset.new; if (!n) return; if ($('#fab').dataset.dep) return openDeposito(); if (REL[n] && !ensureTarget(REL[n].mod)) return; const FF = FORMS[n]; if (FF && FF.perm && !can(FF.perm)) return toast('Tu usuario no tiene permiso para registrar esto (' + FF.perm + ')', true); openForm(n); });
 let rzT, lastW = window.innerWidth; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { if (Math.abs(window.innerWidth - lastW) > 60 && !FORM && DB.t.Cuentas) { lastW = window.innerWidth; render(); } }, 250); });
 window.addEventListener('scroll', () => $('#top').classList.toggle('scrolled', window.scrollY > 8), {passive: true});
