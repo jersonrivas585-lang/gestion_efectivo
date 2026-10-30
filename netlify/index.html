@@ -352,6 +352,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .combo-opt{display:block;width:100%;min-height:34px;padding:7px 12px;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);font:inherit;font-size:14.5px;text-align:left;cursor:pointer}
 .combo-opt[hidden],.combo-head[hidden]{display:none}
 .combo-pop.up{top:auto;bottom:calc(100% + 4px)}
+.sug-pop{max-height:min(38vh,260px)}
 .combo-head{padding:9px 12px 5px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--sunk);border-top:1px solid var(--line)}
 .combo-head:first-child{border-top:0}
 .combo-head + .combo-opt{border-top:0}
@@ -497,7 +498,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.30-0053';
+const APP_VERSION = '2026.10.30-0148';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1350,7 +1351,7 @@ const VIEWS = {
   combustible: {t: 'Combustible', icon: 'fuel', d: 'Llenados y rendimiento en km por litro'},
   tarjetas:    {t: 'Tarjetas', icon: 'card', d: 'Consumos con tarjeta y referencias de pago'},
   cortes:      {t: 'Cortes de resumen', icon: 'snap', d: 'Fotografías del mes guardadas en Resumen'},
-  catalogos:   {t: 'Catálogos', icon: 'list', d: 'Cuentas, artículos, unidades y conceptos'},
+  catalogos:   {t: 'Catálogos', icon: 'list', d: 'Cuentas, conceptos de gastos e ingresos, unidades y retiros'},
   periodos:    {t: 'Períodos', icon: 'cal', d: 'Abrir o cerrar meses por módulo'},
   conexion:    {t: 'Mi cuenta', icon: 'plug', d: 'Contraseña, usuarios y apariencia'},
   mas:         {t: 'Más', icon: 'more'}
@@ -1758,7 +1759,7 @@ V.cuenta = () => {
     <div class="fig"><small>Promedio por mes</small><b class="num">${money(act ? tg / act : 0)}</b></div>
   </div>
   <section class="section"><div class="panel">${barChart(byYear ? ysel : mLabels(sel), [{name: 'Gastado', values: byYear ? grp(G) : G, color: 'var(--bar-spent)'}], {all: true, tips: byYear ? ysel : sel.map(mesLabel), marks: {name: 'Presupuesto', values: byYear ? grp(P) : P, color: 'var(--sun)'}})}</div></section>
-  <section class="section"><h3>En qué se va <small>artículos con más gasto</small></h3>
+  <section class="section"><h3>En qué se va <small>conceptos con más gasto</small></h3>
   ${top.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Descripción</th><th class="n">Veces</th><th class="n">Total</th><th class="n">Promedio</th></tr></thead><tbody>${top.map(([k, v]) => `<tr data-buscar="${esc(k)}"><td>${esc(k)}</td><td class="n">${v.n}</td><td class="n">${money(v.t)}</td><td class="n">${money(v.t / v.n)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>Sin gastos en este período</b></div>'}</section>`;
 };
 
@@ -1997,11 +1998,11 @@ const CATS = {
   Tarjetas_Credito: {t: 'Tarjetas de crédito', cols: [['Nombre', 'Nombre'], ['Banco', 'Banco'], ['Dia_Corte', 'Corte'], ['Dia_Pago', 'Pago'], ['Saldo_Inicial', 'Deuda inicial', 'n'], ['Activa', 'Activa', 'b']]},
   Bancos: {t: 'Cuentas de banco', cols: [['Nombre', 'Nombre'], ['Banco', 'Banco'], ['Moneda', 'Moneda'], ['Saldo_Inicial', 'Saldo inicial', 'n'], ['Fecha_Inicial', 'Desde', 'd'], ['Activa', 'Activa', 'b']]},
   Cuentas: {t: 'Cuentas', cols: [['Codigo', 'Código'], ['Cuentas', 'Nombre'], ['Cuenta_de_Gastos', 'Gasto', 'b'], ['Cuenta_de_Ingresos', 'Ingreso', 'b'], ['Activa', 'Activa', 'b']]},
-  Items: {t: 'Artículos de gasto', cols: [['Descripcion', 'Descripción'], ['Cuenta', 'Cuenta', 'c'], ['UM', 'Unidad', 'u']]},
-  Items_Ingresos: {t: 'Conceptos de ingreso', cols: [['Descripcion', 'Descripción'], ['Cuenta', 'Cuenta', 'c']]},
+  Items: {t: 'Conceptos de gastos y presupuesto', cols: [['Descripcion', 'Descripción'], ['Cuenta', 'Cuenta', 'c'], ['UM', 'Unidad', 'u']]},
+  Items_Ingresos: {t: 'Conceptos de ingresos', cols: [['Descripcion', 'Descripción'], ['Cuenta', 'Cuenta', 'c']]},
   UM: {t: 'Unidades', cols: [['UM', 'Unidad']]},
   Vehiculos: {t: 'Vehículos', cols: [['Nombre', 'Nombre'], ['Placa', 'Placa'], ['Detalle', 'Detalle'], ['Activo', 'Activo', 'b']]},
-  Obs_Retiros: {t: 'Movimientos de retiro', cols: [['Observaciones_Retiro', 'Movimiento'], ['Mostrar', 'Mostrar en lista', 'b']]}
+  Obs_Retiros: {t: 'Movimientos de retiros', cols: [['Observaciones_Retiro', 'Movimiento'], ['Mostrar', 'Mostrar en lista', 'b']]}
 };
 V.catalogos = () => {
   if (!S.tab || !CATS[S.tab]) S.tab = 'Cuentas';
@@ -2162,7 +2163,7 @@ const FORMS = {
     {k: 'Fecha_Retiro', l: 'Fecha y hora del retiro', ty: 'datetime', req: 1, def: nowDT, hint: 'Cuándo se hizo el retiro. Cámbialo si lo registras después.'},
     {k: 'ID_Banco', l: 'Desde la cuenta', ty: 'select', live: o => saldoLine(o.ID_Banco, isUsdBank(o.ID_Banco) ? retiroUsd(o) : o.Total, FORM && FORM.rec), hint: 'Solo retiros de cajero o retiro sin tarjeta: el dinero pasa a tu efectivo. Pagos y transferencias a otros se registran como gasto.', opts: () => bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), def: () => lsGet('bank_ret') ?? (bancos()[0] || {}).ID_Banco ?? ''},
     {k: 'Efectivo_Moneda', l: 'Recibo el efectivo en', ty: 'select', opts: () => [['NIO', 'Córdobas (C$)'], ['USD', 'Dólares (US$)']], def: 'NIO', fillFrom: rec => rec.Efectivo_Moneda || 'NIO', show: o => isUsdBank(o.ID_Banco), hint: 'Córdobas: escribes los córdobas que recibes y se descuenta su equivalente en dólares. Dólares: se descuentan y quedan como efectivo en dólares, sin conversión.'},
-    {k: 'Movimiento', l: 'Tipo de retiro', ty: 'text', req: 1, list: () => ['Retiro de Cajero Automatico', 'Retiro sin tarjeta'], def: 'Retiro de Cajero Automatico'},
+    {k: 'Movimiento', l: 'Tipo de retiro', ty: 'text', req: 1, list: () => ['Retiro de Cajero Automatico', 'Retiro sin tarjeta', ...(DB.t.Obs_Retiros || []).filter(x => truthy(x.Mostrar)).map(x => x.Observaciones_Retiro)], def: 'Retiro de Cajero Automatico'},
     {k: 'Monto_Moneda', l: 'Monto (US$)', ty: 'number', req: 1, step: '0.01', show: o => isUsdBank(o.ID_Banco) && o.Efectivo_Moneda === 'USD'},
     {k: 'Total', l: 'Monto (C$)', ty: 'number', req: 1, step: '0.01', show: o => !(isUsdBank(o.ID_Banco) && o.Efectivo_Moneda === 'USD')},
     {k: 'Tipo_Cambio', l: 'Tipo de cambio de venta (C$ por US$)', ty: 'number', req: 1, step: 'any', def: () => tcFor(S.mes), hint: tcHint, show: o => isUsdBank(o.ID_Banco) && o.Efectivo_Moneda !== 'USD'}],
@@ -2347,7 +2348,7 @@ const FORMS = {
     {k: 'Cuenta_de_Ingresos', l: 'Cuenta de ingresos', ty: 'bool', def: false},
     {k: 'Activa', l: 'Activa', ty: 'bool', def: true}],
     before: o => { if (!FORM.rec) o.Codigo = ''; o.Cuentas_Gastos = o.Codigo ? o.Codigo + '-' + o.Cuentas : ''; }},
-  Items: {t: 'artículo', perm: 'catalogos.editar', fields: [
+  Items: {t: 'concepto de gasto', perm: 'catalogos.editar', fields: [
     {k: 'Descripcion', l: 'Descripción', ty: 'text', req: 1},
     {k: 'Cuenta', l: 'Cuenta', ty: 'select', opts: () => optsCuentas(true), req: 1},
     {k: 'UM', l: 'Unidad', ty: 'select', opts: () => DB.t.UM.map(u => [u.ID_UM, u.UM]), def: 7, half: 1, num: 1},
@@ -2385,7 +2386,27 @@ function openCombo(btn) {
     q.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); const first = pop.querySelector('.combo-opt:not([hidden])'); if (first) pickCombo(first.dataset.cval); } }); if (matchMedia('(pointer:fine)').matches) setTimeout(() => q.focus(), 20); }
   const on = pop.querySelector('.combo-opt.on'); if (on) on.scrollIntoView({block: 'nearest'});
 }
-function pickCombo(v) { if (!COMBO) return; const sel = COMBO.sel; sel.value = v; closeCombo(); sel.dispatchEvent(new Event('change', {bubbles: true})); syncCombos(); }
+/* Sugerencias para campos de texto con catálogo (descripción, concepto, tipo de retiro…): se puede escribir libre;
+   al escribir se filtran y al tocar una se completa el campo */
+function sugItems(inp) {
+  const f = FORM && FORM.F.fields.find(x => 'f_' + x.k === inp.id); if (!f || !f.list) return [];
+  const t = nrm(inp.value), seen = new Set(), out = [];
+  f.list(readForm()).forEach(x => { const v = String(x ?? '').trim(), k2 = nrm(v); if (!v || seen.has(k2)) return; seen.add(k2); if (!t || k2.includes(t)) out.push(v); });
+  if (t) out.sort((a, b) => Number(nrm(b).startsWith(t)) - Number(nrm(a).startsWith(t)));
+  return out.slice(0, 60);
+}
+function openSug(inp) {
+  if (inp.disabled || inp.readOnly) return;
+  const items = sugItems(inp), cur = nrm(inp.value);
+  if (!items.length || (items.length === 1 && nrm(items[0]) === cur)) { if (COMBO && COMBO.btn === inp) closeCombo(); return; }
+  let pop = COMBO && COMBO.btn === inp ? COMBO.pop : null;
+  if (!pop) { closeCombo(); pop = document.createElement('div'); pop.className = 'combo-pop sug-pop'; inp.parentElement.appendChild(pop); COMBO = {btn: inp, pop, sug: true}; inp.setAttribute('aria-expanded', 'true');
+    const r = inp.getBoundingClientRect(), below = window.innerHeight - r.bottom; if (below < 220 && r.top > below) pop.classList.add('up'); }
+  pop.innerHTML = `<div class="combo-list" role="listbox">${items.map(v => `<button type="button" class="combo-opt ${nrm(v) === cur ? 'on' : ''}" data-cval="${esc(v)}" role="option" tabindex="-1">${esc(v)}</button>`).join('')}</div>`;
+}
+function pickCombo(v) { if (!COMBO) return;
+  if (COMBO.sug) { const inp = COMBO.btn; inp.value = v; closeCombo(); inp.dispatchEvent(new Event('input', {bubbles: true})); inp.dispatchEvent(new Event('change', {bubbles: true})); inp.focus(); return; }
+  const sel = COMBO.sel; sel.value = v; closeCombo(); sel.dispatchEvent(new Event('change', {bubbles: true})); syncCombos(); }
 /** Opciones de un selector; si el registro usa una cuenta o un vehículo ya desactivado, se conserva para no cambiarlo sin querer */
 function optsWithCurrent(f, v) {
   const list = f.opts();
@@ -2420,7 +2441,8 @@ function openForm(table, id, edit) {
     else if (f.ty === 'pct') inp = `<input class="input" id="${idf}" name="${f.k}" type="number" step="any" inputmode="decimal" value="${v === '' ? '' : r2(Number(v) * 100)}" ${dis}>`;
     else if (f.ty === 'datetime') { const dv = toDTL(v); inp = `<div class="dtrow"><input class="input" id="${idf}" name="${f.k}" type="date" aria-label="Fecha" value="${esc(dv.slice(0, 10))}" ${dis} ${f.req ? 'required' : ''}><input class="input dt-time" id="${idf}_t" type="time" aria-label="Hora" value="${esc(dv.slice(11, 16))}" ${dis}></div>
       ${dis ? '' : `<div class="dtchips">${[['Ahora', 0], ['Hace 1 h', 60], ['Hace 3 h', 180], ['Ayer', 1440]].map(([l, m]) => `<button type="button" class="chip" data-act="dt-set" data-for="${idf}" data-min="${m}">${l}</button>`).join('')}</div>`}`; }
-    else inp = `<input class="input" id="${idf}" name="${f.k}" type="${f.ty === 'number' ? 'number' : f.ty}" ${f.ty === 'number' ? `inputmode="decimal" step="${f.step || 'any'}"` : ''} value="${esc(f.ty === 'date' ? String(v).slice(0, 10) : v)}" ${f.list ? `list="dl_${f.k}" autocomplete="off"` : ''} ${dis} ${f.req ? 'required' : ''}>${f.list ? `<datalist id="dl_${f.k}"></datalist>` : ''}`;
+    else inp = `<input class="input" id="${idf}" name="${f.k}" type="${f.ty === 'number' ? 'number' : f.ty}" ${f.ty === 'number' ? `inputmode="decimal" step="${f.step || 'any'}"` : ''} value="${esc(f.ty === 'date' ? String(v).slice(0, 10) : v)}" ${f.list ? 'autocomplete="off" data-sug="1" aria-autocomplete="list"' : ''} ${dis} ${f.req ? 'required' : ''}>`;
+    if (f.list) inp = `<div class="combo sug">${inp}</div>`;
     if (f.ty === 'select' && f.combo !== 0) inp = `<div class="combo">${inp.replace('<select class="input"', '<select class="input combo-native" tabindex="-1" aria-hidden="true"')}<button type="button" class="input combo-btn" data-combo="${idf}" ${dis} aria-haspopup="listbox"><span></span></button></div>`;
     return `<div class="field ${f.half ? 'half' : ''}" data-fk="${f.k}"><label for="${idf}">${f.l}</label>${inp}${f.live ? `<div class="saldo" data-live="${f.k}"></div>` : ''}${f.hint ? `<span class="hint">${typeof f.hint === 'function' ? f.hint() : f.hint}</span>` : ''}</div>`;
   };
@@ -3054,6 +3076,7 @@ document.addEventListener('submit', e => {
 });
 let qT;
 document.addEventListener('input', e => {
+  if (e.target.dataset && e.target.dataset.sug) openSug(e.target);
   const b = e.target.dataset.bind;
   if (b === 'q') { S.q = e.target.value; clearTimeout(qT); qT = setTimeout(() => { const pos = e.target.selectionStart; render(); const el = $('[data-bind=q]'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 220); }
   if (e.target.closest && e.target.closest('#frmApertura')) apTotal();
@@ -3128,11 +3151,13 @@ document.addEventListener('change', async e => {
     el.disabled = false; renderMonthPicker();
   }
 });
+document.addEventListener('focusin', e => { if (e.target.dataset && e.target.dataset.sug) openSug(e.target); });
 document.addEventListener('keydown', e => {
+  if (COMBO && COMBO.sug && (e.key === 'Tab' || (e.key === 'Enter' && document.activeElement === COMBO.btn))) closeCombo();
   if (COMBO && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); const ops = [...COMBO.pop.querySelectorAll('.combo-opt:not([hidden])')]; if (!ops.length) return;
     const i = ops.indexOf(document.activeElement), on = ops.findIndex(b => b.classList.contains('on')); const n = i < 0 ? (on >= 0 ? on : (e.key === 'ArrowDown' ? -1 : ops.length)) + (e.key === 'ArrowDown' ? (i < 0 && on >= 0 ? 0 : 1) : -1) : i + (e.key === 'ArrowDown' ? 1 : -1);
     const t = ops[Math.max(0, Math.min(ops.length - 1, n))]; t.focus(); t.scrollIntoView({block: 'nearest'}); return; }
-  if (e.key === 'Escape' && COMBO) { const b = COMBO.btn; closeCombo(); b.focus(); return; } if (e.key === 'Escape' && $('#modal').innerHTML) cancelModal(); });
+  if (e.key === 'Escape' && COMBO) { const b = COMBO.btn; closeCombo(); if (document.activeElement !== b) b.focus(); return; } if (e.key === 'Escape' && $('#modal').innerHTML) cancelModal(); });
 $('#fab').addEventListener('click', () => { const n = $('#fab').dataset.new; if (!n) return; if ($('#fab').dataset.dep) return openDeposito(); if (REL[n] && !ensureTarget(REL[n].mod)) return; const FF = FORMS[n]; if (FF && FF.perm && !can(FF.perm)) return toast('Tu usuario no tiene permiso para registrar esto (' + FF.perm + ')', true); openForm(n); });
 let rzT, lastW = window.innerWidth; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { if (Math.abs(window.innerWidth - lastW) > 60 && !FORM && DB.t.Cuentas) { lastW = window.innerWidth; render(); } }, 250); });
 window.addEventListener('scroll', () => $('#top').classList.toggle('scrolled', window.scrollY > 8), {passive: true});
