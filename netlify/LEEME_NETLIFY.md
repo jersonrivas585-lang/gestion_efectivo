@@ -217,6 +217,8 @@ Sin señal puedes **registrar, corregir y eliminar** gastos, retiros, ingresos, 
 - **Necesitan conexión:** iniciar sesión, contraseña, usuarios y permisos, datos del hogar, configuración, catálogos (cuentas, tarjetas, vehículos, bancos), abrir o cerrar períodos y tipos de cambio, importar o copiar el presupuesto, mover registros de período, saldos actuales y reparar. Sin señal avisan «Esta acción necesita internet».
 - **Ten en cuenta:** sin señal ves lo último sincronizado; si otra persona registró algo desde otro equipo, los saldos se completan al sincronizar. Si cierras sesión con registros sin enviar, la app avisa porque se perderían.
 
+**Catálogos:** cada fila de cada sección (tarjetas de crédito, cuentas de banco, cuentas, conceptos de gastos y presupuesto, conceptos de ingresos, unidades, vehículos y movimientos de retiros) tiene al final dos botones: **lápiz** para editar y **papelera** para eliminar (pide confirmar y no deja eliminar lo que está en uso, por ejemplo una tarjeta o cuenta con movimientos: en ese caso se desactiva). Tocar la fila también abre el formulario. En el celular los botones quedan siempre a la vista a la derecha.
+
 ## Consultar y editar registros
 
 **Las ventanas no se cierran al tocar fuera.** Para no perder lo que estás escribiendo, tocar el fondo oscuro alrededor de una ventana ya no la cierra (la ventana hace un pequeño rebote). Se cierra con **×**, **Cancelar** o **Cerrar**, o con la tecla Escape en la computadora.
