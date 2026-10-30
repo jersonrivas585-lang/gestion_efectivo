@@ -3,7 +3,7 @@
      Si no hay señal o tarda más de 4 s, se abre la copia guardada.
    - Íconos y demás archivos: copia guardada, actualizada en segundo plano.
    - Los datos no pasan por aquí: se piden a Google Apps Script. */
-const CACHE = 'efectivo-v5';
+const CACHE = 'efectivo-v6';
 const SHELL = ['/index.html', '/config.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
@@ -12,6 +12,16 @@ self.addEventListener('activate', e => {
 const timeout = (ms) => new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  // Letra de Google Fonts: se guarda y se usa al instante (se actualiza en segundo plano); así no se ve el salto de tamaño al abrir
+  if (e.request.method === 'GET' && (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com')) {
+    e.respondWith(caches.open(CACHE).then(async c => {
+      const hit = await c.match(e.request);
+      const net = fetch(e.request).then(r => { if (r && (r.ok || r.type === 'opaque')) c.put(e.request, r.clone()); return r; }).catch(() => hit);
+      if (hit) { e.waitUntil(net); return hit; }
+      return net;
+    }));
+    return;
+  }
   if (e.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/.well-known/')) return;
   const nav = e.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html' || url.pathname === '/config.js';
   if (nav) {

@@ -176,7 +176,7 @@ Al registrar un gasto, debajo de *Cuenta* aparece **Partida del presupuesto**, c
 - **Elegir una partida:** si la descripción está vacía, se llena con la de la partida. Debajo del formulario se ve cuánto está presupuestado y gastado, y cómo queda la partida con este gasto (o cuánto se excede; solo avisa, no bloquea).
 - **Si no eliges:** el gasto se vincula solo a la partida con la misma descripción, si existe.
 - **Sin partida:** esa opción deja el gasto fuera de toda partida aunque la descripción coincida.
-- **Presupuesto:** la columna *Gastado* de cada partida suma los gastos vinculados y muestra cuántos son. Al tocar el monto se abre la lista de esos gastos (que se pueden abrir para corregir). Lo que no está vinculado aparece como *Otros gastos sin partida*. Los gastos anteriores sin vínculo siguen contando por descripción igual.
+- **Presupuesto:** la columna *Gastado* de cada partida suma los gastos vinculados y muestra cuántos son. Lo que no está vinculado aparece como *Otros gastos sin partida*, con su monto y cuántos son: **tócalo** para ver la lista de esos gastos y abrir cada uno para vincularlo a una partida. Al tocar el monto se abre la lista de esos gastos (que se pueden abrir para corregir). Lo que no está vinculado aparece como *Otros gastos sin partida*. Los gastos anteriores sin vínculo siguen contando por descripción igual.
 - **En Gastos:** cada gasto vinculado muestra «partida …».
 - **Al cambiar de período** un gasto, se quita el vínculo (la partida pertenece al otro período) y se vuelve a vincular por descripción si coincide. Si **reemplazas el presupuesto** al importar desde Excel, los gastos vinculados se vuelven a ligar por cuenta y descripción.
 - El vínculo se guarda en la columna `ID_Partida` de Gastos_Detalle (se agrega sola; `0` = sin partida a propósito).
@@ -218,6 +218,12 @@ Sin señal puedes **registrar, corregir y eliminar** gastos, retiros, ingresos, 
 - **Ten en cuenta:** sin señal ves lo último sincronizado; si otra persona registró algo desde otro equipo, los saldos se completan al sincronizar. Si cierras sesión con registros sin enviar, la app avisa porque se perderían.
 
 **Catálogos:** cada fila de cada sección (tarjetas de crédito, cuentas de banco, cuentas, conceptos de gastos y presupuesto, conceptos de ingresos, unidades, vehículos y movimientos de retiros) tiene al final dos botones: **lápiz** para editar y **papelera** para eliminar (pide confirmar y no deja eliminar lo que está en uso, por ejemplo una tarjeta o cuenta con movimientos: en ese caso se desactiva). Tocar la fila también abre el formulario. En el celular los botones quedan siempre a la vista a la derecha. **Ordenar:** toca el título de cualquier columna para ordenar de menor a mayor (▲); otra vez, de mayor a menor (▼); una tercera vez vuelve al orden original. Los montos se ordenan como números, las fechas por fecha, las cuentas y unidades por su nombre, y cada sección recuerda su orden mientras usas la app.
+
+## Abrir y actualizar sin saltos de tamaño
+
+- El **tema** (claro u oscuro) se aplica antes del primer dibujo, sin parpadeo. La pantalla *Cargando datos…* espera a que cargue la letra de la app (hasta 1,5 s) para que el texto no se reacomode al mostrarse, y la letra queda guardada en el teléfono para abrir al instante después de cada actualización.
+- En la computadora, el ancho de la página ya no se mueve cuando aparece o desaparece la barra de desplazamiento; en el celular se usa la altura real de la pantalla (sin saltos por la barra del navegador).
+- El indicador de envíos de arriba es compacto en el celular: un punto y, si hay registros **por enviar**, su número (rojo si no hay conexión); el texto completo está en *Mi cuenta → Envíos*. Ya no empuja el año y el mes fuera de la pantalla, y el nombre del mes se acorta con «…» si no cabe.
 
 ## Consultar y editar registros
 

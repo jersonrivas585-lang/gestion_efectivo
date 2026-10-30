@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="Efectivo">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <script src="/config.js"></script>
+<script>try{var t=localStorage.getItem('ge_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <title>Gestión de Efectivo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,7 +49,7 @@
   color-scheme: dark;
 }
 *,*::before,*::after{box-sizing:inherit}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px);scrollbar-gutter:stable}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.45;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
 a{color:var(--teal)}
@@ -57,13 +58,13 @@ a{color:var(--teal)}
 :focus-visible{outline:3px solid var(--teal);outline-offset:2px;border-radius:6px}
 
 /* ---------- Layout ---------- */
-.app{display:grid;grid-template-columns:1fr;min-height:100vh}
+.app{display:grid;grid-template-columns:1fr;min-height:100vh;min-height:100dvh;height:100dvh}
 .side{display:none}
 .main{min-width:0;padding:0 16px 96px}
 .wrap{max-width:1040px;margin:0 auto}
 @media (min-width:900px){
   .app{grid-template-columns:232px 1fr}
-  .side{display:flex;flex-direction:column;gap:2px;position:sticky;top:env(safe-area-inset-top,0px);height:100vh;padding:20px 12px;border-right:1px solid var(--line);background:var(--surface);overflow:auto}
+  .side{display:flex;flex-direction:column;gap:2px;position:sticky;top:env(safe-area-inset-top,0px);height:100vh;height:100dvh;padding:20px 12px;border-right:1px solid var(--line);background:var(--surface);overflow:auto}
   .main{padding:0 32px 48px}
   .bottom{display:none!important}
 }
@@ -436,6 +437,10 @@ button.drow:hover{background:var(--sunk)}
 .sideuser b{display:block}
 .sideuser button{border:0;background:none;padding:4px 0;color:var(--teal);cursor:pointer;font-weight:600}
 .sync{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.sync .ss{display:none;font-weight:700}
+@media (max-width:560px){.sync .sl{display:none}.sync .ss{display:inline}}
+@media (max-width:420px){.sync{position:absolute;left:0;top:50%;transform:translateY(-50%)}.top .monthpick{margin-left:auto;min-width:0;max-width:calc(100% - 44px)}.monthpick .combo-mp:not(.combo-yr){min-width:0;flex:0 1 auto;overflow:hidden}.monthpick .combo-mp .combo-btn{min-width:0;max-width:100%}.monthpick .combo-mp .combo-btn span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.monthpick .combo-yr{flex:none}}
+@media (max-width:340px){.monthpick{gap:0;padding:2px}.monthpick > button{width:24px}.monthpick .combo-mp .combo-btn{padding:0 2px 0 6px}.monthpick .combo-mp .combo-btn::after{margin-left:4px}}
 .sync::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--teal);animation:pulse 1.2s ease-in-out infinite}
 .sync.err::before{background:var(--over);animation:none}
 @keyframes pulse{50%{opacity:.25}}
@@ -511,7 +516,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.30-0246';
+const APP_VERSION = '2026.10.30-2023';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1189,7 +1194,10 @@ const canGz = () => typeof DecompressionStream !== 'undefined';
 const unpack = async r => r && r.gz ? gunzipB64(r.gz) : r;
 const Sync = {
   seq: 0, busy: false, timer: null, saveT: null,
-  status(msg, err) { const el = $('#sync'); if (!el) return; el.hidden = !msg; el.textContent = msg || ''; el.classList.toggle('err', !!err); },
+  status(msg, err) { const el = $('#sync'); if (!el) return; el.hidden = !msg;
+    // en pantallas angostas solo se ve el punto y, si hay pendientes, su número (el texto completo queda en el título)
+    const n = (String(msg || '').match(/(\d+)\s+pendiente/) || [])[1] || '';
+    el.innerHTML = `<span class="sl">${esc(msg || '')}</span><span class="ss">${n}</span>`; el.title = msg || ''; el.setAttribute('aria-label', msg || ''); el.classList.toggle('err', !!err); },
   refresh() { const n = Q.n, p = Outbox.ops.filter(o => o.action !== 'autoResumen').length, off = sinSenal();
     if (p) return this.status((off ? 'Sin conexión · ' : Outbox.busy ? 'Enviando · ' : 'Por enviar · ') + p + (p === 1 ? ' pendiente' : ' pendientes'), off);
     if (off) return this.status('Sin conexión', true);
@@ -1693,8 +1701,8 @@ V.presupuesto = () => {
     const pr = P.filter(p => p.Cuenta_Gastos === a), gr = G.filter(g => g.Cuenta_Gastos === a);
     const used = new Set();
     const lines = pr.map(p => { const m = gr.filter(g => partidaOfGasto(g, pr) === p); m.forEach(x => used.add(x)); return {p, g: sum(m), n: m.length}; });
-    const otros = sum(gr.filter(g => !used.has(g)));
-    return {a, pr, lines, otros, tp: sum(pr), tg: sum(gr)};
+    const sinP = gr.filter(g => !used.has(g)), otros = sum(sinP);
+    return {a, pr, lines, otros, otrosN: sinP.length, tp: sum(pr), tg: sum(gr)};
   }).sort((x, y) => y.tp - x.tp);
   return `${lockNote('Presupuesto')}
   <p class="muted" style="margin:12px 2px 0">Presupuesto de <b>${esc(mesLabel(S.mes))}</b>, período ${rangeLabel(S.mes)}.</p>
@@ -1717,7 +1725,7 @@ ${groups.length ? `    <button class="btn" data-act="tpl-ppto">Descargar plantil
         ${track(g.tp, g.tg)}<span class="meta">Gastado ${money(g.tg)} de ${money(g.tp)}</span></div>
       <div class="bcols"><span>Partida</span><span>Presupuesto</span><span>Gastado</span></div>
       ${g.lines.map(l => `<button class="bline" data-edit="Presupuesto_Detalle" data-id="${l.p.ID_DetPresupuesto}"><span>${esc(l.p.Descripcion)}${Number(l.p.Cantidad) > 1 ? ` <span class="muted">(${l.p.Cantidad} ${esc(l.p.UM)})</span>` : ''}</span><span class="num bp">${money(l.p.Total)}</span><span class="num bg lnk ${l.g > l.p.Total ? 'neg' : ''}" data-pgastos="${l.p.ID_DetPresupuesto}" title="Ver los gastos de esta partida">${money(l.g)}${l.n ? `<small class="muted bn"> (${l.n})</small>` : ''}</span></button>`).join('')}
-      ${g.otros ? `<div class="bline ghost"><span>Otros gastos sin partida</span><span class="num bp">—</span><span class="num bg">${money(g.otros)}</span></div>` : ''}
+      ${g.otros ? `<div class="bline ghost"><span>Otros gastos sin partida</span><span class="num bp">—</span><span class="num bg lnk" data-pgastos="otros:${esc(g.a)}" title="Ver estos gastos">${money(g.otros)}<small class="muted bn"> (${g.otrosN})</small></span></div>` : ''}
     </div>`).join('')}</div>`
     : `<div class="panel empty"><b>${esc(mesLabel(S.mes))} todavía no tiene presupuesto</b>Período ${rangeLabel(S.mes)}. ${ed ? 'Elige cómo cargarlo:' : 'El período está cerrado o no tienes permiso para editar el presupuesto.'}
       ${ed ? `<div class="row" style="justify-content:center;margin-top:14px">
@@ -2662,7 +2670,19 @@ function openDeposito(bid) {
   formDynamics();
 }
 /** Gastos vinculados a una partida del presupuesto: trazabilidad entre lo presupuestado y lo gastado */
+function openOtrosGastos(cuenta) {
+  const pr = partidasOf(S.mes, cuenta);
+  const gs = detail('Gastos_Detalle', S.mes).filter(g => g.Cuenta_Gastos === cuenta && !partidaOfGasto(g, pr)).sort((a, b) => dtKey(b.Fecha).localeCompare(dtKey(a.Fecha)));
+  const gast = sum(gs);
+  $('#modal').innerHTML = `<div class="scrim" data-close="1"><div class="sheet" role="dialog" aria-modal="true" aria-label="Otros gastos sin partida">
+    <h4>Otros gastos sin partida <span class="pill">${esc(cuentaNombre(cuenta))}</span><button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>
+    <div class="figs three" style="margin:0 0 6px"><div class="fig"><small>Gastado</small><b class="num">${money(gast)}</b></div><div class="fig"><small>Gastos</small><b class="num">${gs.length}</b></div><div class="fig"><small>Partidas de la cuenta</small><b class="num">${pr.length}</b></div></div>
+    <p class="muted" style="font-size:12.5px;margin:2px 0 6px">Estos gastos no están vinculados a ninguna partida de ${esc(mesLabel(S.mes))}. Ábrelos para elegir la partida a la que pertenecen.</p>
+    ${gs.length ? gs.map(g => `<button type="button" class="pgrow" data-edit="Gastos_Detalle" data-id="${g.ID_Detalle_Gastos}"><span><b>${esc(g.Descripcion_Gasto)}</b><br><small>${fdatetime(g.Fecha)}${hasId(g.ID_Partida) && Number(g.ID_Partida) === 0 ? ', sin partida a propósito' : ''}</small></span><b class="num">${money(g.Total)}</b></button>`).join('') : '<p class="muted" style="margin:14px 0">No hay gastos sin partida en esta cuenta.</p>'}
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn primary" data-close="1">Cerrar</button></div></div></div>`;
+}
 function openPartidaGastos(pid) {
+  if (String(pid).startsWith('otros:')) return openOtrosGastos(String(pid).slice(6));
   const p = DB.t.Presupuesto_Detalle.find(x => String(x.ID_DetPresupuesto) === String(pid)); if (!p) return;
   const pr = partidasOf(S.mes, p.Cuenta_Gastos);
   const gs = detail('Gastos_Detalle', S.mes).filter(g => g.Cuenta_Gastos === p.Cuenta_Gastos && partidaOfGasto(g, pr) === p).sort((a, b) => dtKey(b.Fecha).localeCompare(dtKey(a.Fecha)));
@@ -2848,7 +2868,7 @@ function downloadBudgetTemplate() {
 /* ---------- Inicio de sesión ---------- */
 function showLogin(msg) {
   document.body.classList.add('locked'); closeModal();
-  $('#login').hidden = false; $('#frmLogin').hidden = false; $('#frmNewPwd').hidden = true; $('#loading').style.display = 'none';
+  $('#login').hidden = false; $('#frmLogin').hidden = false; $('#frmNewPwd').hidden = true; hideLoading();
   $('#loginMsg').textContent = msg || '';
   const lu = $('#lu'); if (!lu.value) lu.value = lsGet('last_user') || '';
   setTimeout(() => (lu.value ? $('#lp') : lu).focus(), 50);
@@ -3186,6 +3206,14 @@ document.addEventListener('keydown', e => {
 $('#fab').addEventListener('click', () => { const n = $('#fab').dataset.new; if (!n) return; if ($('#fab').dataset.dep) return openDeposito(); if (REL[n] && !ensureTarget(REL[n].mod)) return; const FF = FORMS[n]; if (FF && FF.perm && !can(FF.perm)) return toast('Tu usuario no tiene permiso para registrar esto (' + FF.perm + ')', true); openForm(n); });
 let rzT, lastW = window.innerWidth; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { if (Math.abs(window.innerWidth - lastW) > 60 && !FORM && DB.t.Cuentas) { lastW = window.innerWidth; render(); } }, 250); });
 window.addEventListener('scroll', () => $('#top').classList.toggle('scrolled', window.scrollY > 8), {passive: true});
+/** Espera a que cargue la letra de la app para no ver el salto de tamaño al reacomodarse el texto */
+const fontsReady = (() => {
+  const link = document.querySelector('link[href*="fonts.googleapis"]');
+  const cssP = !link || link.media === 'all' ? Promise.resolve() : new Promise(r => { link.addEventListener('load', r, {once: true}); link.addEventListener('error', r, {once: true}); });
+  const go = cssP.then(() => document.fonts && document.fonts.load ? Promise.all(['400', '500', '600', '700', '800'].map(w => document.fonts.load(w + ' 15px "Schibsted Grotesk"'))) : null).catch(() => {});
+  return Promise.race([go, new Promise(r => setTimeout(r, navigator.onLine === false ? 300 : 1500))]);
+})();
+const hideLoading = () => fontsReady.then(() => { const l = $('#loading'); if (l) l.style.display = 'none'; });
 function applyTheme() { const t = lsGet('theme'); if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
 
 /* ---------- Inicio ---------- */
@@ -3215,12 +3243,12 @@ async function checkTZ() {
 async function boot(force) {
   try {
     if (Backend.mode === 'setup') throw new Error('setup');
-    if (Backend.online && !Auth.s) { $('#loading').style.display = 'none'; showLogin(); return; }
+    if (Backend.online && !Auth.s) { hideLoading(); showLogin(); return; }
     if (Backend.online && !force) {
       const c = await Store.get('db');
       if (c && c.t && c.user === (Auth.user || {}).usuario) {
         DB.t = c.t; DB.cols = c.cols; DB.ver++; Sync.seq = c.seq || 0; Outbox.reapply();
-        hideLogin(); pickMes(); render(); $('#loading').style.display = 'none';
+        hideLogin(); pickMes(); render(); hideLoading();
         Sync.start(); Sync.soon(); checkTZ(); refreshMe(true); return;
       }
     }
@@ -3236,7 +3264,7 @@ async function boot(force) {
         : '<b>No se pudieron cargar los datos</b>' + esc(e.message)}<div class="row" style="justify-content:center;margin-top:14px"><button class="btn" data-act="reload">Reintentar</button>${Backend.online ? '<button class="btn" data-act="logout">Cerrar sesión</button>' : ''}</div></div>`;
     }
   }
-  $('#loading').style.display = 'none';
+  hideLoading();
 }
 applyTheme(); Backend.detect(); Outbox.load(); boot().then(() => Outbox.flush());
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
