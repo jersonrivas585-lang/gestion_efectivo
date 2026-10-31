@@ -60,7 +60,7 @@ a{color:var(--teal)}
 /* ---------- Layout ---------- */
 .app{display:grid;grid-template-columns:1fr;min-height:100vh;min-height:100dvh;height:100dvh}
 .side{display:none}
-.main{min-width:0;padding:0 16px 96px}
+.main{min-width:0;padding:0 16px calc(150px + env(safe-area-inset-bottom,0px))}
 .wrap{max-width:1040px;margin:0 auto}
 @media (min-width:900px){
   .app{grid-template-columns:232px 1fr}
@@ -291,8 +291,12 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 @keyframes sp{to{transform:rotate(360deg)}}
 .fab{position:fixed;right:18px;bottom:calc(78px + env(safe-area-inset-bottom,0px));z-index:24;width:56px;height:56px;border-radius:18px;border:0;background:var(--ink);color:var(--paper);display:grid;place-items:center;cursor:pointer;box-shadow:0 8px 22px rgba(10,40,38,.28)}
 .fab[hidden]{display:none}
-.fab svg{width:26px;height:26px}
-@media (min-width:900px){.fab{display:none}}
+.fab svg{width:26px;height:26px;pointer-events:none}
+.fab{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:opacity .15s,transform .15s}
+.fab.dragging{transition:none;transform:scale(1.1);opacity:.92;cursor:grabbing}
+.fab.fab-scroll{opacity:.35}
+.fabhint{position:fixed;z-index:26;max-width:230px;padding:9px 12px;border-radius:12px;background:var(--ink);color:var(--paper);font-size:13px;line-height:1.35;box-shadow:0 8px 22px rgba(10,40,38,.28)}
+@media (min-width:900px){.fab{display:none}.fabcfg{display:none}}
 .desk-only{display:none}
 @media (min-width:900px){.desk-only{display:inline-flex}}
 .locked .app,.locked .bottom,.locked .fab{display:none!important}
@@ -539,7 +543,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.31-0117';
+const APP_VERSION = '2026.10.31-1645';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1446,7 +1450,8 @@ function render() {
   if (Outbox.fails.length) $('#view').insertAdjacentHTML('afterbegin', `<div class="notice" style="margin-top:0"><span><b>${Outbox.fails.length} ${Outbox.fails.length === 1 ? 'registro no se pudo enviar' : 'registros no se pudieron enviar'}.</b> Se hicieron sin conexión y el servidor no los aceptó.</span><button class="btn small" data-act="ob-fails">Revisar</button></div>`);
   const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Movimientos_Banco', bancos: 'Movimientos_Banco', combustible: 'Consumo_Combustible', tarjetas: 'Movimientos_Tarjeta'}[S.view];
   const fabOk = fabFor && (REL[fabFor] ? canAdd(REL[fabFor].mod) : can(FORMS[fabFor].perm));
-  fab.hidden = !fabOk; fab.dataset.new = fabFor || ''; fab.dataset.dep = S.view === 'ingresos' ? '1' : '';
+  fab.hidden = !fabOk; fab.dataset.new = fabFor || ''; fab.dataset.dep = S.view === 'ingresos' ? '1' : ''; fabApply();
+  if (fabOk && matchMedia('(pointer:coarse)').matches && !lsGet('fab_hint')) { lsSet('fab_hint', '1'); setTimeout(() => toast('Puedes mover el botón + arrastrándolo, para que no tape nada'), 1200); }
   $('#banner').innerHTML = Backend.mode === 'demo' ? `<div class="demo-banner">Modo demostración con los datos exportados de Access. Los cambios se guardan solo en esta pestaña.</div>` : '';
 }
 
@@ -2114,6 +2119,7 @@ V.conexion = () => {
     <div class="row" style="margin-top:12px"><button class="btn" data-act="reload">Recargar datos</button></div></div></section>
   ${accountSection()}
   ${Backend.online ? `<section class="section"><h3>Envíos</h3><div class="panel"><div class="row" style="align-items:center;flex-wrap:nowrap"><span style="flex:1">${obPend() ? `<b>${obPend()} ${obPend() === 1 ? 'registro por enviar' : 'registros por enviar'}</b> ${sinSenal() ? '(sin conexión: se enviarán al volver la señal)' : ''}` : 'Todo está enviado.'}${Outbox.fails.length ? `<br><span class="neg">${Outbox.fails.length} con problema</span>` : ''}<br><small class="muted">Gastos, retiros, depósitos, transferencias, combustible, tarjetas y partidas se pueden registrar sin conexión.</small></span>${obPend() && !sinSenal() ? '<button class="btn small" data-act="ob-send">Enviar ahora</button>' : ''}${Outbox.fails.length ? '<button class="btn small" data-act="ob-fails">Revisar</button>' : ''}</div></div></section>` : ''}
+  <section class="section fabcfg"><h3>Botón + <small>solo en el celular</small></h3><div class="panel"><div class="row" style="align-items:center;flex-wrap:nowrap"><span style="flex:1">Se puede arrastrar con el dedo a donde no tape información; se pega al borde y recuerda su lugar.</span><button class="btn small" data-act="fab-reset">Restablecer posición</button></div></div></section>
   <section class="section"><h3>Configuración</h3><div class="panel">
     <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start;flex-wrap:nowrap"><span class="toggle" style="flex:none;margin-top:2px"><input type="checkbox" data-cfg="Bloquear_Negativos" ${blockNeg() ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></span>
       <span><b>Bloquear eliminaciones que dejan saldos en negativo</b><br><small class="muted">Si eliminar un retiro, depósito o transferencia dejaría una cuenta o el efectivo en negativo (porque ese dinero ya se gastó o se movió), la app no lo deja. Desactivado, solo avisa y pide confirmar. Antes de eliminar siempre se muestra qué saldos cambian.${can('periodos.gestionar') ? '' : ' Solo un administrador o supervisor puede cambiarlo.'}</small></span></label>
@@ -2970,6 +2976,7 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'fab-reset') { fabReset(); toast('El botón + volvió a su lugar'); return; }
   if (a === 'cat-edit') return openForm(t.dataset.t, t.dataset.id, true);
   if (a === 'cat-del') { openForm(t.dataset.t, t.dataset.id, true); if (FORM && FORM.rec) askDelete(); return; }
   if (a === 'ob-fails') return openFails();
@@ -3243,6 +3250,44 @@ const hideLoading = () => fontsReady.then(() => { const l = $('#loading'); if (l
 /** Al tocar un campo en el celular, se acerca a la vista para que el teclado y los botones no lo tapen */
 document.addEventListener('focusin', e => { const el = e.target; if (!el.closest || !el.closest('.sheet') || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.type === 'checkbox') return;
   if (!matchMedia('(pointer:coarse)').matches) return; setTimeout(() => { try { el.scrollIntoView({block: 'center', behavior: 'smooth'}); } catch (err) {} }, 300); });
+/* ---------- Botón + movible ----------
+   Se arrastra con el dedo a donde no tape información; se pega al borde izquierdo o derecho y la posición se recuerda.
+   Mientras se desliza la pantalla se vuelve semitransparente para ver lo que hay debajo. */
+const FAB_GAP = 18;
+function fabLimits() {
+  const f = $('#fab'), top = (($('#top') || {}).getBoundingClientRect ? $('#top').getBoundingClientRect().bottom : 70) + 8, bn = $('#bottom'), nav = bn && bn.offsetHeight ? bn.offsetHeight : 64;
+  const vh = (window.visualViewport ? visualViewport.height : innerHeight);
+  return {minB: nav + 10, maxB: Math.max(nav + 10, vh - top - (f.offsetHeight || 56))};
+}
+function fabApply() {
+  const f = $('#fab'); if (!f) return; let pos = null; try { pos = JSON.parse(lsGet('fab_pos') || 'null'); } catch (e) {}
+  f.style.left = f.style.right = f.style.top = f.style.bottom = '';
+  if (!pos) return;
+  const L = fabLimits(), b = Math.max(L.minB, Math.min(L.maxB, Number(pos.b) || L.minB));
+  f.style.bottom = b + 'px'; f.style[pos.s === 'l' ? 'left' : 'right'] = FAB_GAP + 'px';
+}
+function fabReset() { lsSet('fab_pos', null); fabApply(); }
+(() => {
+  let st = null, dragged = false;
+  const f = () => $('#fab');
+  document.addEventListener('pointerdown', e => { const el = f(); if (!el || e.target.closest('#fab') !== el || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const r = el.getBoundingClientRect(); st = {id: e.pointerId, x: e.clientX, y: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, moved: false}; dragged = false; }, true);
+  document.addEventListener('pointermove', e => { if (!st || e.pointerId !== st.id) return; const el = f();
+    if (!st.moved && Math.hypot(e.clientX - st.x, e.clientY - st.y) < 8) return;
+    if (!st.moved) { st.moved = true; dragged = true; el.classList.add('dragging'); try { el.setPointerCapture(e.pointerId); } catch (er) {} }
+    const w = el.offsetWidth, h = el.offsetHeight, vw = innerWidth, vh = window.visualViewport ? visualViewport.height : innerHeight, L = fabLimits();
+    const x = Math.max(6, Math.min(vw - w - 6, e.clientX - st.dx)), yb = vh - (e.clientY - st.dy) - h, b = Math.max(L.minB, Math.min(L.maxB, yb));
+    el.style.right = el.style.top = ''; el.style.left = x + 'px'; el.style.bottom = b + 'px'; e.preventDefault(); }, {capture: true, passive: false});
+  const end = e => { if (!st || (e.pointerId !== undefined && e.pointerId !== st.id)) return; const el = f(), was = st.moved; st = null;
+    if (!el) return; el.classList.remove('dragging');
+    if (was) { const r = el.getBoundingClientRect(), vh = window.visualViewport ? visualViewport.height : innerHeight, side = r.left + r.width / 2 < innerWidth / 2 ? 'l' : 'r';
+      lsSet('fab_pos', JSON.stringify({s: side, b: Math.round(vh - r.bottom)})); fabApply(); setTimeout(() => { dragged = false; }, 350); } };
+  document.addEventListener('pointerup', end, true); document.addEventListener('pointercancel', end, true);
+  document.addEventListener('click', e => { if (dragged && e.target.closest && e.target.closest('#fab')) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); } }, true);
+  let tm = null; document.addEventListener('scroll', () => { const el = f(); if (!el) return; el.classList.add('fab-scroll'); clearTimeout(tm); tm = setTimeout(() => el.classList.remove('fab-scroll'), 450); }, {capture: true, passive: true});
+  window.addEventListener('resize', fabApply);
+  if (window.visualViewport) visualViewport.addEventListener('resize', fabApply);
+})();
 function applyTheme() { const t = lsGet('theme'); if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
 
 /* ---------- Inicio ---------- */

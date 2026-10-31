@@ -225,6 +225,10 @@ Sin señal puedes **registrar, corregir y eliminar** gastos, retiros, ingresos, 
 - En la computadora, el ancho de la página ya no se mueve cuando aparece o desaparece la barra de desplazamiento; en el celular se usa la altura real de la pantalla (sin saltos por la barra del navegador).
 - El indicador de envíos de arriba es compacto en el celular: un punto y, si hay registros **por enviar**, su número (rojo si no hay conexión); el texto completo está en *Mi cuenta → Envíos*. Ya no empuja el año y el mes fuera de la pantalla, y el nombre del mes se acorta con «…» si no cabe.
 
+## Botón + movible (celular)
+
+El botón **+** se puede **arrastrar con el dedo** a donde no tape información: al soltarlo se pega al borde izquierdo o derecho, queda siempre por encima de la barra inferior y por debajo del encabezado, y la app recuerda su lugar en ese teléfono. Un toque sin arrastrar sigue abriendo el formulario de agregar. Mientras deslizas la pantalla se vuelve semitransparente para ver lo que hay debajo. Para devolverlo a su lugar: *Mi cuenta → Botón + → Restablecer posición*. Además, **todas las pantallas dejan espacio al final** para subir lo último por encima del botón y de la barra inferior (así el monto del último renglón siempre se puede leer).
+
 ## Ventanas en el celular
 
 Todas las ventanas de captura y consulta (gastos, retiros, depósitos y transferencias, partidas, combustible, tarjetas, catálogos, saldos, usuarios, resumen, importar presupuesto, etc.) comparten las mismas reglas y caben en la pantalla del celular, probadas desde 320 hasta 430 px de ancho:
