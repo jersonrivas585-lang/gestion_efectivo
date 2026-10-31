@@ -225,6 +225,16 @@ Sin señal puedes **registrar, corregir y eliminar** gastos, retiros, ingresos, 
 - En la computadora, el ancho de la página ya no se mueve cuando aparece o desaparece la barra de desplazamiento; en el celular se usa la altura real de la pantalla (sin saltos por la barra del navegador).
 - El indicador de envíos de arriba es compacto en el celular: un punto y, si hay registros **por enviar**, su número (rojo si no hay conexión); el texto completo está en *Mi cuenta → Envíos*. Ya no empuja el año y el mes fuera de la pantalla, y el nombre del mes se acorta con «…» si no cabe.
 
+## Ventanas en el celular
+
+Todas las ventanas de captura y consulta (gastos, retiros, depósitos y transferencias, partidas, combustible, tarjetas, catálogos, saldos, usuarios, resumen, importar presupuesto, etc.) comparten las mismas reglas y caben en la pantalla del celular, probadas desde 320 hasta 430 px de ancho:
+
+- **Teclado en pantalla:** la ventana se ajusta a la parte de la pantalla que sí se ve (también en iPhone), así que los botones **Cancelar** y **Guardar** y el campo que escribes no quedan tapados por el teclado; al tocar un campo se acerca a la vista. En el celular el teclado ya no se abre solo al abrir una ventana; solo en la computadora se enfoca el primer campo.
+- **Título:** el nombre de la ventana se acomoda en dos líneas si hace falta y la **×** queda siempre a la derecha.
+- **Listas y campos de media columna** (por ejemplo *Tipo*, *Desde* y *Hacia*): muestran su texto en hasta dos líneas en lugar de cortarlo.
+- **Importar presupuesto:** la vista previa ya no es una tabla ancha: cada partida es una fila con su descripción, cuenta y monto.
+- Los botones de abajo quedan fijos y la ventana se desplaza por dentro cuando el contenido es largo.
+
 ## Consultar y editar registros
 
 **Las ventanas no se cierran al tocar fuera.** Para no perder lo que estás escribiendo, tocar el fondo oscuro alrededor de una ventana ya no la cierra (la ventana hace un pequeño rebote). Se cierra con **×**, **Cancelar** o **Cerrar**, o con la tecla Escape en la computadora.

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#13302E">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
@@ -244,21 +244,42 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .toggle input:focus-visible + span{outline:3px solid var(--teal);outline-offset:2px}
 
 /* Modal sheet */
-.scrim{position:fixed;inset:0;background:rgba(5,20,18,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
-.sheet{background:var(--surface);width:100%;max-width:560px;max-height:calc(100% - env(safe-area-inset-top,0px) - 16px);overflow:auto;border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));animation:up .18s ease-out}
-@media (min-width:700px){.scrim{align-items:center}.sheet{border-radius:18px;padding:22px}}
+.scrim{position:fixed;left:0;right:0;top:var(--vvt,0px);height:var(--vvh,100%);background:rgba(5,20,18,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{--pad:18px;background:var(--surface);width:100%;max-width:560px;max-height:calc(100% - env(safe-area-inset-top,0px) - 16px);overflow:auto;overflow-x:hidden;border-radius:18px 18px 0 0;padding:var(--pad) var(--pad) calc(var(--pad) + env(safe-area-inset-bottom,0px));animation:up .18s ease-out;overscroll-behavior:contain}
+@media (min-width:700px){.scrim{align-items:center}.sheet{--pad:22px;border-radius:18px;padding:22px}}
 @keyframes up{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion: reduce){.sheet{animation:none}}
 .sheet h4{margin:0 0 14px;font-size:18px;display:flex;align-items:center;gap:8px}
 .sheet h4 .x{margin-left:auto;border:0;background:var(--sunk);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;line-height:1}
-.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.field{display:flex;flex-direction:column;gap:5px;grid-column:1 / -1}
+.fgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.fgrid > *,.field > *{min-width:0}
+.sheet h4{flex-wrap:nowrap;align-items:flex-start;line-height:1.25}
+.sheet h4 > .x{flex:none;margin-left:auto}
+.sheet h4 > .pill{flex:none;align-self:center}
+.sheet{overflow-wrap:anywhere;word-break:normal}
+.sheet .num,.sheet .pill,.sheet button,.sheet .btn{overflow-wrap:normal}
+.sheet img,.sheet table,.sheet textarea,.sheet input,.sheet select{max-width:100%}
+.sheet .row{flex-wrap:wrap}
+.sheet .combo-btn span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.25}
+.sheet .combo-btn{height:auto;min-height:40px}
+.sheet .combo-sm .combo-btn span{-webkit-line-clamp:1}
+.improws{max-height:260px;overflow:auto;margin:10px 0;border:1px solid var(--line);border-radius:10px}
+.improw{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:9px 12px;border-top:1px solid var(--line)}
+.improw:first-child{border-top:0}
+.improw > span{min-width:0}
+.improw small{display:block;color:var(--muted);font-size:12.5px}
+.sheet h4 .pill{max-width:100%}
+.field{display:flex;flex-direction:column;gap:5px;grid-column:1 / -1;min-width:0}
+.field .combo,.field .input,.field .dtrow{min-width:0;max-width:100%}
+.combo-btn span{min-width:0}
 .field.half{grid-column:auto}
 .field[hidden]{display:none}
 .field label{font-size:13px;font-weight:600;color:var(--ink2)}
 .field .hint{font-size:12px;color:var(--muted)}
 .field.check{flex-direction:row;align-items:center;justify-content:space-between}
-.sheet .actions{display:flex;gap:8px;margin-top:18px}
+.sheet .actions{display:flex;flex-wrap:wrap;gap:8px;position:sticky;bottom:calc(-1 * (var(--pad) + env(safe-area-inset-bottom,0px)));z-index:2;background:var(--surface);margin:16px calc(-1 * var(--pad)) calc(-1 * (var(--pad) + env(safe-area-inset-bottom,0px)));padding:12px var(--pad) calc(var(--pad) + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+.sheet .actions .btn{white-space:normal;text-align:center;min-width:0}
+@media (max-width:480px){.sheet .actions .spacer{display:none}.sheet .actions .btn:not(.danger){flex:1 1 120px}.sheet .actions .btn.primary{flex:2 1 160px}}
 .sheet .actions .spacer{flex:1}
 
 .toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;z-index:60;font-weight:600;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
@@ -340,7 +361,9 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .delbox.block{border-color:var(--over)}
 .delbox.block > b{color:var(--over)}
 .delfx{list-style:none;margin:8px 0 0;padding:0}
-.delfx li{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px dashed var(--line);font-size:13.5px}
+.delfx li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 10px;padding:5px 0;border-top:1px dashed var(--line);font-size:13.5px}
+.delfx li > span{min-width:0}
+.delfx li > .num{white-space:normal;margin-left:auto;text-align:right}
 .combo{position:relative}
 .combo-inline{display:inline-block;flex:1 1 230px;min-width:200px;max-width:420px}
 .combo-inline .combo-pop{min-width:240px}
@@ -516,7 +539,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.30-2023';
+const APP_VERSION = '2026.10.31-0117';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -2490,7 +2513,7 @@ function openForm(table, id, edit) {
     <div class="actions">${view ? '<span class="spacer"></span><button type="button" class="btn" data-close="1">Cerrar</button><button type="button" class="btn primary" data-act="form-edit">Editar</button>' : `${rec && !ro ? '<button type="button" class="btn danger" data-act="del">Eliminar</button>' : ''}<span class="spacer"></span><button type="button" class="btn" data-close="1">${ro ? 'Cerrar' : 'Cancelar'}</button>${ro ? '' : `<button type="submit" class="btn primary">${rec ? 'Guardar cambios' : F.t.length > 14 ? 'Guardar' : 'Guardar ' + F.t}</button>`}`}</div>
   </form></div>`;
   fillLists(); formDynamics(); syncCombos();
-  const first = $('#frm input:not([disabled]), #frm select:not([disabled]):not(.combo-native)'); if (first && !rec) setTimeout(() => first.focus(), 30);
+  const first = $('#frm input:not([disabled]), #frm select:not([disabled]):not(.combo-native)'); if (first && !rec && matchMedia('(pointer:fine)').matches) setTimeout(() => first.focus(), 30);
 }
 /** Muestra u oculta campos, ajusta etiquetas y la vista previa según lo que se va llenando */
 function formDynamics() {
@@ -2751,7 +2774,7 @@ function sheetModal(id, title, body, submitLabel) {
   $('#modal').innerHTML = `<div class="scrim" data-close="1"><form class="sheet" id="${id}" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <h4>${esc(title)}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>${body}
     <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-close="1">Cancelar</button><button type="submit" class="btn primary">${esc(submitLabel)}</button></div></form></div>`;
-  const f = $('#' + id + ' input:not([disabled])'); if (f) setTimeout(() => f.focus(), 30);
+  const f = $('#' + id + ' input:not([disabled])'); if (f && matchMedia('(pointer:fine)').matches) setTimeout(() => f.focus(), 30);
 }
 function openPwdForm() {
   sheetModal('frmPwd', 'Cambiar contraseña', `<div class="fgrid">
@@ -2845,8 +2868,7 @@ function openImportPreview() {
     <p style="margin:0 0 10px">${esc(I.file)}, hoja ${esc(I.hoja)}: <b>${I.rows.length} partidas</b> por <b>${money(tot)}</b>${ing ? `. Ingresos del mes: ${money(ing)}, quedarían ${money(ing - tot)} sin asignar` : ''}.</p>
     ${I.errors.length ? `<div class="notice" style="display:block"><b>${I.errors.length} filas no se importarán:</b>${I.errors.slice(0, 12).map(e => `<div class="imp-err">${esc(e)}</div>`).join('')}${I.errors.length > 12 ? `<div class="imp-err">y ${I.errors.length - 12} más…</div>` : ''}</div>` : ''}
     ${I.warns.length ? `<p class="muted" style="font-size:13px">${I.warns.slice(0, 5).map(esc).join('<br>')}</p>` : ''}
-    ${I.rows.length ? `<div class="tablewrap" style="max-height:260px;overflow:auto;margin:10px 0"><table class="t"><thead><tr><th>Cuenta</th><th>Descripción</th><th class="n">Cant.</th><th>Unidad</th><th class="n">Monto</th></tr></thead><tbody>
-      ${I.rows.map(r => `<tr style="cursor:default"><td>${esc(r._cta)}</td><td>${esc(r.Descripcion)}</td><td class="n">${r.Cantidad}</td><td>${esc(r.UM)}</td><td class="n">${money(r.Total)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${I.rows.length ? `<div class="improws">${I.rows.map(r => `<div class="improw"><span><b>${esc(r.Descripcion)}</b><small>${esc(r._cta)}${Number(r.Cantidad) > 1 ? ' · ' + r.Cantidad + ' ' + esc(r.UM) : ''}</small></span><b class="num">${money(r.Total)}</b></div>`).join('')}</div>` : ''}
     ${existing ? `<div class="field check"><label for="impRep">Reemplazar las ${existing} partidas que ya tiene ${esc(mesLabel(S.mes))}</label><label class="toggle"><input type="checkbox" id="impRep" checked><span></span></label></div>
       <p class="muted" style="font-size:12.5px;margin:4px 0 0">Si lo desmarcas, las partidas del archivo se suman a las existentes.</p>` : ''}`,
     I.rows.length ? `Importar ${I.rows.length} partidas` : 'Cerrar');
@@ -3214,6 +3236,13 @@ const fontsReady = (() => {
   return Promise.race([go, new Promise(r => setTimeout(r, navigator.onLine === false ? 300 : 1500))]);
 })();
 const hideLoading = () => fontsReady.then(() => { const l = $('#loading'); if (l) l.style.display = 'none'; });
+/** Teclado en pantalla: en iPhone (y celulares sin «resizes-content») la ventana se acomoda a la parte que sí se ve */
+(() => { const vv = window.visualViewport; if (!vv) return;
+  const set = () => { const r = document.documentElement.style; if (Math.abs(vv.scale - 1) > .02) return; r.setProperty('--vvh', Math.round(vv.height) + 'px'); r.setProperty('--vvt', Math.round(vv.offsetTop) + 'px'); };
+  vv.addEventListener('resize', set); vv.addEventListener('scroll', set); set(); })();
+/** Al tocar un campo en el celular, se acerca a la vista para que el teclado y los botones no lo tapen */
+document.addEventListener('focusin', e => { const el = e.target; if (!el.closest || !el.closest('.sheet') || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.type === 'checkbox') return;
+  if (!matchMedia('(pointer:coarse)').matches) return; setTimeout(() => { try { el.scrollIntoView({block: 'center', behavior: 'smooth'}); } catch (err) {} }, 300); });
 function applyTheme() { const t = lsGet('theme'); if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
 
 /* ---------- Inicio ---------- */
