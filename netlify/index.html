@@ -543,7 +543,7 @@ button.drow:hover{background:var(--sunk)}
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.10.31-1645';
+const APP_VERSION = '2026.11.02-2132';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1219,6 +1219,10 @@ const Store = {
 const gunzipB64 = async b64 => { const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const st = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip')); return JSON.parse(await new Response(st).text()); };
 const canGz = () => typeof DecompressionStream !== 'undefined';
 const unpack = async r => r && r.gz ? gunzipB64(r.gz) : r;
+/** Datos para guardar en el teléfono: sin las filas provisionales (tmp…), que se reconstruyen desde la bandeja de salida al abrir */
+const persistable = t => { const o = {}; Object.keys(t).forEach(n => { const k = DB.key(n); o[n] = k ? (t[n] || []).filter(r => !(r._pending || isTmp(r[k]))) : t[n]; }); return o; };
+/** Hay registros por enviar: mientras tanto no se aplican datos del servidor (podrían traer la copia real del mismo registro) */
+const holdSync = () => Outbox.ops.some(o => o.action !== 'autoResumen');
 const Sync = {
   seq: 0, busy: false, timer: null, saveT: null,
   status(msg, err) { const el = $('#sync'); if (!el) return; el.hidden = !msg;
@@ -1229,7 +1233,7 @@ const Sync = {
     if (p) return this.status((off ? 'Sin conexión · ' : Outbox.busy ? 'Enviando · ' : 'Por enviar · ') + p + (p === 1 ? ' pendiente' : ' pendientes'), off);
     if (off) return this.status('Sin conexión', true);
     this.status(n ? (n === 1 ? 'Guardando…' : 'Guardando ' + n + '…') : this.busy ? 'Actualizando…' : '', false); },
-  persist() { if (!Backend.online || Q.n) return; clearTimeout(this.saveT); this.saveT = setTimeout(() => Store.set('db', {user: (Auth.user || {}).usuario, seq: this.seq, at: Date.now(), t: DB.t, cols: DB.cols}), 800); },
+  persist() { if (!Backend.online || Q.n) return; clearTimeout(this.saveT); this.saveT = setTimeout(() => Store.set('db', {user: (Auth.user || {}).usuario, seq: this.seq, at: Date.now(), t: persistable(DB.t), cols: DB.cols}), 800); },
   after(ch) { if (!ch || !Backend.online) return; if (ch.seq) { if (ch.seq === this.seq + 1) this.seq = ch.seq; else this.soon(); } this.persist(); },
   async full(tables) {
     const r = await unpack(await Backend.call('getAll', {gz: canGz(), tables}));
@@ -1251,18 +1255,19 @@ const Sync = {
     try {
       const daily = Date.now() - Number(lsGet('full_at') || 0) > 864e5;
       const r = daily ? {full: true} : await unpack(await Backend.call('sync', {since: this.seq, gz: canGz()}));
+      if (holdSync()) return;                                   // se vuelve a pedir cuando termine el envío (no se pierde nada: el número de cambio no avanza)
       if (r.full) { await this.full(); if (!FORM) render(); }
       else {
         let n = 0; (r.changes || []).forEach(c => { DB.apply(c); n++; });
         if (r.periods) { const tb = r.periods, rows = tb.rows.map(x => { const o = {}; tb.cols.forEach((c, i) => o[c] = c === 'Mes_Anio' ? normMes(x[i]) : x[i]); return o; }); fixPeriodRows(rows);
           if (JSON.stringify(rows) !== JSON.stringify(DB.t.Mes_Anio)) { const before = activePeriod(); DB.t.Mes_Anio = rows; DB.cols.Mes_Anio = tb.cols; DB.ver++; n++;
             const now = activePeriod(); if (now && now !== before && !FORM) { S.mes = now; toast('Período activo: ' + mesLabel(now)); } } }
-        if (r.fullTables && r.fullTables.length) { await this.full(r.fullTables); n++; }
+        if (r.fullTables && r.fullTables.length) { if (!holdSync()) { await this.full(r.fullTables); n++; } }
         this.seq = r.seq;
         if (n) { if (!FORM) render(); this.persist(); }
       }
     } catch (e) { err = e; }
-    finally { this.busy = false; }
+    finally { this.busy = false; Outbox.sweep(); }
     if (err && err.code !== 'AUTH') this.status('Sin conexión', true); else this.refresh();
   },
   soon() { clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 400); },
@@ -1326,7 +1331,7 @@ const Outbox = {
         }
         this.sending = null; this.ops.shift(); this.save(); this.done(op, ch || {});
       }
-    } finally { this.busy = false; resBusy = false; this.sending = null; this.save(); Sync.refresh(); if (!FORM && DB.t.Cuentas) render(); }
+    } finally { this.busy = false; resBusy = false; this.sending = null; this.save(); this.sweep(); Sync.refresh(); if (!this.ops.length) Sync.soon(); if (!FORM && DB.t.Cuentas) render(); }
   },
   done(op, ch) {
     const sv = ch.saved;
@@ -1345,6 +1350,14 @@ const Outbox = {
     if (quick) { toast(op.label + ' no se guardó: ' + e.message, true); openForm(op.table, op.form.id && !isTmp(op.form.id) ? op.form.id : undefined, true); fillFormValues(op.form.o); }
     else { this.fails.push({id: op.id, label: op.label, msg: e.message, at: op.at, table: op.table, form: op.form, action: op.action}); toast('No se pudo enviar «' + op.label + '»: ' + e.message, true); }
     this.save();
+  },
+  /** Borra filas provisionales (tmp…) que ya no pertenecen a ningún envío pendiente (por ejemplo, guardadas por una versión anterior) */
+  sweep() {
+    if (!Backend.online) return {};   // en la demostración el «servidor» comparte la memoria de la app y reutiliza los encabezados provisionales
+    const keep = new Set(); this.ops.forEach(o => { if (o.tmp) keep.add(String(o.tmp)); Object.values(o.tmps || {}).flat().forEach(k => keep.add(String(k))); (o.hdrs || []).forEach(h => keep.add(String(h.k))); });
+    const del = {}; Object.keys(DB.t).forEach(t => { const k = DB.key(t); if (!k) return; (DB.t[t] || []).forEach(r => { if (isTmp(r[k]) && !keep.has(String(r[k]))) (del[t] = del[t] || []).push(r[k]); }); });
+    if (Object.keys(del).length) { DB.apply({deletes: del}); if (typeof render === 'function' && DB.t.Cuentas && !FORM) render(); }
+    return del;
   },
   /** Después de descargar todo de nuevo, se vuelven a mostrar los registros que aún no se envían */
   reapply() { this.ops.forEach(op => { if (op.loc) DB.apply(op.loc); }); },
@@ -3321,7 +3334,7 @@ async function boot(force) {
     if (Backend.online && !force) {
       const c = await Store.get('db');
       if (c && c.t && c.user === (Auth.user || {}).usuario) {
-        DB.t = c.t; DB.cols = c.cols; DB.ver++; Sync.seq = c.seq || 0; Outbox.reapply();
+        DB.t = c.t; DB.cols = c.cols; DB.ver++; Sync.seq = c.seq || 0; Outbox.sweep(); Outbox.reapply();
         hideLogin(); pickMes(); render(); hideLoading();
         Sync.start(); Sync.soon(); checkTZ(); refreshMe(true); return;
       }
