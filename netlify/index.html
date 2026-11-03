@@ -562,7 +562,7 @@ const COPYRIGHT_TXT = AUTOR.derechos + ' Creado por ' + AUTOR.creador + '. ' + A
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.11.03-0032';
+const APP_VERSION = '2026.11.03-0126';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -2109,10 +2109,10 @@ V.periodos = () => {
   if (!S.anio || !years.map(String).includes(String(S.anio))) S.anio = String(years[0]);
   const flags = [['Abierta', 'Abierto'], ['Ingresos', 'Ingresos'], ['Presupuesto', 'Presupuesto'], ['Gastos', 'Gastos'], ['Retiros', 'Retiros'], ['Guardar_Resumen', 'Resumen']];
   const D = diaInicio(), hoyP = periodForDate(todayISO());
-  const actP = activePeriod();
-  return `<div class="notice info" style="margin-top:4px"><span>${actP ? `Período activo: <b>${esc(mesLabel(actP))}</b> (${rangeLabel(actP)}). Es el que la app usa por defecto en Gastos, Retiros, Ingresos y Presupuesto.` : 'No hay ningún período activo: activa la columna Abierto del mes en curso.'}</span></div>
+  const actP = activePeriod(), abiertos = openPeriods();
+  return `${!multiPeriods() && abiertos.length > 1 ? `<div class="notice" style="margin-top:4px"><span><b>Hay ${abiertos.length} períodos abiertos</b> (${esc(abiertos.map(x => pName(x.Mes_Anio)).join(', '))}) y la configuración permite uno solo. Cierra los que no necesites; mientras haya uno abierto no se puede abrir otro.</span></div>` : ''}<div class="notice info" style="margin-top:4px"><span>${actP ? `Período activo: <b>${esc(mesLabel(actP))}</b> (${rangeLabel(actP)}). Es el que la app usa por defecto en Gastos, Retiros, Ingresos y Presupuesto.` : 'No hay ningún período activo: activa la columna Abierto del mes en curso.'}</span></div>
   <p class="muted" style="font-size:13px;margin:0 0 10px"><b>T/C compra</b>: córdobas que pagas por US$ 1 cuando compras dólares (de córdobas a dólares). <b>T/C venta</b>: córdobas que recibes por US$ 1 cuando cambias dólares a córdobas; también se usa para valorar en córdobas los saldos, retiros, gastos y depósitos en dólares. Cada movimiento propone la que le corresponde.</p>
-  <p class="muted">Cada período va del día ${D} de su mes al ${D - 1 || 'último'} del mes siguiente (cobras el ${D}). Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access.</p>
+  <p class="muted">Cada período va del día ${D} de su mes al ${D - 1 || 'último'} del mes siguiente (cobras el ${D}). Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access. <b>Abierto</b> abre o cierra de una vez todos los módulos del mes (Ingresos, Presupuesto, Gastos, Retiros y Resumen); después puedes cerrar o abrir cada uno por separado. ${multiPeriods() ? 'Se pueden tener <b>varios períodos abiertos</b> a la vez (Mi cuenta → Configuración).' : 'Solo puede haber <b>un período abierto</b> a la vez: para modificar otro mes, cierra el activo y abre el que necesitas (se puede cambiar en Mi cuenta → Configuración).'}</p>
   ${can('periodos.gestionar') ? `<div class="row" style="margin:0 0 12px;gap:10px"><label for="diaIni" style="font-weight:600;font-size:14px">El período empieza el día</label>
     ${comboize(`<select class="input" id="diaIni" style="width:auto">${Array.from({length: 28}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === D ? 'selected' : ''}>${n}</option>`).join('')}</select>`, '', 'combo-sm')}
     <span class="muted" style="font-size:13px">Hoy corresponde a <b>${esc(mesLabel(hoyP))}</b>.</span></div>` : ''}
@@ -2155,6 +2155,8 @@ V.conexion = () => {
   <section class="section"><h3>Configuración</h3><div class="panel">
     <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start;flex-wrap:nowrap"><span class="toggle" style="flex:none;margin-top:2px"><input type="checkbox" data-cfg="Bloquear_Negativos" ${blockNeg() ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></span>
       <span><b>Bloquear eliminaciones que dejan saldos en negativo</b><br><small class="muted">Si eliminar un retiro, depósito o transferencia dejaría una cuenta o el efectivo en negativo (porque ese dinero ya se gastó o se movió), la app no lo deja. Desactivado, solo avisa y pide confirmar. Antes de eliminar siempre se muestra qué saldos cambian.${can('periodos.gestionar') ? '' : ' Solo un administrador o supervisor puede cambiarlo.'}</small></span></label>
+    <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start;flex-wrap:nowrap;margin-top:14px"><span class="toggle" style="flex:none;margin-top:2px"><input type="checkbox" data-cfg="Varios_Periodos" ${multiPeriods() ? 'checked' : ''} ${can('periodos.gestionar') ? '' : 'disabled'}><span></span></span>
+      <span><b>Permitir varios períodos abiertos a la vez</b><br><small class="muted">Desactivado (recomendado): solo hay un período abierto o activo. Para modificar otro mes, cierra el activo y abre el que necesitas. Activado: se pueden abrir varios períodos al mismo tiempo.${can('periodos.gestionar') ? '' : ' Solo un administrador o supervisor puede cambiarlo.'}</small></span></label>
   </div></section>
   <section class="section"><h3>Hogar</h3><div class="panel"><div class="row" style="align-items:flex-start;flex-wrap:nowrap"><div style="flex:1;min-width:0"><b>${esc(e.Empresa)}</b><p class="muted" style="margin:4px 0 0">${esc(e.Direccion || 'Sin dirección')}<br>Teléfono ${esc(e.Telefono || '—')}, celular ${esc(e.Celular || '—')}</p></div>${can('usuarios.gestionar') ? '<button class="btn small" data-act="hogar-edit">Editar</button>' : ''}</div></div></section>
   <section class="section"><h3>Apariencia</h3><div class="tabs">${[['', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, l]) => `<button class="tab" data-theme-set="${v}" aria-pressed="${(lsGet('theme') || '') === v}">${l}</button>`).join('')}</div></section>
@@ -2756,7 +2758,22 @@ function openPartidaGastos(pid) {
       : '<p class="muted" style="margin:14px 0">Todavía no hay gastos vinculados a esta partida.</p>'}
     <div class="actions"><span class="spacer"></span><button type="button" class="btn primary" data-close="1">Cerrar</button></div></div></div>`;
 }
-function closeModal() { $('#modal').innerHTML = ''; FORM = null; }
+function closeModal() { const r = S.askRes; S.askRes = null; $('#modal').innerHTML = ''; FORM = null; if (r) r(false); }
+/** Pregunta con dos botones; devuelve una promesa (true = aceptó). Cerrar con ×, Cancelar o Escape = false */
+function askConfirm({title, html, ok = 'Aceptar', danger = false, noCancel = false}) {
+  return new Promise(res => {
+    if (S.askRes) { const r0 = S.askRes; S.askRes = null; r0(false); }
+    S.askRes = res;
+    $('#modal').innerHTML = `<div class="scrim" data-close="1"><div class="sheet" role="alertdialog" aria-modal="true" aria-label="${esc(title)}">
+      <h4>${esc(title)}<button type="button" class="x" data-close="1" aria-label="Cerrar">×</button></h4>${html}
+      <div class="actions"><span class="spacer"></span>${noCancel ? '' : '<button type="button" class="btn" data-close="1">Cancelar</button>'}<button type="button" class="btn ${danger ? 'danger' : 'primary'}" data-act="ask-ok">${esc(ok)}</button></div></div></div>`;
+  });
+}
+const PERIOD_FLAGS = ['Abierta', 'Ingresos', 'Presupuesto', 'Gastos', 'Retiros', 'Guardar_Resumen'];
+/** Por defecto solo puede haber un período abierto a la vez; Mi cuenta → Configuración permite varios */
+const multiPeriods = () => truthy(empresa().Varios_Periodos);
+const openPeriods = () => periodos().filter(x => truthy(x.Abierta));
+const pName = m => mesLabel(m);
 function cancelModal() { if (S.pendingGasto && FORM && FORM.table === 'Retiros_Detalle') { const P = S.pendingGasto; S.pendingGasto = null; closeModal(); openForm('Gastos_Detalle', P.rec ? P.rec.ID_Detalle_Gastos : undefined, true); fillFormValues(P.o); return; } closeModal(); }
 
 /* ---------- Resumen automático ----------
@@ -3009,6 +3026,7 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'ask-ok') { const r = S.askRes; S.askRes = null; $('#modal').innerHTML = ''; FORM = null; if (r) r(true); return; }
   if (a === 'fab-reset') { fabReset(); toast('El botón + volvió a su lugar'); return; }
   if (a === 'cat-edit') return openForm(t.dataset.t, t.dataset.id, true);
   if (a === 'cat-del') { openForm(t.dataset.t, t.dataset.id, true); if (FORM && FORM.rec) askDelete(); return; }
@@ -3196,6 +3214,22 @@ document.addEventListener('input', e => {
   if (FORM && e.target.name === 'Descripcion_Gasto' && e.inputType === 'insertReplacementText') autofillFromHistory(e.target);
 });
 document.addEventListener('change', async e => {
+  if (e.target.dataset && e.target.dataset.cfg === 'Varios_Periodos') {
+    const el = e.target, on = el.checked, e0 = empresa(); el.disabled = true;
+    try {
+      if (!on) {
+        const abiertos = openPeriods(), keep = activePeriod();
+        if (abiertos.length > 1) {
+          const ok = await askConfirm({title: 'Un solo período abierto', ok: 'Cerrar los demás', danger: true, html: `<p style="margin:0">Hay <b>${abiertos.length} períodos abiertos</b> (${esc(abiertos.map(x => pName(x.Mes_Anio)).join(', '))}).</p><p style="margin:10px 0 0">Para usar un solo período se mantiene abierto <b>${esc(pName(keep))}</b> (el más reciente) y se cierran los demás junto con todos sus módulos.</p>`});
+          if (!ok) { el.checked = true; el.disabled = false; return; }
+          for (const x of abiertos.filter(x => x.Mes_Anio !== keep)) { const row = {ID: x.ID}; PERIOD_FLAGS.forEach(f => { row[f] = false; }); commit(await Backend.call('save', {table: 'Mes_Anio', row})); }
+        }
+      }
+      commit(await Q.run(() => Backend.call('save', {table: 'Empresa', row: {Empresa: e0.Empresa, Varios_Periodos: on}})));
+      toast(on ? 'Se pueden abrir varios períodos a la vez' : 'Solo puede haber un período abierto a la vez');
+    } catch (err) { el.checked = !on; toast(err.message, true); }
+    el.disabled = false; renderMonthPicker(); if (S.view === 'periodos') render(); return;
+  }
   if (e.target.dataset && e.target.dataset.cfg) {
     const el = e.target, e0 = empresa(); el.disabled = true;
     try { commit(await Q.run(() => Backend.call('save', {table: 'Empresa', row: {Empresa: e0.Empresa, [el.dataset.cfg]: el.checked}}))); toast(el.checked ? 'Bloqueo activado' : 'Bloqueo desactivado: al eliminar solo se avisará'); }
@@ -3251,11 +3285,41 @@ document.addEventListener('change', async e => {
     }
     if (el.id === 'f__periodo') return; if (el.name === 'ID_Partida') prefillFromPartida(el); if (el.name === 'Descripcion_Gasto') autofillFromHistory(el); return; }
   if (el.dataset.flag) {
-    const p = DB.t.Mes_Anio.find(x => String(x.ID) === el.dataset.pid); const row = {ID: p.ID}; row[el.dataset.flag] = el.checked;
+    const p = DB.t.Mes_Anio.find(x => String(x.ID) === el.dataset.pid), flag = el.dataset.flag, on = el.checked, mesTxt = mesLabel(p.Mes_Anio);
     el.disabled = true;
-    try { const ch = await Backend.call('save', {table: 'Mes_Anio', row}); commit(ch); if (el.dataset.flag === 'Guardar_Resumen' && el.checked) queueResumen(p.Mes_Anio, 'Resumen reactivado'); toast(`${el.closest('label').getAttribute('aria-label')}: ${el.checked ? 'activado' : 'desactivado'}`); }
-    catch (err) { el.checked = !el.checked; toast(err.message, true); }
-    el.disabled = false; renderMonthPicker();
+    try {
+      const row = {ID: p.ID}; row[flag] = on;
+      // un solo período abierto a la vez (si Mi cuenta → Configuración no permite varios)
+      if (on && !multiPeriods()) {
+        const otros = openPeriods().filter(x => String(x.ID) !== String(p.ID));
+        if (flag === 'Abierta' && otros.length) {
+          el.checked = false;   // no se abre: el interruptor vuelve a «apagado» antes de explicar por qué
+          await askConfirm({title: 'Solo un período abierto', ok: 'Entendido', noCancel: true, html: `<p style="margin:0">Solo puede haber <b>un período abierto</b> a la vez. Ahora ${otros.length === 1 ? 'está abierto' : 'están abiertos'} <b>${esc(otros.map(x => pName(x.Mes_Anio)).join(' y '))}</b>.</p><p style="margin:10px 0 0">Para trabajar en <b>${esc(mesTxt)}</b>, primero cierra ${otros.length === 1 ? 'ese período' : 'esos períodos'} y luego abre el que necesitas.</p><p class="muted" style="margin:10px 0 0;font-size:13px">Si prefieres tener varios abiertos, actívalo en Mi cuenta → Configuración.</p>`});
+          el.checked = false; el.disabled = false; return;
+        }
+        if (flag !== 'Abierta' && !truthy(p.Abierta)) {
+          el.checked = false;
+          await askConfirm({title: mesTxt + ' está cerrado', ok: 'Entendido', noCancel: true, html: otros.length ? `<p style="margin:0">Solo puede haber <b>un período abierto</b> a la vez y ahora está abierto <b>${esc(otros.map(x => pName(x.Mes_Anio)).join(' y '))}</b>. Para modificar ${esc(mesTxt)}, cierra ese período y abre este con el interruptor <b>Abierto</b>.</p>` : `<p style="margin:0">Primero abre el período con el interruptor <b>Abierto</b>: se abrirán también sus módulos y después puedes cerrar los que no necesites.</p>`});
+          el.checked = false; el.disabled = false; return;
+        }
+      }
+      if (flag === 'Abierta') {
+        // abrir o cerrar el período abre o cierra también todos sus módulos; después cada uno se puede cambiar por separado
+        PERIOD_FLAGS.forEach(f => { row[f] = on; });
+        const quedan = periodos().filter(x => String(x.ID) !== String(p.ID) && truthy(x.Abierta)).length, pend = obPend();
+        if (!on && (!quedan || pend)) {
+          const ok = await askConfirm({title: 'Cerrar ' + mesTxt, ok: 'Cerrar el período', danger: true, html:
+            (!quedan ? `<div class="notice" style="margin-top:0"><span><b>Después de cerrar ${esc(mesTxt)} no quedará ningún período abierto.</b> Mientras no abras uno, no se podrán registrar ni corregir gastos, presupuesto, ingresos ni retiros, y el resumen dejará de actualizarse.</span></div>` : '')
+            + `<p style="margin:12px 0 0">Se cerrará <b>${esc(mesTxt)}</b> junto con todos sus módulos: Ingresos, Presupuesto, Gastos, Retiros y Resumen. Podrás volver a abrirlo cuando quieras.</p>`
+            + (pend ? `<p class="neg" style="margin:10px 0 0"><b>Tienes ${pend} ${pend === 1 ? 'registro sin enviar' : 'registros sin enviar'}.</b> Si lo cierras ahora, es posible que el servidor no los acepte; conviene esperar a que se envíen.</p>` : '')});
+          if (!ok) { el.checked = true; el.disabled = false; return; }
+        }
+      }
+      const ch = await Backend.call('save', {table: 'Mes_Anio', row}); commit(ch);
+      if ((flag === 'Abierta' || flag === 'Guardar_Resumen') && on) queueResumen(p.Mes_Anio, 'Resumen reactivado');
+      toast(flag === 'Abierta' ? `${mesTxt} ${on ? 'abierto: también se abrieron' : 'cerrado: también se cerraron'} Ingresos, Presupuesto, Gastos, Retiros y Resumen` : `${el.closest('label').getAttribute('aria-label')}: ${on ? 'activado' : 'desactivado'}`);
+    } catch (err) { el.checked = !on; toast(err.message, true); }
+    el.disabled = false; renderMonthPicker(); if (S.view === 'periodos' && !FORM && !$('#modal').innerHTML) render();
   }
 });
 document.addEventListener('focusin', e => { if (e.target.dataset && e.target.dataset.sug) openSug(e.target); });

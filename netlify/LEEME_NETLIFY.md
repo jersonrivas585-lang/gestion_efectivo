@@ -205,6 +205,17 @@ En *Mi cuenta → Hogar* los **administradores** tienen el botón **Editar** par
 
 La barra de abajo tiene, en este orden, **Inicio, Bancos, Retiros, Gastos, Presupuesto y Combustible**, y se **desliza** hacia la derecha para ver las que no caben; un desvanecido en el borde indica que hay más. **Más** queda fijo a la derecha y lleva a las demás secciones (Ingresos, Histórico, Análisis por cuenta, Tarjetas, Cortes, Catálogos, Períodos y Mi cuenta). La sección en la que estás siempre queda a la vista y resaltada.
 
+## Abrir y cerrar períodos
+
+En *Períodos*, el interruptor **Abierto** de un mes abre o cierra **de una vez todos sus módulos**: Ingresos, Presupuesto, Gastos, Retiros y Resumen. Después se puede cerrar o abrir **cada módulo por separado** con su propio interruptor, sin que cambie *Abierto*.
+
+- **Cerrar un período que es el único abierto:** la app avisa antes: *«Después de cerrar … no quedará ningún período abierto. Mientras no abras uno, no se podrán registrar ni corregir gastos, presupuesto, ingresos ni retiros, y el resumen dejará de actualizarse.»* Con **Cancelar**, la **×** o tocando fuera, el período sigue abierto; solo **Cerrar el período** lo cierra.
+- **Si quedan otros períodos abiertos**, se cierra directamente (sin advertencia), salvo que haya registros sin enviar: en ese caso también avisa, porque el servidor podría no aceptarlos después.
+- **Abrir un período** abre también sus cinco módulos y reactiva el resumen automático del mes.
+- **Un solo período abierto a la vez (por defecto).** Si ya hay un período abierto, la app no deja abrir otro ni activar módulos de un mes cerrado: avisa cuál está abierto y explica que primero hay que cerrarlo. Para modificar otro mes: **cierra el activo y abre el que necesitas**. Si ya había varios abiertos de antes, *Períodos* lo avisa y puedes ir cerrando los que no necesites (cerrar siempre se permite).
+- **Varios períodos abiertos (opcional).** En *Mi cuenta → Configuración → Permitir varios períodos abiertos a la vez* (administrador o supervisor) se puede permitir. Al volver a desactivarlo estando abiertos varios, la app pide confirmar y deja abierto el más reciente, cerrando los demás con todos sus módulos. La opción se guarda en la columna `Varios_Periodos` de la hoja Empresa (vacío = solo uno) y el servidor aplica la misma regla.
+- La misma regla está en el servidor (`Code.gs`): si llega solo el cambio de *Abierta*, se aplican también a los módulos; si llegan los módulos explícitos, se respetan tal cual.
+
 ## Registrar sin conexión
 
 Sin señal puedes **registrar, corregir y eliminar** gastos, retiros, ingresos, depósitos y transferencias, llenados de combustible, movimientos de tarjeta y partidas del presupuesto. Se guardan primero en el teléfono, se ven al instante (saldos, presupuesto y tarjetas incluidos) y quedan en una **bandeja de salida** que sobrevive aunque cierres la app o se apague el teléfono.
