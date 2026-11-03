@@ -99,11 +99,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .bottom{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);display:flex;align-items:stretch;padding:6px 0 calc(6px + env(safe-area-inset-bottom,0px))}
 .bscroll{flex:1;min-width:0;display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .bscroll::-webkit-scrollbar{display:none}
-.bscroll button{flex:0 0 auto;min-width:74px;padding:4px 6px;scroll-snap-align:start}
+.bscroll button{flex:1 1 auto;min-width:0;padding:4px 2px;white-space:nowrap;scroll-snap-align:start}
 .bscroll.more-r{-webkit-mask-image:linear-gradient(to right,#000 82%,transparent);mask-image:linear-gradient(to right,#000 82%,transparent)}
 .bscroll.more-l.more-r{-webkit-mask-image:linear-gradient(to right,transparent,#000 12%,#000 82%,transparent);mask-image:linear-gradient(to right,transparent,#000 12%,#000 82%,transparent)}
 .bscroll.more-l:not(.more-r){-webkit-mask-image:linear-gradient(to right,transparent,#000 12%);mask-image:linear-gradient(to right,transparent,#000 12%)}
-.bottom .bmore{flex:0 0 70px;border-left:1px solid var(--line)}
+.bottom .bmore{flex:0 0 58px;border-left:1px solid var(--line)}
+@media (max-width:380px){.bottom button{font-size:10.5px}}
 .bottom button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;color:var(--muted);padding:4px 0;cursor:pointer;font-weight:500}
 .bottom button svg{width:22px;height:22px}
 .bottom button[aria-current="page"]{color:var(--teal);font-weight:700}
@@ -199,6 +200,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--teal)}
 .sumline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:4px 2px 10px;color:var(--muted);font-size:14px}
 .sumline b{color:var(--ink);font-size:16px}
+.sumline.go{width:100%;margin:4px 0 6px;padding:7px 2px;background:none;border:0;border-radius:8px;font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.sumline.go:hover{background:var(--sunk)}
+.sumline.go{align-items:center}
+.sumline.go small{display:block;color:var(--teal);font-weight:600;font-size:12.5px;margin-top:1px}
 
 /* Budget groups */
 .bgroup{border-top:1px solid var(--line)}
@@ -240,6 +245,8 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 
 .chart svg{width:100%;height:auto;display:block}
 .chart text{font-family:var(--font);font-size:10px;fill:var(--muted)}
+.bgh{margin:18px 2px 8px;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)}
+.bgh:first-of-type{margin-top:12px}
 .legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);margin-top:6px;flex-wrap:wrap}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 
@@ -565,7 +572,7 @@ const COPYRIGHT_TXT = AUTOR.derechos + ' Creado por ' + AUTOR.creador + '. ' + A
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.11.03-0417';
+const APP_VERSION = '2026.11.03-1513';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1428,34 +1435,36 @@ const S = {view: 'inicio', mes: null, q: '', cuenta: '', all: false, tab: '', an
 const VIEWS = {
   inicio:      {t: 'Inicio', icon: 'home', main: true, mes: true},
   gastos:      {t: 'Gastos', icon: 'cart', main: true, mes: true},
-  retiros:     {t: 'Retiros', icon: 'cash', main: true, mes: true},
+  retiros:     {t: 'Retiros del período', icon: 'cash', mes: true, d: 'Detalle de los retiros de efectivo del mes (se abre desde Bancos)'},
   presupuesto: {t: 'Presupuesto', icon: 'plan', main: true, mes: true},
-  ingresos:    {t: 'Ingresos', icon: 'income', mes: true, d: 'Salario, bonos y saldos del mes'},
-  bancos:      {t: 'Bancos', icon: 'bank', mes: true, d: 'Saldos de Avanz y BAC, transferencias y dólares'},
+  ingresos:    {t: 'Ingresos del período', icon: 'income', mes: true, d: 'Detalle de los ingresos del mes (se abre desde Bancos)'},
+  bancos:      {t: 'Bancos', icon: 'bank', mes: true, d: 'Cuentas, tarjetas de crédito y efectivo, agrupadas por banco'},
   historico:   {t: 'Histórico', icon: 'chart', d: 'Totales por mes y por año desde 2018'},
   cuenta:      {t: 'Análisis por cuenta', icon: 'account', d: 'Cómo ha cambiado cada sobre en el tiempo'},
   combustible: {t: 'Combustible', icon: 'fuel', d: 'Llenados y rendimiento en km por litro'},
-  tarjetas:    {t: 'Tarjetas', icon: 'card', d: 'Consumos con tarjeta y referencias de pago'},
   cortes:      {t: 'Cortes de resumen', icon: 'snap', d: 'Fotografías del mes guardadas en Resumen'},
   catalogos:   {t: 'Catálogos', icon: 'list', d: 'Cuentas, conceptos de gastos e ingresos, unidades y retiros'},
   periodos:    {t: 'Períodos', icon: 'cal', d: 'Abrir o cerrar meses por módulo'},
   conexion:    {t: 'Mi cuenta', icon: 'plug', d: 'Contraseña, usuarios y apariencia'},
   mas:         {t: 'Más', icon: 'more'}
 };
-const MORE = ['ingresos', 'bancos', 'historico', 'cuenta', 'combustible', 'tarjetas', 'cortes', 'catalogos', 'periodos', 'conexion'];
+const MORE = ['bancos', 'historico', 'cuenta', 'combustible', 'cortes', 'catalogos', 'periodos', 'conexion'];
 
-function go(v) { S.view = v; S.tab = ''; try { history.replaceState(null, '', '#' + v); } catch (e) {} render(); window.scrollTo(0, 0); }
+function go(v) {
+  if (v === 'tarjetas') { v = 'bancos'; const t = tarjeta(S.tarjeta) || tarjetas()[0]; if (t) { S.tarjeta = String(t.ID_Tarjeta); S.banco = cardSel(t.ID_Tarjeta); } }   // la sección Tarjetas ahora vive dentro de Bancos
+  S.view = v; S.tab = ''; try { history.replaceState(null, '', '#' + v); } catch (e) {} render(); window.scrollTo(0, 0); }
 function renderNav() {
-  const side = ['inicio', 'gastos', 'retiros', 'presupuesto', 'ingresos', 'bancos', '|', 'historico', 'cuenta', 'combustible', 'tarjetas', 'cortes', '|', 'catalogos', 'periodos', 'conexion'];
+  const navView = S.view === 'ingresos' || S.view === 'retiros' ? 'bancos' : S.view;   // el detalle de ingresos y de retiros cuelga de Bancos
+  const side = ['inicio', 'gastos', 'presupuesto', 'bancos', '|', 'historico', 'cuenta', 'combustible', 'cortes', '|', 'catalogos', 'periodos', 'conexion'];
   const emp = (DB.t.Empresa && DB.t.Empresa[0]) ? DB.t.Empresa[0].Empresa : '';
   $('#side').innerHTML = `<div class="brand"><b>Efectivo</b><span>${esc(String(emp).trim().split(/\s+/).map((w, i) => i && w.length <= 2 ? w.toLowerCase() : cap(w)).join(' '))}</span></div>` +
     side.map(v => v === '|' ? '<div class="navsep"></div>' :
-      `<button class="navbtn" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('') +
+      `<button class="navbtn" data-go="${v}" ${navView === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('') +
     (Backend.online && Auth.user ? `<div class="sideuser"><small class="muted" style="display:block;font-size:11px">Versión ${APP_VERSION}</small><b>${esc(Auth.user.nombre)}</b><span class="muted">${esc(Auth.user.rolNombre || Auth.user.rol)}</span><br><button data-act="logout">Cerrar sesión</button></div>` : '');
-  const BOTTOM = ['inicio', 'bancos', 'retiros', 'gastos', 'presupuesto', 'combustible'];
-  const inMore = (MORE.includes(S.view) && !BOTTOM.includes(S.view)) || S.view === 'mas';
+  const BOTTOM = ['inicio', 'bancos', 'gastos', 'presupuesto', 'combustible'];
+  const inMore = (MORE.includes(navView) && !BOTTOM.includes(navView)) || navView === 'mas';
   const prev = $('#bottom .bscroll'), keep = prev ? prev.scrollLeft : (S.bscroll || 0);
-  $('#bottom').innerHTML = `<div class="bscroll">${BOTTOM.map(v => `<button data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('')}</div>`
+  $('#bottom').innerHTML = `<div class="bscroll">${BOTTOM.map(v => `<button data-go="${v}" ${navView === v ? 'aria-current="page"' : ''}>${ico(VIEWS[v].icon)}${VIEWS[v].t}</button>`).join('')}</div>`
     + `<button class="bmore" data-go="mas" ${inMore ? 'aria-current="page"' : ''}>${ico(VIEWS.mas.icon)}${VIEWS.mas.t}</button>`;
   const bs = $('#bottom .bscroll'); if (bs) {
     bs.scrollLeft = keep;
@@ -1486,7 +1495,7 @@ function render() {
   COMBO = null;
   $('#view').innerHTML = fn(); syncCombos();
   if (Outbox.fails.length) $('#view').insertAdjacentHTML('afterbegin', `<div class="notice" style="margin-top:0"><span><b>${Outbox.fails.length} ${Outbox.fails.length === 1 ? 'registro no se pudo enviar' : 'registros no se pudieron enviar'}.</b> Se hicieron sin conexión y el servidor no los aceptó.</span><button class="btn small" data-act="ob-fails">Revisar</button></div>`);
-  const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Movimientos_Banco', bancos: 'Movimientos_Banco', combustible: 'Consumo_Combustible', tarjetas: 'Movimientos_Tarjeta'}[S.view];
+  const fab = $('#fab'); const fabFor = {inicio: 'Gastos_Detalle', gastos: 'Gastos_Detalle', retiros: 'Retiros_Detalle', presupuesto: 'Presupuesto_Detalle', ingresos: 'Movimientos_Banco', bancos: isCardSel() ? 'Movimientos_Tarjeta' : 'Movimientos_Banco', combustible: 'Consumo_Combustible'}[S.view];
   const fabOk = fabFor && (REL[fabFor] ? canAdd(REL[fabFor].mod) : can(FORMS[fabFor].perm));
   fab.hidden = !fabOk; fab.dataset.new = fabFor || ''; fab.dataset.dep = S.view === 'ingresos' ? '1' : ''; fabApply();
   if (fabOk && matchMedia('(pointer:coarse)').matches && !lsGet('fab_hint')) { lsSet('fab_hint', '1'); setTimeout(() => toast('Puedes mover el botón + arrastrándolo, para que no tape nada'), 1200); }
@@ -1623,7 +1632,7 @@ V.inicio = () => {
       <button class="drow" data-go="bancos" data-banco="ef"><span>${ico('cash')}Efectivo en mano</span><b class="num ${D.mano < 0 ? 'neg' : ''}">${money(D.mano)}</b></button>
       <div class="drow total"><span>Total disponible</span><b class="num ${D.total < 0 ? 'neg' : ''}">${money(D.total)}</b></div>
       ${D.usd.map(u => `<button class="drow usd" data-go="bancos" data-banco="${u.b.ID_Banco}"><span>${esc(u.b.Nombre)}, aparte del total</span><b class="num">${usd(u.v)}</b></button>`).join('')}
-      ${tarjetas().map(c => { const st = cardStatus(c); return st.NIO.deuda > 0.004 || st.USD.deuda > 0.004 ? `<button class="drow usd" data-go="tarjetas" data-tarjeta="${c.ID_Tarjeta}"><span>Tarjeta ${esc(c.Nombre)}, deuda<br><small>${dueText(st)}</small></span><b class="num">${dosMonedas(st.NIO.deuda, st.USD.deuda)}</b></button>` : ''; }).join('')}
+      ${tarjetas().map(c => { const st = cardStatus(c); return st.NIO.deuda > 0.004 || st.USD.deuda > 0.004 ? `<button class="drow usd" data-go="bancos" data-banco="${cardSel(c.ID_Tarjeta)}"><span>Tarjeta ${esc(c.Nombre)}, deuda<br><small>${dueText(st)}</small></span><b class="num">${dosMonedas(st.NIO.deuda, st.USD.deuda)}</b></button>` : ''; }).join('')}
       ${hasUsdCash() && (D.efUsd || cashUsdLedger().rows.length) ? `<button class="drow usd" data-go="bancos" data-banco="efd"><span>Efectivo en dólares, aparte del total</span><b class="num">${usd(D.efUsd)}</b></button>` : ''}
     </div>
     ${D.configurado ? `<p class="muted" style="font-size:12.5px;margin:6px 2px 0">Saldos desde ${fdatetime(empresa().Fecha_Efectivo_Inicial)}</p>` : ''}</section>`; })()}
@@ -1693,7 +1702,8 @@ V.retiros = () => {
   const byMov = {}; rows.forEach(r => byMov[r.Movimiento] = (byMov[r.Movimiento] || 0) + (Number(r.Total) || 0));
   const top = Object.entries(byMov).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const byBank = {}; rows.forEach(r => { const k = !banco(r.ID_Banco) ? '' : String(r.ID_Banco); byBank[k] = (byBank[k] || 0) + (Number(r.Total) || 0); });
-  return `${lockNote('Retiros')}
+  return `<div class="toolbar" style="margin:12px 0 0"><button class="btn small" data-go="bancos">‹ Bancos</button><span class="spacer"></span></div>
+  ${lockNote('Retiros')}
   <div class="figs three">
     <div class="fig"><small>Retirado</small><b class="num">${money(t.R)}</b></div>
     <div class="fig"><small>Gastado</small><b class="num">${money(t.G)}</b></div>
@@ -1712,7 +1722,8 @@ V.ingresos = () => {
   const rows = rowsFor('Ingresos_Detalle', S.mes);
   const byBank = {}, byUsd = {}; rows.forEach(r => { const k = !banco(r.ID_Banco) ? '' : String(r.ID_Banco); byBank[k] = (byBank[k] || 0) + (Number(r.Total) || 0); if (isUsdBank(r.ID_Banco)) byUsd[k] = (byUsd[k] || 0) + (Number(r.Monto_Moneda) || 0); });
   const enBancos = r2(Object.entries(byBank).filter(([k]) => k !== '').reduce((a, [, v]) => a + v, 0));
-  return `${lockNote('Ingresos')}
+  return `<div class="toolbar" style="margin:12px 0 0"><button class="btn small" data-go="bancos">‹ Bancos</button><span class="spacer"></span></div>
+  ${lockNote('Ingresos')}
   ${isNewPeriod(S.mes) ? `<p class="muted" style="margin:12px 2px 0">Ingresos con fecha ${rangeLabel(S.mes)}: los depósitos que cuentan como ingreso, menos las deducciones (por ejemplo, la retención de impuesto sobre intereses). Se registran desde la cuenta de banco (<i>Bancos → Transferir o depositar → Depósito de efectivo</i>).</p>` : ''}
   ${rows.length && bancos().length ? `<div class="figs three"><div class="fig"><small>Ingresos del mes</small><b class="num">${money(sum(rows))}</b></div>
     <div class="fig" data-go="bancos"><small>Depositado en bancos</small><b class="num">${money(enBancos)}</b></div>
@@ -1724,37 +1735,99 @@ V.ingresos = () => {
     : `<div class="panel empty"><b>No hay ingresos en este mes</b>Los ingresos se registran como <b>depósitos</b> en una cuenta de banco o en efectivo (<i>Bancos → Transferir o depositar → Depósito de efectivo</i>) y aparecen aquí según su fecha.${can('bancos.editar') ? '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="deposito">Depósito en cuenta</button></div>' : ''}</div>`}`;
 };
 
+/* ===== Bancos: cuentas (córdobas y dólares), tarjetas de crédito y efectivo, agrupados por banco ===== */
+const cardSel = id => 'c:' + id;
+const isCardSel = () => String(S.banco || '').startsWith('c:');
+/** Un grupo por banco (según el texto «Banco» de sus cuentas y tarjetas), en el orden de la lista de cuentas y tarjetas */
+function bankGroups() {
+  const G = new Map(), put = (name, kind, obj, orden) => { const k = nrm(name) || '~', g = G.get(k) || {name: String(name || '').trim() || 'Otros', ord: 1e9, accs: [], cards: []};
+    G.set(k, g); g.ord = Math.min(g.ord, Number(orden) || 999); (kind === 'acc' ? g.accs : g.cards).push(obj); };
+  bancos().forEach(b => put(b.Banco, 'acc', b, b.Orden)); tarjetas().forEach(t => put(t.Banco, 'card', t, t.Orden));
+  return [...G.values()].sort((a, b) => a.ord - b.ord || a.name.localeCompare(b.name, 'es'));
+}
+function tarjetaLegacy() {
+  // historial de Access (consumos con tarjeta de antes de esta app)
+  let rows = DB.t.Referencias_Tarjetas.slice().sort((a, b) => String(b.Fecha).localeCompare(String(a.Fecha)));
+  const pend = rows.filter(r => !truthy(r.Pagado)); if (S.pend) rows = pend;
+  return DB.t.Referencias_Tarjetas.length ? `<section class="section"><h3>Consumos anteriores <small>registrados en Access (${DB.t.Referencias_Tarjetas.length})</small></h3>
+    <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="tarLegacy" ${S.tarLegacy ? 'checked' : ''}><span></span></span>Mostrar el historial de Access</label>
+    ${S.tarLegacy ? `<div class="toolbar" style="margin-top:0"><div class="tabs" style="margin:0"><button class="tab" data-pend="0" aria-pressed="${!S.pend}">Todos</button><button class="tab" data-pend="1" aria-pressed="${S.pend}">Pendientes (${pend.length})</button></div></div>
+    ${rows.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Concepto</th><th class="n">Valor</th><th class="n">Descuento</th><th class="n">A pagar</th><th>Estado</th><th>Referencia de pago</th></tr></thead>
+  <tbody>${rows.map(r => `<tr data-edit="Referencias_Tarjetas" data-id="${r.ID}"><td>${fdatetime(r.Fecha)}</td><td>${esc(r.Tarjeta_Credito)}</td><td>${esc(r.Observacion_Gastos)}</td><td class="n">${money(r.Valor)}</td><td class="n">${money(r.Descuento)}</td><td class="n">${money(r.Pagar)}</td><td>${truthy(r.Pagado) ? '<span class="pill open">Pagado</span>' : '<span class="pill bad">Pendiente</span>'}</td><td>${esc(r.Referencias_Pago)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>No hay consumos pendientes</b></div>'}` : ''}</section>` : '';
+}
+function tarjetaDetalle(c) {
+  const ed = can('tarjetas.editar'), adm = can('catalogos.editar'), legacy = tarjetaLegacy();
+  const st = cardStatus(c), cy = st.cy, N = st.NIO, U = st.USD;
+  const lastK = cy ? isoD(cy.prev) : '';
+  const all = [...N.L.rows, ...U.L.rows].sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const shown = (S.tarAll || !cy ? all : all.filter(r => r.fecha > lastK)).slice().reverse().slice(0, 250);
+  const cell = (s1, k, cur) => cy ? fcur(s1[k], cur) : '—';
+  const row = (label, k, cls) => `<tr style="cursor:default"><td>${label}</td><td class="n ${cls ? cls(N) : ''}">${cell(N, k, 'NIO')}</td><td class="n ${cls ? cls(U) : ''}">${cell(U, k, 'USD')}</td></tr>`;
+  const hot = s1 => s1.pendiente > 0 && st.dias <= 5 ? 'neg' : '';
+  return `
+  ${!cy ? `<div class="notice" style="margin-top:12px"><span>Escribe el <b>día de corte</b> y el <b>día límite de pago</b> de ${esc(c.Nombre)} para ver su estado de cuenta.</span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button>' : ''}</div>` : ''}
+  <div class="tablewrap" style="margin-top:12px"><table class="t estado"><thead><tr><th>Estado de cuenta</th><th class="n">Córdobas</th><th class="n">Dólares</th></tr></thead><tbody>
+    <tr style="cursor:default"><td><b>Deuda total</b></td><td class="n ${N.deuda > 0 ? 'neg' : ''}"><b>${money(N.deuda)}</b></td><td class="n ${U.deuda > 0 ? 'neg' : ''}"><b>${usd(U.deuda)}</b></td></tr>
+    ${row('Saldo al corte' + (cy ? ' (' + fdate(isoD(cy.last)) + ')' : ''), 'saldoCorte')}
+    ${row('<b>Por pagar</b>' + (cy && cy.due ? ' antes del ' + fdate(isoD(cy.due)) : ''), 'pendiente', hot)}
+    ${row('Consumos, cargos y reembolsos desde el corte', 'consumosDesde')}
+    ${row('Pagado desde el corte', 'pagosDesde')}
+  </tbody></table></div>
+  <p class="muted" style="font-size:12.5px;margin:8px 2px 0">${Number(c.Limite) ? `Límite ${usd(c.Limite)}; disponible <b>${usd(st.disponible)}</b> (lo que debes en córdobas se convierte a T/C de compra ${st.tc}). ` : ''}${cy ? `Corte el día ${c.Dia_Corte} de cada mes${c.Dia_Pago ? ', pago hasta el día ' + c.Dia_Pago : ''}. Próximo corte: ${fdate(isoD(cy.next))}. ${st.porPagar && cy.due ? (st.dias < 0 ? `<b class="neg">El pago venció hace ${-st.dias} ${st.dias === -1 ? 'día' : 'días'}.</b>` : `Faltan <b>${st.dias}</b> ${st.dias === 1 ? 'día' : 'días'} para el límite de pago.`) : ''}` : ''}</p>
+  <section class="section"><h3 id="bdet">Movimientos de ${esc(c.Nombre)} <small>${S.tarAll || !cy ? 'todos' : 'desde el corte del ' + fdate(lastK)}</small></h3>
+    <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="tarAll" ${S.tarAll ? 'checked' : ''}><span></span></span>Mostrar todos</label>
+    <div class="toolbar" style="margin-top:0">${ed ? `<button class="btn primary" data-act="tar-mov">Registrar movimiento</button>` : ''}<span class="spacer"></span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button>' : ''}</div>
+    <p class="muted" style="font-size:12.5px;margin:0 0 10px">La tarjeta lleva dos deudas: en córdobas y en dólares. Suben con las compras (menos su descuento), el combustible pagado con la tarjeta, los retiros de efectivo con su cargo y los cargos del banco (intereses o comisiones); bajan con los pagos y con los reembolsos o bonificaciones. Al recibir el estado de cuenta, agrega sus cargos y reembolsos para que la deuda coincida con la del banco. Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta.</p>
+    ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt < 0 ? 'var(--good)' : 'var(--sun)'}"></span>
+      <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)} en ${r.cur === 'USD' ? 'dólares' : 'córdobas'}${r.alt ? ', ' + esc(r.alt) : ''}</small></span>
+      <span class="amt num ${r.amt < 0 ? 'pos' : ''}">${r.amt > 0 ? '+' : '−'}${fcur(Math.abs(r.amt), r.cur)}<small>${r.pre ? 'Anterior a la deuda inicial' : 'Deuda ' + fcur(r.bal, r.cur)}</small></span></button>`).join('')}</div>`
+      : `<div class="panel empty"><b>Sin movimientos ${S.tarAll || !cy ? '' : 'desde el corte'}</b>Registra compras, retiros y pagos, o paga el combustible con esta tarjeta.</div>`}
+  </section>
+  ${legacy}`;
+}
+
 V.bancos = () => {
-  const bs = bancos();
-  if (!bs.length) return '<div class="panel empty" style="margin-top:16px"><b>Aún no hay cuentas de banco activas</b>' + (can('catalogos.editar') ? '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="bank-new">Agregar cuenta</button></div>' : 'Pide a un administrador que agregue una cuenta.') + '</div>';
-  if (!S.banco || (S.banco !== 'ef' && S.banco !== 'efd' && !bs.some(b => String(b.ID_Banco) === String(S.banco)))) S.banco = String(bs[0].ID_Banco);
+  const bs = bancos(), TL = tarjetas(), adm = can('catalogos.editar');
+  if (!bs.length && !TL.length) return '<div class="panel empty" style="margin-top:16px"><b>Aún no hay cuentas ni tarjetas activas</b>' + (adm ? '<div class="row" style="justify-content:center;gap:8px;margin-top:12px"><button class="btn primary" data-act="bank-new">Agregar cuenta</button><button class="btn" data-act="tar-new">Agregar tarjeta</button></div>' : 'Pide a un administrador que agregue una cuenta.') + '</div>';
+  const okSel = S.banco === 'ef' || S.banco === 'efd' || bs.some(b => String(b.ID_Banco) === String(S.banco)) || TL.some(t => S.banco === cardSel(t.ID_Tarjeta));
+  if (!S.banco || !okSel) S.banco = bs[0] ? String(bs[0].ID_Banco) : cardSel(TL[0].ID_Tarjeta);
+  const isCard = isCardSel(), cardObj = isCard ? tarjeta(String(S.banco).slice(2)) : null; if (cardObj) S.tarjeta = String(cardObj.ID_Tarjeta);
   const D = disponible(), L = {}; bs.forEach(b => L[b.ID_Banco] = ledger(b.ID_Banco));
   const C = cashLedger(), CU = cashUsdLedger(), ef = S.banco === 'ef', efd = S.banco === 'efd', showUsd = hasUsdCash();
-  const cur = efd ? {Nombre: 'Efectivo en dólares', Moneda: 'USD'} : ef ? {Nombre: 'Efectivo en mano', Moneda: 'NIO'} : banco(S.banco), led = efd ? CU : ef ? C : L[S.banco];
+  const cur = isCard ? {Nombre: cardObj.Nombre, Moneda: 'NIO'} : efd ? {Nombre: 'Efectivo en dólares', Moneda: 'USD'} : ef ? {Nombre: 'Efectivo en mano', Moneda: 'NIO'} : banco(S.banco), led = isCard ? {rows: []} : efd ? CU : ef ? C : L[S.banco];
   // la lista sigue el período elegido arriba (o todos los meses si se activa); el saldo de cada fila es el acumulado real
   const inPer = S.bankAll ? led.rows : led.rows.filter(r => periodForDate(r.fecha) === S.mes), previosVista = inPer.filter(r => r.pre).length;
   const ed = can('bancos.editar'), shown = inPer.slice().reverse().slice(0, 250);
   const card = (id, top, name, v, curr, sub) => `<button class="bankcard ${String(id) === S.banco ? 'on' : ''}" data-banco="${id}"><small>${esc(top)}</small><b>${esc(name)}</b><span class="num bal ${v < 0 ? 'neg' : ''}" style="--n:${fcur(v, curr).length}">${fcur(v, curr)}</span><small>${sub || '&nbsp;'}</small></button>`;
+  const accTile = b => card(b.ID_Banco, (b.Moneda === 'USD' ? 'Cuenta en dólares' : 'Cuenta en córdobas') + (b.Numero ? ' · ' + b.Numero : ''), b.Nombre, L[b.ID_Banco].saldo, b.Moneda, b.Moneda === 'USD' ? `≈ ${money(L[b.ID_Banco].saldo * tcFor(S.mes))} a ${tcFor(S.mes)}` : '');
+  const cardTile = t => { const s2 = cardStatus(t), n = money(s2.NIO.deuda), u = usd(s2.USD.deuda); return `<button class="bankcard ${S.banco === cardSel(t.ID_Tarjeta) ? 'on' : ''}" data-banco="${cardSel(t.ID_Tarjeta)}"><small>Tarjeta de crédito${t.Ultimos4 ? ' · ' + esc(t.Ultimos4) : ''}</small><b>${esc(t.Nombre)}</b><span class="num bal" style="--n:${n.length}">${n}</span><span class="num bal bal2" style="--n:${u.length}">${u}</span><small>${dueText(s2)}</small></button>`; };
+  const groups = bankGroups(), debtN = r2(TL.reduce((a, t) => a + cardStatus(t).NIO.deuda, 0)), debtU = r2(TL.reduce((a, t) => a + cardStatus(t).USD.deuda, 0));
   return `
   ${!D.configurado ? `<div class="notice info" style="margin-top:12px"><span>Escribe una vez cuánto tienes hoy en cada cuenta y en efectivo; desde ahí los saldos se calculan solos.</span>${can('catalogos.editar') || !Backend.online ? '<button class="btn small primary" data-act="saldos">Escribir saldos actuales</button>' : ''}</div>` : ''}
-  <section class="section"><div class="bankgrid">
-    ${bs.map(b => card(b.ID_Banco, b.Banco + (b.Numero ? ', ' + b.Numero : ''), b.Nombre, L[b.ID_Banco].saldo, b.Moneda, b.Moneda === 'USD' ? `≈ ${money(L[b.ID_Banco].saldo * tcFor(S.mes))} a ${tcFor(S.mes)}` : '')).join('')}
+  <section class="section">
+  ${adm ? '<div class="toolbar" style="margin:12px 0 0"><span class="spacer"></span><button class="btn small" data-act="bank-new">Agregar cuenta</button><button class="btn small" data-act="tar-new">Agregar tarjeta</button></div>' : ''}
+  ${groups.map(g => `<h3 class="bgh">${esc(g.name)}</h3><div class="bankgrid">${g.accs.map(accTile).join('')}${g.cards.map(cardTile).join('')}</div>`).join('')}
+  <h3 class="bgh">Efectivo</h3><div class="bankgrid">
     ${card('ef', 'Efectivo', 'Efectivo en mano', C.saldo, 'NIO', '')}
     ${showUsd ? card('efd', 'Efectivo', 'Efectivo en dólares', CU.saldo, 'USD', `≈ ${money(CU.saldo * tcFor(S.mes))} a ${tcFor(S.mes)}`) : ''}
   </div>
   <div class="sumline" style="margin-top:12px"><span>Disponible para gastar (cuentas en córdobas + efectivo)</span><b class="num">${money(D.total)}</b></div>
+  ${TL.length && (debtN > 0.004 || debtU > 0.004) ? `<div class="sumline" style="margin-top:6px"><span>Deuda en tarjetas de crédito</span><b class="num neg">${dosMonedas(debtN, debtU)}</b></div>` : ''}
+  ${(() => { const tI = totals(S.mes).I, nI = rowsFor('Ingresos_Detalle', S.mes).length; return `<button type="button" class="sumline go" data-go="ingresos"><span>Ingresos de ${esc(mesLabel(S.mes))}<small>${nI} ${nI === 1 ? 'ingreso' : 'ingresos'} · Ver detalle ›</small></span><b class="num ${tI < 0 ? 'neg' : ''}">${money(tI)}</b></button>`; })()}
+  ${(() => { const tR = totals(S.mes).R, nR = rowsFor('Retiros_Detalle', S.mes).length; return `<button type="button" class="sumline go" data-go="retiros"><span>Retiros de efectivo de ${esc(mesLabel(S.mes))}<small>${nR} ${nR === 1 ? 'retiro' : 'retiros'} · Ver detalle ›</small></span><b class="num">${money(tR)}</b></button>`; })()}
   ${bancos(true).length > bs.length ? `<p class="muted" style="font-size:12.5px;margin:4px 2px 0">${bancos(true).length - bs.length} cuentas desactivadas. <a href="#" data-act="bank-inactive">Verlas</a></p>` : ''}</section>
-  <section class="section"><h3>Movimientos de ${esc(cur.Nombre)} <small>${S.bankAll ? 'todos los meses' : esc(mesLabel(S.mes)) + ', ' + rangeLabel(S.mes)}</small></h3>
+  ${isCard ? tarjetaDetalle(cardObj) : `
+  <section class="section"><h3 id="bdet">Movimientos de ${esc(cur.Nombre)} <small>${S.bankAll ? 'todos los meses' : esc(mesLabel(S.mes)) + ', ' + rangeLabel(S.mes)}</small></h3>
     <p class="muted" style="font-size:12.5px;margin:-4px 0 8px">${inPer.length} ${inPer.length === 1 ? 'movimiento' : 'movimientos'}${S.bankAll ? '' : ' en este período'}${inPer.length > 250 ? ' (se muestran los 250 más recientes)' : ''}${led.start ? ' · saldo inicial ' + fcur(led.inicial, cur.Moneda) + ' (' + fdatetime(led.start) + ')' : ''}</p>
     <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="bankAll" ${S.bankAll ? 'checked' : ''}><span></span></span>Mostrar todos los meses</label>
-    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir o depositar</button>' : ''}${efd && ed ? '<button class="btn" data-act="efd-bank">Depositar en la cuenta en dólares</button><button class="btn" data-act="efd-cash">Cambiar a córdobas</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `${!ef && !efd ? '<button class="btn small" data-act="bank-edit">Editar esta cuenta</button>' : ''}<button class="btn small" data-act="bank-new">Agregar cuenta</button>` : ''}</div>
+    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir o depositar</button>' : ''}${!ef && !efd && canAdd('Retiros') ? '<button class="btn" data-act="ret-new">Retirar efectivo</button>' : ''}${efd && ed ? '<button class="btn" data-act="efd-bank">Depositar en la cuenta en dólares</button><button class="btn" data-act="efd-cash">Cambiar a córdobas</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `${!ef && !efd ? '<button class="btn small" data-act="bank-edit">Editar esta cuenta</button>' : ''}` : ''}</div>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">${efd ? 'Sube con los retiros hechos en dólares, los depósitos y lo que cambias o transfieres hacia aquí; baja con los gastos pagados con «Efectivo en dólares» y con lo que depositas en la cuenta en dólares o cambias a córdobas. No cuenta en el dinero disponible en córdobas.' : ef ? 'Sube con los retiros de cajero y los ingresos en efectivo; baja con los gastos pagados en efectivo.' : 'Sube con los ingresos depositados y las transferencias que recibes; baja con los retiros de cajero, las deducciones (retenciones o impuestos), los gastos con débito o pago directo y las transferencias que haces.'}</p>
     <p class="legend muted" aria-label="Significado de los colores"><span><i class="k-in"></i>Entra dinero</span><span><i class="k-ret"></i>Retiro de efectivo</span>${!ef && !efd ? '<span><i class="k-ded"></i>Deducción</span>' : ''}<span><i class="k-out"></i>Otras salidas</span></p>
     ${previosVista ? `<p class="muted" style="font-size:12.5px;margin:0 0 10px">${previosVista} ${previosVista === 1 ? 'movimiento es anterior' : 'movimientos son anteriores'} a los saldos actuales (${fdatetime(led.start)}): se muestran atenuados y no cambian el saldo.</p>` : ''}
     ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot k-${r.pre ? 'pre' : rowKind(r)}"></span>
       <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)}${r.alt ? ', ' + r.alt + ' en córdobas' : ''}</small></span>
       <span class="amt num ${r.pre ? '' : 'k-' + rowKind(r)}">${r.amt >= 0 ? '+' : ''}${fcur(r.amt, cur.Moneda)}<small>${r.pre ? 'Anterior a los saldos' : 'Saldo ' + fcur(r.bal, cur.Moneda)}</small></span></button>`).join('')}</div>`
-      : `<div class="panel empty"><b>Sin movimientos ${S.bankAll ? '' : 'en ' + esc(mesLabel(S.mes))}</b>${!S.bankAll && led.rows.length ? 'Esta cuenta tiene movimientos en otros meses: cambia el período arriba o activa «Todos los meses».' : 'Los movimientos que hagas con esta cuenta aparecerán aquí.'}</div>`}</section>`;
+      : `<div class="panel empty"><b>Sin movimientos ${S.bankAll ? '' : 'en ' + esc(mesLabel(S.mes))}</b>${!S.bankAll && led.rows.length ? 'Esta cuenta tiene movimientos en otros meses: cambia el período arriba o activa «Todos los meses».' : 'Los movimientos que hagas con esta cuenta aparecerán aquí.'}</div>`}</section>`}`;
 };
 
 V.presupuesto = () => {
@@ -1774,7 +1847,7 @@ V.presupuesto = () => {
   return `${lockNote('Presupuesto')}
   <p class="muted" style="margin:12px 2px 0">Presupuesto de <b>${esc(mesLabel(S.mes))}</b>, período ${rangeLabel(S.mes)}.</p>
   <div class="figs ${enCurso ? 'four' : 'three'}">
-    <div class="fig"><small>Ingresos del período</small><b class="num">${money(ing)}</b></div>
+    <button class="fig" data-go="ingresos"><small>Ingresos del período</small><b class="num">${money(ing)}</b></button>
     ${enCurso ? `<div class="fig"><small>Dinero para el período</small><b class="num">${money(dinero)}</b></div>` : ''}
     <div class="fig"><small>Presupuestado</small><b class="num">${money(tp)}</b></div>
     <div class="fig"><small>Sin asignar</small><b class="num ${dinero - tp < 0 ? 'neg' : ''}">${money(dinero - tp)}</b></div>
@@ -2019,49 +2092,6 @@ V.combustible = () => {
     <span class="amt num">${Number(r.km_litros) > 0 ? perf(r, 'L').toFixed(2) : '—'}<small>km/L</small>${Number(r.km_litros) > 0 ? `<small class="g">${perf(r, 'GL').toFixed(2)} km/GL</small>` : ''}</span></button>`).join('')}</div>`;
 };
 
-V.tarjetas = () => {
-  const TL = tarjetas(), ed = can('tarjetas.editar'), adm = can('catalogos.editar');
-  if (!S.tarjeta || !TL.some(c => String(c.ID_Tarjeta) === String(S.tarjeta))) S.tarjeta = TL[0] ? String(TL[0].ID_Tarjeta) : '';
-  // historial de Access (consumos con tarjeta de antes de esta app)
-  let rows = DB.t.Referencias_Tarjetas.slice().sort((a, b) => String(b.Fecha).localeCompare(String(a.Fecha)));
-  const pend = rows.filter(r => !truthy(r.Pagado)); if (S.pend) rows = pend;
-  const legacy = DB.t.Referencias_Tarjetas.length ? `<section class="section"><h3>Consumos anteriores <small>registrados en Access (${DB.t.Referencias_Tarjetas.length})</small></h3>
-    <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="tarLegacy" ${S.tarLegacy ? 'checked' : ''}><span></span></span>Mostrar el historial de Access</label>
-    ${S.tarLegacy ? `<div class="toolbar" style="margin-top:0"><div class="tabs" style="margin:0"><button class="tab" data-pend="0" aria-pressed="${!S.pend}">Todos</button><button class="tab" data-pend="1" aria-pressed="${S.pend}">Pendientes (${pend.length})</button></div></div>
-    ${rows.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Concepto</th><th class="n">Valor</th><th class="n">Descuento</th><th class="n">A pagar</th><th>Estado</th><th>Referencia de pago</th></tr></thead>
-  <tbody>${rows.map(r => `<tr data-edit="Referencias_Tarjetas" data-id="${r.ID}"><td>${fdatetime(r.Fecha)}</td><td>${esc(r.Tarjeta_Credito)}</td><td>${esc(r.Observacion_Gastos)}</td><td class="n">${money(r.Valor)}</td><td class="n">${money(r.Descuento)}</td><td class="n">${money(r.Pagar)}</td><td>${truthy(r.Pagado) ? '<span class="pill open">Pagado</span>' : '<span class="pill bad">Pendiente</span>'}</td><td>${esc(r.Referencias_Pago)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="panel empty"><b>No hay consumos pendientes</b></div>'}` : ''}</section>` : '';
-  if (!TL.length) return `<div class="panel empty" style="margin-top:12px"><b>Aún no hay tarjetas de crédito activas</b>${adm ? '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="tar-new">Agregar tarjeta</button></div>' : ''}</div>${legacy}`;
-  const c = tarjeta(S.tarjeta), st = cardStatus(c), cy = st.cy, N = st.NIO, U = st.USD;
-  const lastK = cy ? isoD(cy.prev) : '';
-  const all = [...N.L.rows, ...U.L.rows].sort((a, b) => a.fecha.localeCompare(b.fecha));
-  const shown = (S.tarAll || !cy ? all : all.filter(r => r.fecha > lastK)).slice().reverse().slice(0, 250);
-  const cell = (s1, k, cur) => cy ? fcur(s1[k], cur) : '—';
-  const row = (label, k, cls) => `<tr style="cursor:default"><td>${label}</td><td class="n ${cls ? cls(N) : ''}">${cell(N, k, 'NIO')}</td><td class="n ${cls ? cls(U) : ''}">${cell(U, k, 'USD')}</td></tr>`;
-  const hot = s1 => s1.pendiente > 0 && st.dias <= 5 ? 'neg' : '';
-  return `
-  <section class="section"><div class="bankgrid">
-    ${TL.map(t => { const s2 = cardStatus(t), n = money(s2.NIO.deuda), u = usd(s2.USD.deuda); return `<button class="bankcard ${String(t.ID_Tarjeta) === S.tarjeta ? 'on' : ''}" data-tarjeta="${t.ID_Tarjeta}"><small>${esc(t.Banco || 'Tarjeta')}${t.Ultimos4 ? ' · ' + esc(t.Ultimos4) : ''}</small><b>${esc(t.Nombre)}</b><span class="num bal" style="--n:${n.length}">${n}</span><span class="num bal bal2" style="--n:${u.length}">${u}</span><small>${dueText(s2)}</small></button>`; }).join('')}
-  </div></section>
-  ${!cy ? `<div class="notice" style="margin-top:12px"><span>Escribe el <b>día de corte</b> y el <b>día límite de pago</b> de ${esc(c.Nombre)} para ver su estado de cuenta.</span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button>' : ''}</div>` : ''}
-  <div class="tablewrap" style="margin-top:12px"><table class="t estado"><thead><tr><th>Estado de cuenta</th><th class="n">Córdobas</th><th class="n">Dólares</th></tr></thead><tbody>
-    <tr style="cursor:default"><td><b>Deuda total</b></td><td class="n ${N.deuda > 0 ? 'neg' : ''}"><b>${money(N.deuda)}</b></td><td class="n ${U.deuda > 0 ? 'neg' : ''}"><b>${usd(U.deuda)}</b></td></tr>
-    ${row('Saldo al corte' + (cy ? ' (' + fdate(isoD(cy.last)) + ')' : ''), 'saldoCorte')}
-    ${row('<b>Por pagar</b>' + (cy && cy.due ? ' antes del ' + fdate(isoD(cy.due)) : ''), 'pendiente', hot)}
-    ${row('Consumos, cargos y reembolsos desde el corte', 'consumosDesde')}
-    ${row('Pagado desde el corte', 'pagosDesde')}
-  </tbody></table></div>
-  <p class="muted" style="font-size:12.5px;margin:8px 2px 0">${Number(c.Limite) ? `Límite ${usd(c.Limite)}; disponible <b>${usd(st.disponible)}</b> (lo que debes en córdobas se convierte a T/C de compra ${st.tc}). ` : ''}${cy ? `Corte el día ${c.Dia_Corte} de cada mes${c.Dia_Pago ? ', pago hasta el día ' + c.Dia_Pago : ''}. Próximo corte: ${fdate(isoD(cy.next))}. ${st.porPagar && cy.due ? (st.dias < 0 ? `<b class="neg">El pago venció hace ${-st.dias} ${st.dias === -1 ? 'día' : 'días'}.</b>` : `Faltan <b>${st.dias}</b> ${st.dias === 1 ? 'día' : 'días'} para el límite de pago.`) : ''}` : ''}</p>
-  <section class="section"><h3>Movimientos de ${esc(c.Nombre)} <small>${S.tarAll || !cy ? 'todos' : 'desde el corte del ' + fdate(lastK)}</small></h3>
-    <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="tarAll" ${S.tarAll ? 'checked' : ''}><span></span></span>Mostrar todos</label>
-    <div class="toolbar" style="margin-top:0">${ed ? `<button class="btn primary" data-act="tar-mov">Registrar movimiento</button>` : ''}<span class="spacer"></span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button><button class="btn small" data-act="tar-new">Agregar tarjeta</button>' : ''}</div>
-    <p class="muted" style="font-size:12.5px;margin:0 0 10px">La tarjeta lleva dos deudas: en córdobas y en dólares. Suben con las compras (menos su descuento), el combustible pagado con la tarjeta, los retiros de efectivo con su cargo y los cargos del banco (intereses o comisiones); bajan con los pagos y con los reembolsos o bonificaciones. Al recibir el estado de cuenta, agrega sus cargos y reembolsos para que la deuda coincida con la del banco. Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta.</p>
-    ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt < 0 ? 'var(--good)' : 'var(--sun)'}"></span>
-      <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)} en ${r.cur === 'USD' ? 'dólares' : 'córdobas'}${r.alt ? ', ' + esc(r.alt) : ''}</small></span>
-      <span class="amt num ${r.amt < 0 ? 'pos' : ''}">${r.amt > 0 ? '+' : '−'}${fcur(Math.abs(r.amt), r.cur)}<small>${r.pre ? 'Anterior a la deuda inicial' : 'Deuda ' + fcur(r.bal, r.cur)}</small></span></button>`).join('')}</div>`
-      : `<div class="panel empty"><b>Sin movimientos ${S.tarAll || !cy ? '' : 'desde el corte'}</b>Registra compras, retiros y pagos, o paga el combustible con esta tarjeta.</div>`}
-  </section>
-  ${legacy}`;
-};
 
 V.cortes = () => {
   const all = DB.t.Resumen.slice(), tm = r => String(r.Hora_Registro || '') + String(1e9 + Number(r.Id_Resumen || 0));
@@ -2114,12 +2144,12 @@ V.catalogos = () => {
 V.periodos = () => {
   const ps = periodos(); const years = [...new Set(ps.map(p => p.Anio))].sort((a, b) => b - a);
   if (!S.anio || !years.map(String).includes(String(S.anio))) S.anio = String(years[0]);
-  const flags = [['Abierta', 'Abierto'], ['Ingresos', 'Ingresos'], ['Presupuesto', 'Presupuesto'], ['Gastos', 'Gastos'], ['Retiros', 'Retiros'], ['Guardar_Resumen', 'Resumen']];
+  const flags = [['Abierta', 'Abierto'], ['Presupuesto', 'Presupuesto'], ['Gastos', 'Gastos'], ['Guardar_Resumen', 'Resumen']];
   const D = diaInicio(), hoyP = periodForDate(todayISO());
   const actP = activePeriod(), abiertos = openPeriods();
   return `${!multiPeriods() && abiertos.length > 1 ? `<div class="notice" style="margin-top:4px"><span><b>Hay ${abiertos.length} períodos abiertos</b> (${esc(abiertos.map(x => pName(x.Mes_Anio)).join(', '))}) y la configuración permite uno solo. Cierra los que no necesites; mientras haya uno abierto no se puede abrir otro.</span></div>` : ''}<div class="notice info" style="margin-top:4px"><span>${actP ? `Período activo: <b>${esc(mesLabel(actP))}</b> (${rangeLabel(actP)}). Es el que la app usa por defecto en Gastos, Retiros, Ingresos y Presupuesto.` : 'No hay ningún período activo: activa la columna Abierto del mes en curso.'}</span></div>
   <p class="muted" style="font-size:13px;margin:0 0 10px"><b>T/C compra</b>: córdobas que pagas por US$ 1 cuando compras dólares (de córdobas a dólares). <b>T/C venta</b>: córdobas que recibes por US$ 1 cuando cambias dólares a córdobas; también se usa para valorar en córdobas los saldos, retiros, gastos y depósitos en dólares. Cada movimiento propone la que le corresponde.</p>
-  <p class="muted">Cada período va del día ${D} de su mes al ${D - 1 || 'último'} del mes siguiente (cobras el ${D}). Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access. <b>Abierto</b> abre o cierra de una vez todos los módulos del mes (Ingresos, Presupuesto, Gastos, Retiros y Resumen); después puedes cerrar o abrir cada uno por separado. ${multiPeriods() ? 'Se pueden tener <b>varios períodos abiertos</b> a la vez (Mi cuenta → Configuración).' : 'Solo puede haber <b>un período abierto</b> a la vez: para modificar otro mes, cierra el activo y abre el que necesitas (se puede cambiar en Mi cuenta → Configuración).'}</p>
+  <p class="muted">Cada período va del día ${D} de su mes al ${D - 1 || 'último'} del mes siguiente (cobras el ${D}). Un período cerrado no permite registrar ni corregir movimientos de ese módulo, igual que en Access. <b>Abierto</b> abre o cierra de una vez todos los módulos del mes (Presupuesto, Gastos y Resumen); después puedes cerrar o abrir cada uno por separado. ${multiPeriods() ? 'Se pueden tener <b>varios períodos abiertos</b> a la vez (Mi cuenta → Configuración).' : 'Solo puede haber <b>un período abierto</b> a la vez: para modificar otro mes, cierra el activo y abre el que necesitas (se puede cambiar en Mi cuenta → Configuración).'}</p>
   ${can('periodos.gestionar') ? `<div class="row" style="margin:0 0 12px;gap:10px"><label for="diaIni" style="font-weight:600;font-size:14px">El período empieza el día</label>
     ${comboize(`<select class="input" id="diaIni" style="width:auto">${Array.from({length: 28}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === D ? 'selected' : ''}>${n}</option>`).join('')}</select>`, '', 'combo-sm')}
     <span class="muted" style="font-size:13px">Hoy corresponde a <b>${esc(mesLabel(hoyP))}</b>.</span></div>` : ''}
@@ -2356,7 +2386,7 @@ const FORMS = {
     {k: 'Activa', l: 'Activa', ty: 'bool', def: true, hint: 'Desactívala si ya no la usas: su historial se conserva'}],
     validate: o => [o.Dia_Corte, o.Dia_Pago].some(v => v !== '' && !(Number(v) >= 1 && Number(v) <= 31)) ? 'El día de corte y el de pago van del 1 al 31' : (!FORM.rec && (DB.t.Tarjetas_Credito || []).some(t => nrm(t.Nombre) === nrm(o.Nombre)) ? 'Ya existe una tarjeta con ese nombre' : ''),
     guardDelete: rec => (DB.t.Movimientos_Tarjeta || []).some(m => String(m.ID_Tarjeta) === String(rec.ID_Tarjeta)) || DB.t.Consumo_Combustible.some(f => String(f.ID_Tarjeta) === String(rec.ID_Tarjeta)) ? 'Esta tarjeta tiene movimientos. Desactívala en lugar de eliminarla.' : '',
-    after: (o, ch) => { const nt = ((ch && ch.upserts && ch.upserts.Tarjetas_Credito) || [])[0]; if (nt && !(FORM && FORM.rec)) S.tarjeta = String(nt.ID_Tarjeta); }},
+    after: (o, ch) => { const nt = ((ch && ch.upserts && ch.upserts.Tarjetas_Credito) || [])[0]; if (nt && !(FORM && FORM.rec)) { S.tarjeta = String(nt.ID_Tarjeta); S.banco = cardSel(nt.ID_Tarjeta); } }},
   Movimientos_Tarjeta: {t: 'movimiento de tarjeta', perm: 'tarjetas.editar', needsMes: 1, fields: [
     {k: 'ID_Tarjeta', l: 'Tarjeta', ty: 'select', num: 1, opts: () => tarjetas().map(c => [c.ID_Tarjeta, c.Nombre + (c.Ultimos4 ? ' · ' + c.Ultimos4 : '')]), def: () => Number(S.tarjeta || (tarjetas()[0] || {}).ID_Tarjeta) || ''},
     {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Compra', 'Compra'], ['Retiro de efectivo', 'Retiro de efectivo'], ['Cargo', 'Cargo (intereses o comisión)'], ['Reembolso', 'Reembolso o bonificación'], ['Pago', 'Pago de la tarjeta']], def: 'Compra'},
@@ -2988,7 +3018,7 @@ document.addEventListener('click', async e => {
     cancelModal(); return;
   }
   if (d.user) { openUserForm(d.user); return; }
-  if (d.banco) { S.banco = d.banco; render(); return; }
+  if (d.banco && !d.go) { S.banco = d.banco; if (String(d.banco).startsWith('c:')) S.tarjeta = String(d.banco).slice(2); render(); const dt = document.getElementById('bdet'); if (dt) setTimeout(() => { try { dt.scrollIntoView({behavior: 'smooth', block: 'start'}); } catch (e) {} }, 60); return; }
   if (d.gotoMes) { S.mes = d.gotoMes; if (d.stay) render(); else go('inicio'); toast('Trabajando en ' + mesLabel(d.gotoMes)); return; }
   if (d.sort) { const cs = S.catSort || (S.catSort = {}), cur = cs[S.tab]; cs[S.tab] = cur && cur.col === d.sort ? (cur.dir === 'asc' ? {col: d.sort, dir: 'desc'} : null) : {col: d.sort, dir: 'asc'}; render(); return; }
   if (d.tarjeta && !d.go) { S.tarjeta = d.tarjeta; render(); return; }
@@ -2998,7 +3028,7 @@ document.addEventListener('click', async e => {
   if (d.frange) { S.fuelRange = d.frange; render(); return; }
   if (d.funit) { S.fuelUnit = d.funit; lsSet('fuel_unit', d.funit); if (d.fres && S.fuelShown) showFuelResult(S.fuelShown.r, S.fuelShown.fromList); else render(); return; }
   if (d.fuel) { const r = DB.t.Consumo_Combustible.find(x => String(x.ID) === d.fuel); if (r) showFuelResult(r, true); return; }
-  if (d.go) { e.preventDefault(); if (d.banco) S.banco = d.banco; if (d.tarjeta) S.tarjeta = d.tarjeta; go(d.go); return; }
+  if (d.go) { e.preventDefault(); if (d.banco) { S.banco = d.banco; if (String(d.banco).startsWith('c:')) S.tarjeta = String(d.banco).slice(2); } if (d.tarjeta) S.tarjeta = d.tarjeta; go(d.go); if (d.banco) setTimeout(() => { const dt = document.getElementById('bdet'); if (dt) try { dt.scrollIntoView({block: 'start'}); } catch (er) {} }, 80); return; }
   if (d.new === 'Ingresos_Detalle') return openDeposito();
   if (d.new) { const F = FORMS[d.new]; if (F && F.mod && REL[d.new] && !canEdit(F.mod) && canAdd(F.mod) && F.mod !== 'Presupuesto') ensureTarget(F.mod); if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
   if (d.edit) { openForm(d.edit, d.id); return; }
@@ -3040,6 +3070,7 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'ret-new') { openForm('Retiros_Detalle'); const sel = $('#f_ID_Banco'); if (sel && banco(S.banco)) { sel.value = String(S.banco); formDynamics(); } return; }
   if (a === 'ask-ok') { const r = S.askRes; S.askRes = null; $('#modal').innerHTML = ''; FORM = null; if (r) r(true); return; }
   if (a === 'fab-reset') { fabReset(); toast('El botón + volvió a su lugar'); return; }
   if (a === 'cat-edit') return openForm(t.dataset.t, t.dataset.id, true);
@@ -3325,14 +3356,14 @@ document.addEventListener('change', async e => {
         if (!on && (!quedan || pend)) {
           const ok = await askConfirm({title: 'Cerrar ' + mesTxt, ok: 'Cerrar el período', danger: true, html:
             (!quedan ? `<div class="notice" style="margin-top:0"><span><b>Después de cerrar ${esc(mesTxt)} no quedará ningún período abierto.</b> Mientras no abras uno, no se podrán registrar ni corregir gastos, presupuesto, ingresos ni retiros, y el resumen dejará de actualizarse.</span></div>` : '')
-            + `<p style="margin:12px 0 0">Se cerrará <b>${esc(mesTxt)}</b> junto con todos sus módulos: Ingresos, Presupuesto, Gastos, Retiros y Resumen. Podrás volver a abrirlo cuando quieras.</p>`
+            + `<p style="margin:12px 0 0">Se cerrará <b>${esc(mesTxt)}</b> junto con todos sus módulos: Presupuesto, Gastos y Resumen. Podrás volver a abrirlo cuando quieras.</p>`
             + (pend ? `<p class="neg" style="margin:10px 0 0"><b>Tienes ${pend} ${pend === 1 ? 'registro sin enviar' : 'registros sin enviar'}.</b> Si lo cierras ahora, es posible que el servidor no los acepte; conviene esperar a que se envíen.</p>` : '')});
           if (!ok) { el.checked = true; el.disabled = false; return; }
         }
       }
       const ch = await Backend.call('save', {table: 'Mes_Anio', row}); commit(ch);
       if ((flag === 'Abierta' || flag === 'Guardar_Resumen') && on) queueResumen(p.Mes_Anio, 'Resumen reactivado');
-      toast(flag === 'Abierta' ? `${mesTxt} ${on ? 'abierto: también se abrieron' : 'cerrado: también se cerraron'} Ingresos, Presupuesto, Gastos, Retiros y Resumen` : `${el.closest('label').getAttribute('aria-label')}: ${on ? 'activado' : 'desactivado'}`);
+      toast(flag === 'Abierta' ? `${mesTxt} ${on ? 'abierto: también se abrieron' : 'cerrado: también se cerraron'} Presupuesto, Gastos y Resumen` : `${el.closest('label').getAttribute('aria-label')}: ${on ? 'activado' : 'desactivado'}`);
     } catch (err) { el.checked = !on; toast(err.message, true); }
     el.disabled = false; renderMonthPicker(); if (S.view === 'periodos' && !FORM && !$('#modal').innerHTML) render();
   }
@@ -3406,7 +3437,7 @@ function applyTheme() { const t = lsGet('theme'); if (t) document.documentElemen
 function pickMes() {
   const ms = mesesConDatos(), act = activePeriod();
   if (!S.mes || !ms.includes(S.mes)) S.mes = act || ms[ms.length - 1];
-  const h = (location.hash || '').slice(1); if (h && VIEWS[h] && S.view === 'inicio') S.view = h;
+  const h = (location.hash || '').slice(1) === 'tarjetas' ? 'bancos' : (location.hash || '').slice(1); if (h && VIEWS[h] && S.view === 'inicio') S.view = h;
 }
 /** El servidor calcula los permisos en cada petición; la app los refresca para no usar los guardados al iniciar sesión */
 async function refreshMe(force) {

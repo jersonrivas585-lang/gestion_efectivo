@@ -207,7 +207,7 @@ La barra de abajo tiene, en este orden, **Inicio, Bancos, Retiros, Gastos, Presu
 
 ## Abrir y cerrar períodos
 
-En *Períodos*, el interruptor **Abierto** de un mes abre o cierra **de una vez todos sus módulos**: Ingresos, Presupuesto, Gastos, Retiros y Resumen. Después se puede cerrar o abrir **cada módulo por separado** con su propio interruptor, sin que cambie *Abierto*.
+En *Períodos*, el interruptor **Abierto** de un mes abre o cierra **de una vez todos sus módulos**: Presupuesto, Gastos y Resumen. Después se puede cerrar o abrir **cada módulo por separado** con su propio interruptor, sin que cambie *Abierto*.
 
 - **Cerrar un período que es el único abierto:** la app avisa antes: *«Después de cerrar … no quedará ningún período abierto. Mientras no abras uno, no se podrán registrar ni corregir gastos, presupuesto, ingresos ni retiros, y el resumen dejará de actualizarse.»* Con **Cancelar**, la **×** o tocando fuera, el período sigue abierto; solo **Cerrar el período** lo cierra.
 - **Si quedan otros períodos abiertos**, se cierra directamente (sin advertencia), salvo que haya registros sin enviar: en ese caso también avisa, porque el servidor podría no aceptarlos después.
@@ -215,6 +215,28 @@ En *Períodos*, el interruptor **Abierto** de un mes abre o cierra **de una vez 
 - **Un solo período abierto a la vez (por defecto).** Si ya hay un período abierto, la app no deja abrir otro ni activar módulos de un mes cerrado: avisa cuál está abierto y explica que primero hay que cerrarlo. Para modificar otro mes: **cierra el activo y abre el que necesitas**. Si ya había varios abiertos de antes, *Períodos* lo avisa y puedes ir cerrando los que no necesites (cerrar siempre se permite).
 - **Varios períodos abiertos (opcional).** En *Mi cuenta → Configuración → Permitir varios períodos abiertos a la vez* (administrador o supervisor) se puede permitir. Al volver a desactivarlo estando abiertos varios, la app pide confirmar y deja abierto el más reciente, cerrando los demás con todos sus módulos. La opción se guarda en la columna `Varios_Periodos` de la hoja Empresa (vacío = solo uno) y el servidor aplica la misma regla.
 - La misma regla está en el servidor (`Code.gs`): si llega solo el cambio de *Abierta*, se aplican también a los módulos; si llegan los módulos explícitos, se respetan tal cual.
+
+## Retiros: ahora dentro de Bancos
+
+*Retiros* ya no es una sección del menú ni de la barra inferior del celular (que ahora muestra **Inicio, Bancos, Gastos, Presupuesto, Combustible y Más** completa, sin deslizar). Los retiros se hacen desde **Bancos**:
+- En cada **cuenta de banco** (córdobas o dólares) hay un botón **Retirar efectivo** junto a *Transferir o depositar*: abre el formulario de retiro ya con esa cuenta elegida (tipo «Retiro de Cajero Automatico» por defecto; desde una cuenta en dólares pregunta si recibes el efectivo en córdobas o en dólares). El dinero sale de la cuenta y entra al efectivo en mano (o en dólares).
+- Debajo de la línea de ingresos, *Bancos* muestra **«Retiros de efectivo de Octubre 2026 · N retiros · Ver detalle ›»** con el total del mes; al tocarla se abre el **detalle de retiros del período** (por cuenta, por tipo y la lista, también de los períodos de Access) con el botón **‹ Bancos** para volver.
+- *Inicio* conserva su botón **Registrar retiro**, y el botón **+** funciona en el detalle de retiros.
+- Todo lo demás sigue igual: el catálogo de tipos de retiro, el total «Retiros de efectivo» que usan Resumen, Histórico y los cortes, y los 1,998 retiros de Access. Para pagos y transferencias (no son retiros de efectivo) se recomienda *Gasto con débito*, *Transferir o depositar* o el pago de la tarjeta.
+
+## Ingresos: ahora dentro de Bancos
+
+*Ingresos* ya no es una sección del menú: todo el dinero que entra se registra desde **Bancos** (depósitos marcados «Cuenta como ingreso» y deducciones). En *Bancos*, debajo de *Disponible para gastar*, está la línea **«Ingresos de Octubre 2026 · 2 ingresos · Ver detalle ›»** con el total del mes (ya neto de deducciones); al tocarla se abre el **detalle de ingresos del período** (la misma lista de antes, también para los períodos de Access) con el botón **‹ Bancos** para volver. También se abre desde la cifra *Ingresos* de *Inicio* y de *Presupuesto*. Los totales de ingresos siguen alimentando Presupuesto, Histórico y los cortes del resumen.
+- En *Períodos* ya no hay interruptor **Ingresos** ni **Retiros**: ambos son por fecha y nunca se bloquean por período, así que esos interruptores no hacían nada. *Abierto* abre o cierra Presupuesto, Gastos y Resumen.
+
+## Bancos: cuentas, tarjetas y efectivo en una sola sección
+
+*Bancos* agrupa **por banco** (según el texto «Banco» de cada cuenta y de cada tarjeta): por ejemplo, **BAC** muestra *BAC Córdobas*, *BAC Dólares* y sus tarjetas (GasCard VISA, American Express, Mariela), **Avanz** su cuenta, y al final **Efectivo** (en mano y en dólares). Las tarjetas se distinguen con la etiqueta *Tarjeta de crédito* y muestran su deuda en córdobas y en dólares y cuánto pagar antes de qué fecha.
+- **Tocar una cuenta** muestra sus movimientos (con *Transferir o depositar*, *Editar esta cuenta* y los colores por tipo). **Tocar una tarjeta** muestra su estado de cuenta y sus movimientos (con *Registrar movimiento* y *Editar tarjeta*), tal como estaba en la antigua sección Tarjetas. La pantalla baja sola al detalle.
+- **Arriba** están *Agregar cuenta* y *Agregar tarjeta*. Debajo de los grupos: lo disponible para gastar y, si hay deudas, **la deuda total en tarjetas de crédito**.
+- **Botón +** (celular): con una cuenta seleccionada registra un movimiento de banco; con una tarjeta seleccionada, un movimiento de tarjeta.
+- Si una tarjeta no queda en el grupo que esperas (por ejemplo, la que venía de Access con otro banco), cambia el campo **Banco** en *Editar tarjeta*.
+- En *Inicio*, tocar la deuda de una tarjeta abre esa tarjeta en *Bancos*.
 
 ## Deducciones a la cuenta y colores de los movimientos
 
@@ -280,7 +302,7 @@ El bloqueo se cambia en *Mi cuenta → Configuración → Bloquear eliminaciones
 
 ## Tarjetas de crédito
 
-El módulo *Tarjetas* lleva cada **tarjeta de crédito** asociada a un banco. Cada tarjeta tiene **dos deudas**, una en **córdobas** y otra en **dólares**, y un **límite de crédito en dólares** que comparten las dos.
+Las tarjetas de crédito están dentro de la sección **Bancos** (ya no hay una sección *Tarjetas* aparte): cada banco agrupa sus cuentas (en córdobas y en dólares) y sus tarjetas de crédito, y al tocar una tarjeta se abre todo lo que antes tenía en Tarjetas: estado de cuenta, movimientos, editar la tarjeta y el historial de consumos de Access. Cada tarjeta lleva asociada un banco. Cada tarjeta tiene **dos deudas**, una en **córdobas** y otra en **dólares**, y un **límite de crédito en dólares** que comparten las dos.
 
 - **Las tarjetas:** se crearon solas a partir de las que usabas en Access (GasCard VISA, BAC American Express, LAFISE D'TODO, BAC Mariela), con su banco y su % de descuento. Con **Editar tarjeta** escribes los últimos 4 dígitos, el **límite (US$)**, el **día de corte**, el **día límite de pago**, la cuenta desde la que se paga y la **deuda actual en córdobas y en dólares** (con su fecha y hora). Las que ya no uses, desactívalas. Hojas `Tarjetas_Credito` y `Movimientos_Tarjeta`.
 - **Movimientos** (*Registrar movimiento*), cada uno en **córdobas o en dólares**:
