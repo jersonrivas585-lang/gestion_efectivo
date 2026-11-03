@@ -29,7 +29,7 @@
   --paper:#F3F6F5; --surface:#FFFFFF; --sunk:#E8EEEC; --line:#D6DFDC;
   --ink:#13302E; --ink2:#3C5552; --muted:#647774;
   --teal:#1C7A72; --teal-soft:#CDE7E3; --sun:#C98512; --sun-soft:#F6E7C8;
-  --over:#B3261E; --over-soft:#F5D5D2; --good:#2F7D3A;
+  --over:#B3261E; --orange:#D9650F; --over-soft:#F5D5D2; --good:#2F7D3A;
   --bar-spent:#13302E; --bar-left:#8CCBC3;
   --radius:14px; --radius-s:9px;
   --font:"Schibsted Grotesk", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
@@ -43,7 +43,7 @@
     --paper:#0E1918; --surface:#152321; --sunk:#1B2D2B; --line:#2A3F3C;
     --ink:#E4EEEC; --ink2:#B9CAC6; --muted:#8FA4A0;
     --teal:#5CC2B6; --teal-soft:#1D3B37; --sun:#E8B04F; --sun-soft:#3A2F17;
-    --over:#F08A80; --over-soft:#3D1F1C; --good:#7CCB86;
+    --over:#F08A80; --over-soft:#3D1F1C; --good:#7CCB86; --orange:#F2994A;
     --bar-spent:#E4EEEC; --bar-left:#2E6B64;
     color-scheme: dark;
   }
@@ -52,7 +52,7 @@
   --paper:#0E1918; --surface:#152321; --sunk:#1B2D2B; --line:#2A3F3C;
   --ink:#E4EEEC; --ink2:#B9CAC6; --muted:#8FA4A0;
   --teal:#5CC2B6; --teal-soft:#1D3B37; --sun:#E8B04F; --sun-soft:#3A2F17;
-  --over:#F08A80; --over-soft:#3D1F1C; --good:#7CCB86;
+  --over:#F08A80; --over-soft:#3D1F1C; --good:#7CCB86; --orange:#F2994A;
   --bar-spent:#E4EEEC; --bar-left:#2E6B64;
   color-scheme: dark;
 }
@@ -378,6 +378,9 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .delfx li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 10px;padding:5px 0;border-top:1px dashed var(--line);font-size:13.5px}
 .delfx li > span{min-width:0}
 .delfx li > .num{white-space:normal;margin-left:auto;text-align:right}
+.list .dot.k-in{background:var(--good)}.list .dot.k-ret{background:var(--orange)}.list .dot.k-ded{background:var(--over)}.list .dot.k-out,.list .dot.k-pre{background:var(--muted)}
+.list .amt.k-in{color:var(--good)}.list .amt.k-ret{color:var(--orange)}.list .amt.k-ded{color:var(--over)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:0 0 10px;font-size:12.5px}.legend span{display:inline-flex;align-items:center;gap:5px}.legend i{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}.legend i.k-in{background:var(--good)}.legend i.k-ret{background:var(--orange)}.legend i.k-ded{background:var(--over)}
 .combo{position:relative}
 .combo-inline{display:inline-block;flex:1 1 230px;min-width:200px;max-width:420px}
 .combo-inline .combo-pop{min-width:240px}
@@ -562,7 +565,7 @@ const COPYRIGHT_TXT = AUTOR.derechos + ' Creado por ' + AUTOR.creador + '. ' + A
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.11.03-0126';
+const APP_VERSION = '2026.11.03-0417';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -704,13 +707,13 @@ const isNewPeriod = m => { const c = cutover(); return !!c && mesNum(m) >= mesNu
  * Depósito de efectivo que cuenta como ingreso: marcado así en el formulario, o (registros anteriores sin marca)
  * todos menos los que dicen «saldo» (saldos iniciales, no dinero nuevo).
  */
-const depIsIngreso = m => m.Tipo === 'Depósito' && (m.Es_Ingreso === true || m.Es_Ingreso === 'TRUE' ? true : m.Es_Ingreso === false || m.Es_Ingreso === 'FALSE' ? false : !/saldo/i.test(String(m.Descripcion || '')));
+const depIsIngreso = m => m.Tipo === 'Deducción' ? (m.Es_Ingreso === true || m.Es_Ingreso === 'TRUE') : m.Tipo === 'Depósito' && (m.Es_Ingreso === true || m.Es_Ingreso === 'TRUE' ? true : m.Es_Ingreso === false || m.Es_Ingreso === 'FALSE' ? false : !/saldo/i.test(String(m.Descripcion || '')));
 /** Valor en córdobas de un depósito (los dólares, al tipo de cambio con que se registraron) */
-const depTotal = m => isUsdDest(m.ID_Banco_Destino) ? (Number(m.Monto_C) || r2((Number(m.Monto_Destino) || 0) * tcFor(periodForDate(m.Fecha)))) : (Number(m.Monto_Destino) || 0);
+const depTotal = m => m.Tipo === 'Deducción' ? -(Number(m.Monto_C) || (curOf(m.ID_Banco_Origen) === 'USD' ? r2((Number(m.Monto) || 0) * tcFor(periodForDate(m.Fecha))) : (Number(m.Monto) || 0))) : isUsdDest(m.ID_Banco_Destino) ? (Number(m.Monto_C) || r2((Number(m.Monto_Destino) || 0) * tcFor(periodForDate(m.Fecha)))) : (Number(m.Monto_Destino) || 0);
 /** Los depósitos del período se muestran junto a los ingresos, con la misma forma que un ingreso */
 const depositRows = mes => (DB.t.Movimientos_Banco || []).filter(m => depIsIngreso(m) && periodForDate(m.Fecha) === mes).map(m => ({
-  ID_DetIngresos: 'dep' + m.ID_Mov, Descripcion: m.Descripcion || 'Depósito de efectivo', Total: r2(depTotal(m)), Fecha_Registro: m.Fecha, ID_Banco: m.ID_Banco_Destino,
-  Monto_Moneda: isUsdDest(m.ID_Banco_Destino) ? m.Monto_Destino : '', Tipo_Cambio: isUsdDest(m.ID_Banco_Destino) ? m.Tipo_Cambio : '', Cuenta_Ingresos: 'C001', Observaciones: '', Origen: '', _mov: m.ID_Mov}));
+  ID_DetIngresos: 'dep' + m.ID_Mov, Descripcion: m.Tipo === 'Deducción' ? 'Deducción: ' + (m.Descripcion || 'retención') : m.Descripcion || 'Depósito de efectivo', Total: r2(depTotal(m)), Fecha_Registro: m.Fecha, ID_Banco: m.Tipo === 'Deducción' ? m.ID_Banco_Origen : m.ID_Banco_Destino,
+  Monto_Moneda: m.Tipo === 'Deducción' ? (curOf(m.ID_Banco_Origen) === 'USD' ? -(Number(m.Monto) || 0) : '') : isUsdDest(m.ID_Banco_Destino) ? m.Monto_Destino : '', Tipo_Cambio: m.Tipo === 'Deducción' ? (curOf(m.ID_Banco_Origen) === 'USD' ? m.Tipo_Cambio : '') : isUsdDest(m.ID_Banco_Destino) ? m.Tipo_Cambio : '', Cuenta_Ingresos: 'C001', Observaciones: '', Origen: '', _mov: m.ID_Mov}));
 /** Ingresos o retiros de un período: por fecha (períodos nuevos) o por encabezado (Access) */
 const rowsFor = (table, mes) => !DATED[table] ? detail(table, mes) : isNewPeriod(mes)
   // período nuevo: todo lo que tenga fecha dentro del período (sin arrastres ni registros automáticos)
@@ -782,7 +785,7 @@ function depositoLine(o) {
   if (dep > 0) h += saldosConfigurados() && o.Fecha && dtKey(o.Fecha) < startOf(o.ID_Banco_Destino) ? ' <span class="neg">· la fecha es anterior a los saldos actuales: no cambiará el saldo</span>' : ` <span class="muted">· quedaría <b class="num">${fcur(r2(a.v - antes + dep), a.cur)}</b></span>`;
   return h;
 }
-const movAdj = () => FORM && FORM.rec && FORM.rec.Tipo === 'Transferencia' ? {ID_Banco: FORM.rec.ID_Banco_Origen, Total: FORM.rec.Monto, Monto_Moneda: FORM.rec.Monto, Efectivo_USD: isUsdCashId(FORM.rec.ID_Banco_Origen)} : null;
+const movAdj = () => FORM && FORM.rec && (FORM.rec.Tipo === 'Transferencia' || FORM.rec.Tipo === 'Deducción') ? {ID_Banco: FORM.rec.ID_Banco_Origen, Total: FORM.rec.Monto, Monto_Moneda: FORM.rec.Monto, Efectivo_USD: isUsdCashId(FORM.rec.ID_Banco_Origen)} : null;
 /** Lo que se escribe es lo que ENTRA a la cuenta destino; lo que sale del origen se calcula con el tipo de cambio (C$ por US$) */
 const movOrigen = o => {
   const dest = Number(o.Monto_Destino) || 0, tc = Number(o.Tipo_Cambio) || 0, co = curOf(o.ID_Banco_Origen), cd = curOf(o.ID_Banco_Destino);
@@ -933,6 +936,8 @@ function pagoCalc(o) {
   return {banco: tc ? r2(M / tc) : 0, c: M, conv: true, bc, pc, kind: 'venta'};                       // deuda en córdobas pagada con dólares
 }
 const pagoKind = o => o.Tipo === 'Pago' && o.Moneda === 'USD' && curOf(o.ID_Banco) !== 'USD' ? 'compra' : 'venta';
+/** Color de cada movimiento en las listas: verde = entra dinero, naranja = retiro de efectivo, rojo = deducción, gris = otras salidas */
+const rowKind = r => /^retiro/i.test(r.tipo || '') ? 'ret' : r.tipo === 'Deducción' ? 'ded' : r.amt >= 0 ? 'in' : 'out';
 function ledger(bid) {
   const b = banco(bid); if (!b) return {rows: [], saldo: 0};
   const cur = b.Moneda, start = dtKey(b.Fecha_Inicial), out = [];
@@ -945,6 +950,7 @@ function ledger(bid) {
   (DB.t.Movimientos_Banco || []).forEach(m => {
     const src = {t: 'Movimientos_Banco', id: m.ID_Mov};
     if (m.Tipo === 'Ajuste') { if (String(m.ID_Banco_Destino) === String(bid)) add(m.Fecha, m.Descripcion || 'Ajuste de saldo', Number(m.Monto) || 0, src, {tipo: 'Ajuste'}); return; }
+    if (m.Tipo === 'Deducción') { if (String(m.ID_Banco_Origen) === String(bid)) add(m.Fecha, 'Deducción' + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto) || 0), src, {tipo: 'Deducción'}); return; }
     if (String(m.ID_Banco_Origen) === String(bid) && m.Tipo === 'Transferencia') add(m.Fecha, 'Transferencia a ' + bankName(m.ID_Banco_Destino) + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto) || 0), src, {tipo: 'Transferencia'});
     if (String(m.ID_Banco_Destino) === String(bid)) add(m.Fecha, (m.Tipo === 'Depósito' ? 'Depósito de efectivo' : 'Transferencia de ' + bankName(m.ID_Banco_Origen)) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto_Destino) || 0, src, {tipo: m.Tipo});
   });
@@ -1707,14 +1713,14 @@ V.ingresos = () => {
   const byBank = {}, byUsd = {}; rows.forEach(r => { const k = !banco(r.ID_Banco) ? '' : String(r.ID_Banco); byBank[k] = (byBank[k] || 0) + (Number(r.Total) || 0); if (isUsdBank(r.ID_Banco)) byUsd[k] = (byUsd[k] || 0) + (Number(r.Monto_Moneda) || 0); });
   const enBancos = r2(Object.entries(byBank).filter(([k]) => k !== '').reduce((a, [, v]) => a + v, 0));
   return `${lockNote('Ingresos')}
-  ${isNewPeriod(S.mes) ? `<p class="muted" style="margin:12px 2px 0">Ingresos con fecha ${rangeLabel(S.mes)}: los depósitos que cuentan como ingreso. Se registran desde la cuenta de banco (<i>Bancos → Transferir o depositar → Depósito de efectivo</i>).</p>` : ''}
+  ${isNewPeriod(S.mes) ? `<p class="muted" style="margin:12px 2px 0">Ingresos con fecha ${rangeLabel(S.mes)}: los depósitos que cuentan como ingreso, menos las deducciones (por ejemplo, la retención de impuesto sobre intereses). Se registran desde la cuenta de banco (<i>Bancos → Transferir o depositar → Depósito de efectivo</i>).</p>` : ''}
   ${rows.length && bancos().length ? `<div class="figs three"><div class="fig"><small>Ingresos del mes</small><b class="num">${money(sum(rows))}</b></div>
     <div class="fig" data-go="bancos"><small>Depositado en bancos</small><b class="num">${money(enBancos)}</b></div>
     <div class="fig"><small>Efectivo o sin banco</small><b class="num">${money(byBank[''] || 0)}</b></div></div>
     <p class="muted" style="font-size:13px;margin:8px 2px 0">${Object.entries(byBank).filter(([k]) => k !== '').map(([k, v]) => esc(bankName(k)) + ': ' + (byUsd[k] ? usd(byUsd[k]) + ' (' + money(v) + ')' : money(v))).join('; ')}</p>` : ''}
   <div class="toolbar"><div class="sumline" style="margin:0;flex:1"><span>${rows.length} ingresos</span><b class="num">${money(sum(rows))}</b></div>${can('bancos.editar') ? '<button class="btn primary desk-only" data-act="deposito">Depósito en cuenta</button>' : ''}</div>
-  ${rows.length ? `<div class="list">${rows.slice().sort((a, b) => dtKey(b.Fecha_Registro).localeCompare(dtKey(a.Fecha_Registro))).map(r => `<button class="item" data-edit="${r._mov !== undefined ? 'Movimientos_Banco' : 'Ingresos_Detalle'}" data-id="${r._mov !== undefined ? r._mov : r.ID_DetIngresos}"><span class="dot" style="background:${r.Origen ? 'var(--teal)' : 'var(--good)'}"></span>
-    <span class="tx"><b>${esc(r.Descripcion)}</b><small>${esc(bankName(r.ID_Banco))}${Number(r.Monto_Moneda) ? ', ' + usd(r.Monto_Moneda) + (r.Tipo_Cambio ? ' a ' + r.Tipo_Cambio : '') : ''}, ${fdatetime(r.Fecha_Registro)}${r._mov !== undefined ? ', depósito de efectivo' : ''}${r.Origen ? ', automático' : r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num pos">${money(r.Total)}</span></button>`).join('')}</div>`
+  ${rows.length ? `<div class="list">${rows.slice().sort((a, b) => dtKey(b.Fecha_Registro).localeCompare(dtKey(a.Fecha_Registro))).map(r => `<button class="item" data-edit="${r._mov !== undefined ? 'Movimientos_Banco' : 'Ingresos_Detalle'}" data-id="${r._mov !== undefined ? r._mov : r.ID_DetIngresos}"><span class="dot" style="background:${Number(r.Total) < 0 ? 'var(--over)' : r.Origen ? 'var(--teal)' : 'var(--good)'}"></span>
+    <span class="tx"><b>${esc(r.Descripcion)}</b><small>${esc(bankName(r.ID_Banco))}${Number(r.Monto_Moneda) ? ', ' + usd(r.Monto_Moneda) + (r.Tipo_Cambio ? ' a ' + r.Tipo_Cambio : '') : ''}, ${fdatetime(r.Fecha_Registro)}${r._mov !== undefined ? (Number(r.Total) < 0 ? ', deducción a la cuenta' : ', depósito de efectivo') : ''}${r.Origen ? ', automático' : r.Observaciones ? ', ' + esc(r.Observaciones) : ''}</small></span><span class="amt num ${Number(r.Total) < 0 ? 'neg' : 'pos'}">${money(r.Total)}</span></button>`).join('')}</div>`
     : `<div class="panel empty"><b>No hay ingresos en este mes</b>Los ingresos se registran como <b>depósitos</b> en una cuenta de banco o en efectivo (<i>Bancos → Transferir o depositar → Depósito de efectivo</i>) y aparecen aquí según su fecha.${can('bancos.editar') ? '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="deposito">Depósito en cuenta</button></div>' : ''}</div>`}`;
 };
 
@@ -1741,12 +1747,13 @@ V.bancos = () => {
   <section class="section"><h3>Movimientos de ${esc(cur.Nombre)} <small>${S.bankAll ? 'todos los meses' : esc(mesLabel(S.mes)) + ', ' + rangeLabel(S.mes)}</small></h3>
     <p class="muted" style="font-size:12.5px;margin:-4px 0 8px">${inPer.length} ${inPer.length === 1 ? 'movimiento' : 'movimientos'}${S.bankAll ? '' : ' en este período'}${inPer.length > 250 ? ' (se muestran los 250 más recientes)' : ''}${led.start ? ' · saldo inicial ' + fcur(led.inicial, cur.Moneda) + ' (' + fdatetime(led.start) + ')' : ''}</p>
     <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="bankAll" ${S.bankAll ? 'checked' : ''}><span></span></span>Mostrar todos los meses</label>
-    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir o depositar</button>' : ''}${!ef && !efd && cur.Moneda === 'USD' ? `${ed ? '<button class="btn" data-act="usd-buy">Comprar dólares</button>' : ''}` : ''}${efd && ed ? '<button class="btn" data-act="efd-bank">Depositar en la cuenta en dólares</button><button class="btn" data-act="efd-cash">Cambiar a córdobas</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `${!ef && !efd ? '<button class="btn small" data-act="bank-edit">Editar esta cuenta</button>' : ''}<button class="btn small" data-act="bank-new">Agregar cuenta</button>` : ''}</div>
-    <p class="muted" style="font-size:12.5px;margin:0 0 10px">${efd ? 'Sube con los retiros hechos en dólares, los depósitos y lo que cambias o transfieres hacia aquí; baja con los gastos pagados con «Efectivo en dólares» y con lo que depositas en la cuenta en dólares o cambias a córdobas. No cuenta en el dinero disponible en córdobas.' : ef ? 'Sube con los retiros de cajero y los ingresos en efectivo; baja con los gastos pagados en efectivo.' : 'Sube con los ingresos depositados y las transferencias que recibes; baja con los retiros de cajero, los gastos con débito o pago directo y las transferencias que haces.'}</p>
+    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir o depositar</button>' : ''}${efd && ed ? '<button class="btn" data-act="efd-bank">Depositar en la cuenta en dólares</button><button class="btn" data-act="efd-cash">Cambiar a córdobas</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `${!ef && !efd ? '<button class="btn small" data-act="bank-edit">Editar esta cuenta</button>' : ''}<button class="btn small" data-act="bank-new">Agregar cuenta</button>` : ''}</div>
+    <p class="muted" style="font-size:12.5px;margin:0 0 10px">${efd ? 'Sube con los retiros hechos en dólares, los depósitos y lo que cambias o transfieres hacia aquí; baja con los gastos pagados con «Efectivo en dólares» y con lo que depositas en la cuenta en dólares o cambias a córdobas. No cuenta en el dinero disponible en córdobas.' : ef ? 'Sube con los retiros de cajero y los ingresos en efectivo; baja con los gastos pagados en efectivo.' : 'Sube con los ingresos depositados y las transferencias que recibes; baja con los retiros de cajero, las deducciones (retenciones o impuestos), los gastos con débito o pago directo y las transferencias que haces.'}</p>
+    <p class="legend muted" aria-label="Significado de los colores"><span><i class="k-in"></i>Entra dinero</span><span><i class="k-ret"></i>Retiro de efectivo</span>${!ef && !efd ? '<span><i class="k-ded"></i>Deducción</span>' : ''}<span><i class="k-out"></i>Otras salidas</span></p>
     ${previosVista ? `<p class="muted" style="font-size:12.5px;margin:0 0 10px">${previosVista} ${previosVista === 1 ? 'movimiento es anterior' : 'movimientos son anteriores'} a los saldos actuales (${fdatetime(led.start)}): se muestran atenuados y no cambian el saldo.</p>` : ''}
-    ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.pre ? 'var(--muted)' : r.amt >= 0 ? 'var(--good)' : 'var(--sun)'}"></span>
+    ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot k-${r.pre ? 'pre' : rowKind(r)}"></span>
       <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)}${r.alt ? ', ' + r.alt + ' en córdobas' : ''}</small></span>
-      <span class="amt num ${r.amt >= 0 && !r.pre ? 'pos' : ''}">${r.amt >= 0 ? '+' : ''}${fcur(r.amt, cur.Moneda)}<small>${r.pre ? 'Anterior a los saldos' : 'Saldo ' + fcur(r.bal, cur.Moneda)}</small></span></button>`).join('')}</div>`
+      <span class="amt num ${r.pre ? '' : 'k-' + rowKind(r)}">${r.amt >= 0 ? '+' : ''}${fcur(r.amt, cur.Moneda)}<small>${r.pre ? 'Anterior a los saldos' : 'Saldo ' + fcur(r.bal, cur.Moneda)}</small></span></button>`).join('')}</div>`
       : `<div class="panel empty"><b>Sin movimientos ${S.bankAll ? '' : 'en ' + esc(mesLabel(S.mes))}</b>${!S.bankAll && led.rows.length ? 'Esta cuenta tiene movimientos en otros meses: cambia el período arriba o activa «Todos los meses».' : 'Los movimientos que hagas con esta cuenta aparecerán aquí.'}</div>`}</section>`;
 };
 
@@ -2279,19 +2286,23 @@ const FORMS = {
     after: o => { lsSet('bank_ret', String(o.ID_Banco)); if (Number(o.Tipo_Cambio)) lsSet('tc', String(o.Tipo_Cambio)); },
     done: () => { const P = S.pendingGasto; if (!P) return; S.pendingGasto = null; setTimeout(() => { openForm('Gastos_Detalle', P.rec ? P.rec.ID_Detalle_Gastos : undefined, true); fillFormValues(P.o); toast('Retiro registrado. Ahora guarda el gasto'); }, 50); }},
   Movimientos_Banco: {t: 'movimiento de banco', perm: 'bancos.editar', needsMes: 1, fields: [
-    {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Transferencia', 'Transferencia entre cuentas'], ['Depósito', 'Depósito de efectivo'], ...(FORM && FORM.rec && FORM.rec.Tipo === 'Ajuste' ? [['Ajuste', 'Ajuste de saldo (registro anterior)']] : [])], def: 'Transferencia'},
+    {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Transferencia', 'Transferencia entre cuentas'], ['Depósito', 'Depósito de efectivo'], ['Deducción', 'Deducción a la cuenta'], ...(FORM && FORM.rec && FORM.rec.Tipo === 'Ajuste' ? [['Ajuste', 'Ajuste de saldo (registro anterior)']] : [])], def: 'Transferencia'},
     {k: 'Fecha', l: 'Fecha y hora', ty: 'datetime', req: 1, def: nowDT},
-    {k: 'ID_Banco_Origen', l: 'Desde', ty: 'select', half: 1, num: 1, live: o => o.Tipo === 'Transferencia' ? saldoLine(o.ID_Banco_Origen, movOrigen(o), movAdj()) : '', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano'], ...(hasUsdCash() ? [[-1, 'Efectivo en dólares']] : [])], def: () => (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Transferencia'},
-    {k: 'ID_Banco_Destino', l: 'Hacia', ty: 'select', half: 1, num: 1, live: o => o.Tipo === 'Depósito' ? depositoLine(o) : '', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano'], ...(hasUsdCash() ? [[-1, 'Efectivo en dólares']] : [])], def: () => (bancos()[1] || bancos()[0] || {}).ID_Banco},
-    {k: 'Monto_Destino', l: 'Monto que entra', ty: 'number', req: 1, step: '0.01', half: 1},
-    {k: 'Es_Ingreso', l: 'Cuenta como ingreso del período', ty: 'bool', def: true, show: o => o.Tipo === 'Depósito', fillFrom: rec => depIsIngreso(rec), hint: 'Déjalo activado si es dinero nuevo (salario, un pago, efectivo recibido). Desactívalo si solo estás registrando un saldo que ya tenías.'},
-    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: () => tcFor(S.mes), hint: tcHint, show: o => (o.Tipo === 'Transferencia' && curOf(o.ID_Banco_Origen) !== curOf(o.ID_Banco_Destino)) || (o.Tipo === 'Depósito' && isUsdDest(o.ID_Banco_Destino) && !!o.Es_Ingreso)},
+    {k: 'ID_Banco_Origen', l: 'Desde', ty: 'select', half: 1, num: 1, live: o => o.Tipo === 'Transferencia' ? saldoLine(o.ID_Banco_Origen, movOrigen(o), movAdj()) : o.Tipo === 'Deducción' ? saldoLine(o.ID_Banco_Origen, Number(o.Monto_Destino) || 0, movAdj()) : '', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano'], ...(hasUsdCash() ? [[-1, 'Efectivo en dólares']] : [])],
+      dynOpts: o => { const bk = bancos().map(b => [b.ID_Banco, b.Nombre]), l = o.Tipo === 'Deducción' ? bk : [...bk, [0, 'Efectivo en mano'], ...(hasUsdCash() ? [[-1, 'Efectivo en dólares']] : [])]; const cur = o.ID_Banco_Origen; if (cur !== '' && cur !== undefined && !l.some(([v]) => String(v) === String(cur)) && (o.Tipo !== 'Deducción' || banco(cur))) l.push([cur, bankName(cur)]); return l; },
+      def: () => (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Transferencia' || o.Tipo === 'Deducción'},
+    {k: 'ID_Banco_Destino', l: 'Hacia', ty: 'select', half: 1, num: 1, live: o => o.Tipo === 'Depósito' ? depositoLine(o) : '', opts: () => [...bancos().map(b => [b.ID_Banco, b.Nombre]), [0, 'Efectivo en mano'], ...(hasUsdCash() ? [[-1, 'Efectivo en dólares']] : [])], def: () => (bancos()[1] || bancos()[0] || {}).ID_Banco, show: o => o.Tipo !== 'Deducción'},
+    {k: 'Monto_Destino', l: 'Monto que entra', ty: 'number', req: 1, step: '0.01', half: 1, fillFrom: rec => rec.Tipo === 'Deducción' ? rec.Monto : rec.Monto_Destino},
+    {k: 'Es_Ingreso', l: 'Cuenta como ingreso del período', ty: 'bool', def: true, show: o => o.Tipo === 'Depósito' || o.Tipo === 'Deducción', fillFrom: rec => rec.Tipo === 'Deducción' ? truthy(rec.Es_Ingreso) : depIsIngreso(rec), hint: 'Depósito: déjalo activado si es dinero nuevo (salario, un pago, intereses); desactívalo si solo registras un saldo que ya tenías. Deducción: déjalo activado si es una retención sobre un ingreso (por ejemplo, el impuesto sobre los intereses): se resta de los ingresos del período.'},
+    {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', req: 1, step: 'any', half: 1, def: () => tcFor(S.mes), hint: tcHint, show: o => (o.Tipo === 'Transferencia' && curOf(o.ID_Banco_Origen) !== curOf(o.ID_Banco_Destino)) || (o.Tipo === 'Depósito' && isUsdDest(o.ID_Banco_Destino) && !!o.Es_Ingreso) || (o.Tipo === 'Deducción' && curOf(o.ID_Banco_Origen) === 'USD' && !!o.Es_Ingreso)},
     {k: 'Cuenta_Gastos', l: 'Registrar el gasto en la cuenta', ty: 'select', opts: () => optsCuentas(true), def: () => defaultGastoCuenta(), fillEmpty: 1, show: isBuyUsd, hint: 'Los córdobas que pasan a dólares salen de lo que puedes gastar, por eso se registran como gasto.'},
     {k: 'Descripcion', l: 'Nota', ty: 'text', list: () => [...DB.t.Items_Ingresos.map(i => i.Descripcion).filter(d => !/saldo de mes anterior|egreso/i.test(d)), ...histDesc('Movimientos_Banco', 'Descripcion')]}],
-    label: o => { const u = curOf(o.ID_Banco_Destino) === 'USD' ? 'US$' : 'C$';
-      return {Tipo_Cambio: 'Tipo de cambio de ' + movTcKind(o) + ' (C$ por US$)', Descripcion: o.Tipo === 'Depósito' ? 'Concepto (salario, bono, pago recibido…)' : 'Nota', Monto_Destino: o.Tipo === 'Transferencia' ? 'Monto que entra a ' + bankName(o.ID_Banco_Destino) + ' (' + u + ')' : o.Tipo === 'Depósito' ? 'Monto a depositar (' + u + ')' : 'Monto (' + u + '), negativo para restar',
+    label: o => { const ded = o.Tipo === 'Deducción', u = (ded ? curOf(o.ID_Banco_Origen) : curOf(o.ID_Banco_Destino)) === 'USD' ? 'US$' : 'C$';
+      return {Tipo_Cambio: 'Tipo de cambio de ' + movTcKind(o) + ' (C$ por US$)', Descripcion: o.Tipo === 'Depósito' ? 'Concepto (salario, bono, pago recibido…)' : ded ? 'Concepto (retención de impuesto, comisión…)' : 'Nota', Monto_Destino: o.Tipo === 'Transferencia' ? 'Monto que entra a ' + bankName(o.ID_Banco_Destino) + ' (' + u + ')' : o.Tipo === 'Depósito' ? 'Monto a depositar (' + u + ')' : ded ? 'Monto a deducir (' + u + ')' : 'Monto (' + u + '), negativo para restar',
+        ID_Banco_Origen: ded ? 'Deducir de la cuenta' : 'Desde', Es_Ingreso: ded ? 'Resta de los ingresos del período' : 'Cuenta como ingreso del período',
         ID_Banco_Destino: o.Tipo === 'Transferencia' ? 'Hacia' : o.Tipo === 'Depósito' ? 'Depositar en' : 'Cuenta'}; },
     preview: o => { const dest = Number(o.Monto_Destino) || 0; if (!dest) return '';
+      if (o.Tipo === 'Deducción') { const co = curOf(o.ID_Banco_Origen), tc = Number(o.Tipo_Cambio) || 0; return `Se descuentan <b>${fcur(dest, co)}</b> de ${esc(bankName(o.ID_Banco_Origen))}. <b>No es un retiro</b>: no entra al efectivo en mano. ` + (o.Es_Ingreso ? 'Se resta de los <b>ingresos</b> del período' + (co === 'USD' && tc ? ' por ' + money(dest * tc) : '') + '.' : 'No cambia los ingresos del período: solo baja el saldo.'); }
       const cd = curOf(o.ID_Banco_Destino);
       if (o.Tipo === 'Ajuste') return `El saldo de ${esc(bankName(o.ID_Banco_Destino))} cambia en ${fcur(dest, cd)}. No afecta ingresos ni retiros.`;
       if (o.Tipo === 'Depósito') return `Se suman <b>${fcur(dest, cd)}</b> a ${esc(bankName(o.ID_Banco_Destino))}. ${o.Es_Ingreso ? 'Cuenta como <b>ingreso</b> del período' + (isUsdDest(o.ID_Banco_Destino) && Number(o.Tipo_Cambio) ? ' por ' + money(dest * Number(o.Tipo_Cambio)) : '') + '.' : 'No cuenta como ingreso: solo sube el saldo.'} Para restar usa un retiro, una transferencia o un gasto.`;
@@ -2300,12 +2311,15 @@ const FORMS = {
       return `Entran <b>${fcur(dest, cd)}</b> a ${esc(bankName(o.ID_Banco_Destino))} y se descuentan <b>${fcur(m, co)}</b> de ${esc(bankName(o.ID_Banco_Origen))}${co !== cd ? (co === 'USD' ? ` (${fcur(dest, cd)} ÷ T/C ${tc})` : ` (${fcur(dest, cd)} × T/C ${tc})`) : ''}.`
         + (isBuyUsd(o) ? ` Se registra también como <b>gasto de ${money(m)}</b> en ${esc(cuentaNombre(o.Cuenta_Gastos))}.` : co === 'USD' && cd !== 'USD' ? ' Es un cambio de dólares a córdobas entre tus cuentas: no se registra como ingreso.' : ''); },
     validate: o => {
+      if (o.Tipo === 'Deducción') { if (!banco(o.ID_Banco_Origen)) return 'Elige la cuenta de banco de la que se deduce'; if (!(Number(o.Monto_Destino) > 0)) return 'El monto de la deducción debe ser mayor que cero';
+        if (saldosConfigurados()) { const a = availOf(o.ID_Banco_Origen, movAdj()), m = Number(o.Monto_Destino) || 0; if (m > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)} y se deducen ${fcur(m, a.cur)}`; } return ''; }
       if (o.Tipo === 'Transferencia' && String(o.ID_Banco_Origen) === String(o.ID_Banco_Destino)) return 'Elige dos cuentas distintas';
       if (o.Tipo !== 'Ajuste' && !(Number(o.Monto_Destino) > 0)) return o.Tipo === 'Depósito' ? 'El depósito debe ser mayor que cero: para restar usa un retiro, una transferencia o un gasto' : 'El monto debe ser mayor que cero';
       if (o.Tipo === 'Transferencia' && saldosConfigurados()) { const a = availOf(o.ID_Banco_Origen, movAdj()), m = movOrigen(o); if (m > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)} y se necesitan ${fcur(m, a.cur)}`; }
       return ''; },
-    before: o => { const co = o.Tipo === 'Transferencia' ? curOf(o.ID_Banco_Origen) : curOf(o.ID_Banco_Destino), cd = curOf(o.ID_Banco_Destino), tc = Number(o.Tipo_Cambio) || 0;
+    before: o => { const ded = o.Tipo === 'Deducción', co = o.Tipo === 'Transferencia' || ded ? curOf(o.ID_Banco_Origen) : curOf(o.ID_Banco_Destino), cd = curOf(o.ID_Banco_Destino), tc = Number(o.Tipo_Cambio) || 0;
       o.Monto_Destino = r2(Number(o.Monto_Destino) || 0);
+      if (ded) { o.Monto = o.Monto_Destino; o.Monto_Destino = ''; o.ID_Banco_Destino = ''; o.Cuenta_Gastos = ''; o.Moneda = co; o.Monto_C = r2(co === 'USD' ? o.Monto * (tc || lastTC()) : o.Monto); if (!(co === 'USD' && o.Es_Ingreso)) o.Tipo_Cambio = ''; return; }
       if (o.Tipo !== 'Transferencia') o.ID_Banco_Origen = '';
       if (!((o.Tipo === 'Transferencia' && co !== cd) || (o.Tipo === 'Depósito' && isUsdDest(o.ID_Banco_Destino) && o.Es_Ingreso))) o.Tipo_Cambio = '';
       if (o.Tipo !== 'Depósito') o.Es_Ingreso = '';
@@ -2805,7 +2819,7 @@ function motivoOf(table, o, acc) {
     Presupuesto_Detalle: () => `Partida: ${o.Descripcion || ''} ${money(o.Total)}`,
     Consumo_Combustible: () => `Combustible: ${(Number(o.Litro) || 0).toFixed(2)} L ${money(o.Costo)}${String(o.Pagado_Con || '').startsWith('B:') ? ' desde ' + bankName(Number(String(o.Pagado_Con).slice(2))) : o.Pagado_Con === 'E' ? ' en efectivo' : ''}`,
     Movimientos_Tarjeta: () => `${({Pago: 'Pago de tarjeta', Compra: 'Compra con tarjeta', Cargo: 'Cargo de tarjeta', Reembolso: 'Reembolso de tarjeta'})[o.Tipo] || 'Retiro con tarjeta'}: ${tarName(o.ID_Tarjeta)} ${fcur(o.Monto, o.Moneda === 'USD' ? 'USD' : 'NIO')}`,
-    Movimientos_Banco: () => o.Tipo === 'Transferencia' ? `Transferencia: ${bankName(o.ID_Banco_Origen)} → ${bankName(o.ID_Banco_Destino)} ${fcur(o.Monto_Destino, d)}` : `${o.Tipo === 'Depósito' ? 'Depósito' : 'Ajuste'}: ${fcur(o.Monto_Destino, d)} en ${bankName(o.ID_Banco_Destino)}${o.Descripcion ? ' (' + o.Descripcion + ')' : ''}`
+    Movimientos_Banco: () => o.Tipo === 'Deducción' ? `Deducción: ${fcur(o.Monto, curOf(o.ID_Banco_Origen))} de ${bankName(o.ID_Banco_Origen)}${o.Descripcion ? ' (' + o.Descripcion + ')' : ''}` : o.Tipo === 'Transferencia' ? `Transferencia: ${bankName(o.ID_Banco_Origen)} → ${bankName(o.ID_Banco_Destino)} ${fcur(o.Monto_Destino, d)}` : `${o.Tipo === 'Depósito' ? 'Depósito' : 'Ajuste'}: ${fcur(o.Monto_Destino, d)} en ${bankName(o.ID_Banco_Destino)}${o.Descripcion ? ' (' + o.Descripcion + ')' : ''}`
   }[table];
   return m ? pre + m().replace(/\s+/g, ' ').trim() : '';
 }
@@ -3051,8 +3065,7 @@ document.addEventListener('click', async e => {
   if (a === 'bank-edit') return openForm('Bancos', S.banco, true);
   if (a === 'bank-inactive') { go('catalogos'); S.tab = 'Bancos'; render(); return; }
   if (a === 'usd-dep') { openForm('Ingresos_Detalle'); const sel = $('#f_ID_Banco'); if (sel) { sel.value = S.banco; formDynamics(); } return; }
-  if (a === 'usd-buy') { openForm('Movimientos_Banco'); const o = bancos().find(b => b.Moneda === 'NIO'); if ($('#f_ID_Banco_Origen') && o) $('#f_ID_Banco_Origen').value = o.ID_Banco; if ($('#f_ID_Banco_Destino')) $('#f_ID_Banco_Destino').value = S.banco; formDynamics(); return; }
-  if (a === 'move-period') {
+    if (a === 'move-period') {
     const tb = FORM.table, rec = FORM.rec, to = t.dataset.to, rel = REL[tb], k = DB.key(tb), from = rel ? recPeriod(tb, rec) : null;
     if (!confirm(`¿Mover este registro a ${mesLabel(to)}?`)) return;
     t.disabled = true;
@@ -3283,6 +3296,8 @@ document.addEventListener('change', async e => {
         const d = $('#f_Descripcion'); if (d && !d.value.trim() && st.cy) d.value = 'Estado de cuenta al ' + fdate(isoD(st.cy.last));
         formDynamics(); }
     }
+    if (FORM.table === 'Movimientos_Banco' && el.name === 'Tipo') { formDynamics(); const ob = $('#f_ID_Banco_Origen');
+      if (el.value === 'Deducción' && ob && !ob.value) { const c = String(FORM.ctxBanco), cur = bancos().find(b => String(b.ID_Banco) === c) || bancos()[0]; if (cur) { ob.value = String(cur.ID_Banco); formDynamics(); } } }
     if (el.id === 'f__periodo') return; if (el.name === 'ID_Partida') prefillFromPartida(el); if (el.name === 'Descripcion_Gasto') autofillFromHistory(el); return; }
   if (el.dataset.flag) {
     const p = DB.t.Mes_Anio.find(x => String(x.ID) === el.dataset.pid), flag = el.dataset.flag, on = el.checked, mesTxt = mesLabel(p.Mes_Anio);

@@ -216,6 +216,15 @@ En *Períodos*, el interruptor **Abierto** de un mes abre o cierra **de una vez 
 - **Varios períodos abiertos (opcional).** En *Mi cuenta → Configuración → Permitir varios períodos abiertos a la vez* (administrador o supervisor) se puede permitir. Al volver a desactivarlo estando abiertos varios, la app pide confirmar y deja abierto el más reciente, cerrando los demás con todos sus módulos. La opción se guarda en la columna `Varios_Periodos` de la hoja Empresa (vacío = solo uno) y el servidor aplica la misma regla.
 - La misma regla está en el servidor (`Code.gs`): si llega solo el cambio de *Abierta*, se aplican también a los módulos; si llegan los módulos explícitos, se respetan tal cual.
 
+## Deducciones a la cuenta y colores de los movimientos
+
+- **Deducción a la cuenta** (*Bancos → cuenta → Transferir o depositar → Tipo: Deducción a la cuenta*): resta un valor de una cuenta de banco **sin que sea un retiro** (no entra al efectivo en mano) ni un gasto. Es para lo que el banco descuenta solo, por ejemplo la **retención de impuesto sobre los intereses**: interés de C$ 2.12 (depósito) y retención de C$ 0.32 (deducción) dejan la cuenta con +C$ 1.80. Funciona en cuentas en córdobas y en dólares.
+  - **Resta de los ingresos del período** (activado por defecto): la deducción baja los ingresos del mes por su valor en córdobas (en dólares, al T/C de venta), de modo que el interés queda neto: C$ 2.12 − C$ 0.32 = C$ 1.80. Desactívalo si no está relacionada con un ingreso y solo quieres bajar el saldo. Aparece en *Ingresos* como un valor negativo en rojo.
+  - Se puede corregir y eliminar como cualquier movimiento (al eliminar, la app muestra cómo sube el saldo), el corte del resumen la anota («Deducción: C$ 0.32 de BAC Córdobas») y se puede registrar sin conexión.
+  - Para comisiones u otros cargos que no sean retenciones, lo normal es registrarlos como **gasto con débito** de esa cuenta.
+- **Colores en las listas de movimientos** (cuentas de banco y efectivo): **verde** = entra dinero (depósitos, ingresos, transferencias recibidas); **naranja** = retiro de efectivo; **rojo** = deducción; **gris** = otras salidas (gastos con débito, transferencias enviadas, pagos de tarjeta, combustible). Una leyenda sobre la lista lo recuerda.
+- **Comprar dólares:** el botón ya no está en la cuenta en dólares; se hace con *Transferir o depositar* (Desde: una cuenta en córdobas o el efectivo; Hacia: la cuenta en dólares; se registra también como gasto).
+
 ## Registrar sin conexión
 
 Sin señal puedes **registrar, corregir y eliminar** gastos, retiros, ingresos, depósitos y transferencias, llenados de combustible, movimientos de tarjeta y partidas del presupuesto. Se guardan primero en el teléfono, se ven al instante (saldos, presupuesto y tarjetas incluidos) y quedan en una **bandeja de salida** que sobrevive aunque cierres la app o se apague el teléfono.
