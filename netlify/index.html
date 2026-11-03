@@ -1,9 +1,17 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!--
+  Gestión de Efectivo
+  © 2026 Ing. Jerson Rivas — Analista de Información Estratégica.
+  Todos los derechos reservados. Creado por Ing. Jerson Rivas. Analista de Información Estratégica.
+-->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#13302E">
+<meta name="author" content="Ing. Jerson Rivas">
+<meta name="copyright" content="Todos los derechos reservados. Creado por Ing. Jerson Rivas. Analista de Información Estratégica.">
+<meta name="application-name" content="Gestión de Efectivo">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -361,6 +369,8 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .iconbtn.del{color:var(--over);border-color:color-mix(in srgb,var(--over) 45%,var(--line))}
 .iconbtn.del:hover{background:color-mix(in srgb,var(--over) 10%,transparent)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.copyright{margin:28px 0 8px;padding-top:14px;border-top:1px solid var(--line);text-align:center}
+.copyright p{margin:0 auto;max-width:44ch;font-size:12.5px;line-height:1.5;color:var(--muted);user-select:text}
 .delbox{margin:14px 0 0;padding:12px 14px;border-radius:10px;background:var(--sunk);border:1px solid var(--line);font-size:14px}
 .delbox.block{border-color:var(--over)}
 .delbox.block > b{color:var(--over)}
@@ -466,7 +476,7 @@ button.drow:hover{background:var(--sunk)}
 .sync{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap}
 .sync .ss{display:none;font-weight:700}
 @media (max-width:560px){.sync .sl{display:none}.sync .ss{display:inline}}
-@media (max-width:420px){.sync{position:absolute;left:0;top:50%;transform:translateY(-50%)}.top .monthpick{margin-left:auto;min-width:0;max-width:calc(100% - 44px)}.monthpick .combo-mp:not(.combo-yr){min-width:0;flex:0 1 auto;overflow:hidden}.monthpick .combo-mp .combo-btn{min-width:0;max-width:100%}.monthpick .combo-mp .combo-btn span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.monthpick .combo-yr{flex:none}}
+@media (max-width:420px){.sync{position:absolute;left:0;top:50%;transform:translateY(-50%)}.top .monthpick{margin-left:auto;min-width:0;max-width:calc(100% - 44px)}.monthpick .combo-mp:not(.combo-yr){min-width:0;flex:0 1 auto}.monthpick .combo-mp .combo-btn{min-width:0;max-width:100%;overflow:hidden}.monthpick .combo-mp .combo-btn span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.monthpick .combo-yr{flex:none}}
 @media (max-width:340px){.monthpick{gap:0;padding:2px}.monthpick > button{width:24px}.monthpick .combo-mp .combo-btn{padding:0 2px 0 6px}.monthpick .combo-mp .combo-btn::after{margin-left:4px}}
 .sync::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--teal);animation:pulse 1.2s ease-in-out infinite}
 .sync.err::before{background:var(--over);animation:none}
@@ -539,11 +549,20 @@ button.drow:hover{background:var(--sunk)}
 <div id="modal"></div>
 
 <script>
+/*
+ * Gestión de Efectivo
+ * © 2026 Ing. Jerson Rivas — Analista de Información Estratégica.
+ * Todos los derechos reservados. Creado por Ing. Jerson Rivas. Analista de Información Estratégica.
+ * Queda prohibida su reproducción, distribución o modificación sin autorización expresa del autor.
+ */
+/** Autoría y derechos: una sola fuente para el pie de «Mi cuenta» y cualquier otro lugar donde se muestre */
+const AUTOR = Object.freeze({derechos: 'Todos los derechos reservados.', creador: 'Ing. Jerson Rivas', cargo: 'Analista de Información Estratégica'});
+const COPYRIGHT_TXT = AUTOR.derechos + ' Creado por ' + AUTOR.creador + '. ' + AUTOR.cargo + '.';
 /* ======================================================================
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.11.02-2132';
+const APP_VERSION = '2026.11.03-0032';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -2138,7 +2157,8 @@ V.conexion = () => {
       <span><b>Bloquear eliminaciones que dejan saldos en negativo</b><br><small class="muted">Si eliminar un retiro, depósito o transferencia dejaría una cuenta o el efectivo en negativo (porque ese dinero ya se gastó o se movió), la app no lo deja. Desactivado, solo avisa y pide confirmar. Antes de eliminar siempre se muestra qué saldos cambian.${can('periodos.gestionar') ? '' : ' Solo un administrador o supervisor puede cambiarlo.'}</small></span></label>
   </div></section>
   <section class="section"><h3>Hogar</h3><div class="panel"><div class="row" style="align-items:flex-start;flex-wrap:nowrap"><div style="flex:1;min-width:0"><b>${esc(e.Empresa)}</b><p class="muted" style="margin:4px 0 0">${esc(e.Direccion || 'Sin dirección')}<br>Teléfono ${esc(e.Telefono || '—')}, celular ${esc(e.Celular || '—')}</p></div>${can('usuarios.gestionar') ? '<button class="btn small" data-act="hogar-edit">Editar</button>' : ''}</div></div></section>
-  <section class="section"><h3>Apariencia</h3><div class="tabs">${[['', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, l]) => `<button class="tab" data-theme-set="${v}" aria-pressed="${(lsGet('theme') || '') === v}">${l}</button>`).join('')}</div></section>`;
+  <section class="section"><h3>Apariencia</h3><div class="tabs">${[['', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, l]) => `<button class="tab" data-theme-set="${v}" aria-pressed="${(lsGet('theme') || '') === v}">${l}</button>`).join('')}</div></section>
+  <footer class="copyright"><p>${esc(COPYRIGHT_TXT)}</p></footer>`;
 };
 
 /* ---------- Formularios ---------- */

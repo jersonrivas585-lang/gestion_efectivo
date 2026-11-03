@@ -354,3 +354,6 @@ La página se pide siempre primero a Netlify, así se usa la versión publicada;
 - **«Acción desconocida: login»:** Apps Script sigue con la versión anterior. Repite el paso 1.4 (*Nueva versión*).
 - **«Falta la dirección del servicio»:** la variable `APPS_SCRIPT_URL` no llegó al despliegue; revisa el Deploy log.
 - **«No hay conexión con el servidor»:** revisa el internet, o que la implementación esté con acceso *Cualquier usuario*.
+
+---
+Todos los derechos reservados. Creado por Ing. Jerson Rivas. Analista de Información Estratégica.

@@ -1,3 +1,5 @@
+/* Gestión de Efectivo — © 2026 Ing. Jerson Rivas, Analista de Información Estratégica.
+   Todos los derechos reservados. Creado por Ing. Jerson Rivas. Analista de Información Estratégica. */
 /* Service worker
    - La página (index.html) se pide primero a Netlify: así siempre se usa la versión publicada.
      Si no hay señal o tarda más de 4 s, se abre la copia guardada.
