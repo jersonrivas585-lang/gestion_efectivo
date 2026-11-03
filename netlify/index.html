@@ -66,13 +66,13 @@ a{color:var(--teal)}
 :focus-visible{outline:3px solid var(--teal);outline-offset:2px;border-radius:6px}
 
 /* ---------- Layout ---------- */
-.app{display:grid;grid-template-columns:1fr;min-height:100vh;min-height:100dvh;height:100dvh}
+.app{display:grid;grid-template-columns:1fr;min-height:100vh;min-height:100dvh}
 .side{display:none}
 .main{min-width:0;padding:0 16px calc(150px + env(safe-area-inset-bottom,0px))}
 .wrap{max-width:1040px;margin:0 auto}
 @media (min-width:900px){
   .app{grid-template-columns:232px 1fr}
-  .side{display:flex;flex-direction:column;gap:2px;position:sticky;top:env(safe-area-inset-top,0px);height:100vh;height:100dvh;padding:20px 12px;border-right:1px solid var(--line);background:var(--surface);overflow:auto}
+  .side{display:flex;flex-direction:column;gap:2px;position:sticky;top:0;align-self:start;height:100vh;height:100dvh;padding:20px 12px;border-right:1px solid var(--line);background:var(--surface);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
   .main{padding:0 32px 48px}
   .bottom{display:none!important}
 }
@@ -245,6 +245,23 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 
 .chart svg{width:100%;height:auto;display:block}
 .chart text{font-family:var(--font);font-size:10px;fill:var(--muted)}
+.bactions{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:12px 0 4px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.bwho{flex:1 1 150px;min-width:0;display:flex;flex-direction:column}
+.bwho small{color:var(--muted);font-size:12px}
+.bwho b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bbtns{display:flex;flex-wrap:wrap;gap:8px}
+.bgroup{margin:10px 0;border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
+.bgroup.has-sel{border-color:var(--teal)}
+.bghead{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;background:none;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.bghead:hover{background:var(--sunk)}
+.bgt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.bgt b{font-size:14.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bgt small{color:var(--muted);font-size:12.5px}
+.bgm{display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-size:14px;font-weight:700;color:var(--ink);text-align:right}
+.bgm .dbt{font-size:12.5px;font-weight:600}
+.chev{width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .15s;flex:none;margin:0 4px 3px 2px}
+.bgroup.open .chev{transform:rotate(-135deg);margin-bottom:-3px}
+.bgroup .bankgrid{padding:2px 12px 12px}
 .bgh{margin:18px 2px 8px;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)}
 .bgh:first-of-type{margin-top:12px}
 .legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);margin-top:6px;flex-wrap:wrap}
@@ -572,7 +589,7 @@ const COPYRIGHT_TXT = AUTOR.derechos + ' Creado por ' + AUTOR.creador + '. ' + A
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.11.03-1513';
+const APP_VERSION = '2026.11.03-1940';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1455,7 +1472,7 @@ function go(v) {
   S.view = v; S.tab = ''; try { history.replaceState(null, '', '#' + v); } catch (e) {} render(); window.scrollTo(0, 0); }
 function renderNav() {
   const navView = S.view === 'ingresos' || S.view === 'retiros' ? 'bancos' : S.view;   // el detalle de ingresos y de retiros cuelga de Bancos
-  const side = ['inicio', 'gastos', 'presupuesto', 'bancos', '|', 'historico', 'cuenta', 'combustible', 'cortes', '|', 'catalogos', 'periodos', 'conexion'];
+  const side = ['inicio', 'bancos', 'gastos', 'presupuesto', '|', 'historico', 'cuenta', 'combustible', 'cortes', '|', 'catalogos', 'periodos', 'conexion'];
   const emp = (DB.t.Empresa && DB.t.Empresa[0]) ? DB.t.Empresa[0].Empresa : '';
   $('#side').innerHTML = `<div class="brand"><b>Efectivo</b><span>${esc(String(emp).trim().split(/\s+/).map((w, i) => i && w.length <= 2 ? w.toLowerCase() : cap(w)).join(' '))}</span></div>` +
     side.map(v => v === '|' ? '<div class="navsep"></div>' :
@@ -1738,9 +1755,21 @@ V.ingresos = () => {
 /* ===== Bancos: cuentas (córdobas y dólares), tarjetas de crédito y efectivo, agrupados por banco ===== */
 const cardSel = id => 'c:' + id;
 const isCardSel = () => String(S.banco || '').startsWith('c:');
+/** Grupos de Bancos abiertos o cerrados (se recuerda en el dispositivo); por defecto: bancos cerrados y Efectivo abierto */
+const bgState = () => { try { return JSON.parse(lsGet('bgroups') || '{}') || {}; } catch (e) { return {}; } };
+const bgIsOpen = (key, def) => { const st = bgState(); return st[key] === undefined ? !!def : !!st[key]; };
+function bgSet(key, open) { const st = bgState(); st[key] = !!open; lsSet('bgroups', JSON.stringify(st)); }
+/** Abre el grupo (banco o efectivo) al que pertenece una cuenta o tarjeta */
+function bgOpenFor(sel) {
+  const v = String(sel || ''); let key = '';
+  if (v === 'ef' || v === 'efd') key = '#efectivo';
+  else if (v.startsWith('c:')) { const t = tarjeta(v.slice(2)); key = t ? (nrm(t.Banco) || '~') : ''; }
+  else { const b = banco(v); key = b ? (nrm(b.Banco) || '~') : ''; }
+  if (key) bgSet(key, true);
+}
 /** Un grupo por banco (según el texto «Banco» de sus cuentas y tarjetas), en el orden de la lista de cuentas y tarjetas */
 function bankGroups() {
-  const G = new Map(), put = (name, kind, obj, orden) => { const k = nrm(name) || '~', g = G.get(k) || {name: String(name || '').trim() || 'Otros', ord: 1e9, accs: [], cards: []};
+  const G = new Map(), put = (name, kind, obj, orden) => { const k = nrm(name) || '~', g = G.get(k) || {key: k, name: String(name || '').trim() || 'Otros', ord: 1e9, accs: [], cards: []};
     G.set(k, g); g.ord = Math.min(g.ord, Number(orden) || 999); (kind === 'acc' ? g.accs : g.cards).push(obj); };
   bancos().forEach(b => put(b.Banco, 'acc', b, b.Orden)); tarjetas().forEach(t => put(t.Banco, 'card', t, t.Orden));
   return [...G.values()].sort((a, b) => a.ord - b.ord || a.name.localeCompare(b.name, 'es'));
@@ -1765,7 +1794,7 @@ function tarjetaDetalle(c) {
   const row = (label, k, cls) => `<tr style="cursor:default"><td>${label}</td><td class="n ${cls ? cls(N) : ''}">${cell(N, k, 'NIO')}</td><td class="n ${cls ? cls(U) : ''}">${cell(U, k, 'USD')}</td></tr>`;
   const hot = s1 => s1.pendiente > 0 && st.dias <= 5 ? 'neg' : '';
   return `
-  ${!cy ? `<div class="notice" style="margin-top:12px"><span>Escribe el <b>día de corte</b> y el <b>día límite de pago</b> de ${esc(c.Nombre)} para ver su estado de cuenta.</span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button>' : ''}</div>` : ''}
+  ${!cy ? `<div class="notice" style="margin-top:12px"><span>Escribe el <b>día de corte</b> y el <b>día límite de pago</b> de ${esc(c.Nombre)} para ver su estado de cuenta.</span>${adm ? '<button class="btn small" data-act="cat-go" data-t="Tarjetas_Credito">Abrir en Catálogos</button>' : ''}</div>` : ''}
   <div class="tablewrap" style="margin-top:12px"><table class="t estado"><thead><tr><th>Estado de cuenta</th><th class="n">Córdobas</th><th class="n">Dólares</th></tr></thead><tbody>
     <tr style="cursor:default"><td><b>Deuda total</b></td><td class="n ${N.deuda > 0 ? 'neg' : ''}"><b>${money(N.deuda)}</b></td><td class="n ${U.deuda > 0 ? 'neg' : ''}"><b>${usd(U.deuda)}</b></td></tr>
     ${row('Saldo al corte' + (cy ? ' (' + fdate(isoD(cy.last)) + ')' : ''), 'saldoCorte')}
@@ -1776,7 +1805,6 @@ function tarjetaDetalle(c) {
   <p class="muted" style="font-size:12.5px;margin:8px 2px 0">${Number(c.Limite) ? `Límite ${usd(c.Limite)}; disponible <b>${usd(st.disponible)}</b> (lo que debes en córdobas se convierte a T/C de compra ${st.tc}). ` : ''}${cy ? `Corte el día ${c.Dia_Corte} de cada mes${c.Dia_Pago ? ', pago hasta el día ' + c.Dia_Pago : ''}. Próximo corte: ${fdate(isoD(cy.next))}. ${st.porPagar && cy.due ? (st.dias < 0 ? `<b class="neg">El pago venció hace ${-st.dias} ${st.dias === -1 ? 'día' : 'días'}.</b>` : `Faltan <b>${st.dias}</b> ${st.dias === 1 ? 'día' : 'días'} para el límite de pago.`) : ''}` : ''}</p>
   <section class="section"><h3 id="bdet">Movimientos de ${esc(c.Nombre)} <small>${S.tarAll || !cy ? 'todos' : 'desde el corte del ' + fdate(lastK)}</small></h3>
     <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="tarAll" ${S.tarAll ? 'checked' : ''}><span></span></span>Mostrar todos</label>
-    <div class="toolbar" style="margin-top:0">${ed ? `<button class="btn primary" data-act="tar-mov">Registrar movimiento</button>` : ''}<span class="spacer"></span>${adm ? '<button class="btn small" data-act="tar-edit">Editar tarjeta</button>' : ''}</div>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">La tarjeta lleva dos deudas: en córdobas y en dólares. Suben con las compras (menos su descuento), el combustible pagado con la tarjeta, los retiros de efectivo con su cargo y los cargos del banco (intereses o comisiones); bajan con los pagos y con los reembolsos o bonificaciones. Al recibir el estado de cuenta, agrega sus cargos y reembolsos para que la deuda coincida con la del banco. Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta.</p>
     ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt < 0 ? 'var(--good)' : 'var(--sun)'}"></span>
       <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)} en ${r.cur === 'USD' ? 'dólares' : 'córdobas'}${r.alt ? ', ' + esc(r.alt) : ''}</small></span>
@@ -1788,7 +1816,7 @@ function tarjetaDetalle(c) {
 
 V.bancos = () => {
   const bs = bancos(), TL = tarjetas(), adm = can('catalogos.editar');
-  if (!bs.length && !TL.length) return '<div class="panel empty" style="margin-top:16px"><b>Aún no hay cuentas ni tarjetas activas</b>' + (adm ? '<div class="row" style="justify-content:center;gap:8px;margin-top:12px"><button class="btn primary" data-act="bank-new">Agregar cuenta</button><button class="btn" data-act="tar-new">Agregar tarjeta</button></div>' : 'Pide a un administrador que agregue una cuenta.') + '</div>';
+  if (!bs.length && !TL.length) return '<div class="panel empty" style="margin-top:16px"><b>Aún no hay cuentas ni tarjetas activas</b>' + (adm ? '<div class="row" style="justify-content:center;gap:8px;margin-top:12px"><button class="btn primary" data-act="cat-go" data-t="Bancos">Agregar en Catálogos</button></div>' : 'Pide a un administrador que agregue una cuenta.') + '</div>';
   const okSel = S.banco === 'ef' || S.banco === 'efd' || bs.some(b => String(b.ID_Banco) === String(S.banco)) || TL.some(t => S.banco === cardSel(t.ID_Tarjeta));
   if (!S.banco || !okSel) S.banco = bs[0] ? String(bs[0].ID_Banco) : cardSel(TL[0].ID_Tarjeta);
   const isCard = isCardSel(), cardObj = isCard ? tarjeta(String(S.banco).slice(2)) : null; if (cardObj) S.tarjeta = String(cardObj.ID_Tarjeta);
@@ -1798,29 +1826,38 @@ V.bancos = () => {
   // la lista sigue el período elegido arriba (o todos los meses si se activa); el saldo de cada fila es el acumulado real
   const inPer = S.bankAll ? led.rows : led.rows.filter(r => periodForDate(r.fecha) === S.mes), previosVista = inPer.filter(r => r.pre).length;
   const ed = can('bancos.editar'), shown = inPer.slice().reverse().slice(0, 250);
+  const btns = isCard ? (can('tarjetas.editar') ? ['<button class="btn primary" data-act="tar-mov">Registrar movimiento</button>'] : [])
+    : [ed ? '<button class="btn primary" data-act="mov-transfer">Transferir o depositar</button>' : '', !ef && !efd && canAdd('Retiros') ? '<button class="btn" data-act="ret-new">Retirar efectivo</button>' : '', efd && ed ? '<button class="btn" data-act="efd-bank">Depositar en la cuenta en dólares</button><button class="btn" data-act="efd-cash">Cambiar a córdobas</button>' : ''].filter(Boolean);
+  const actions = btns.length ? `<div class="bactions"><div class="bwho"><small>Acciones para</small><b>${esc(cur.Nombre)}</b></div><div class="bbtns">${btns.join('')}</div></div>` : '';
   const card = (id, top, name, v, curr, sub) => `<button class="bankcard ${String(id) === S.banco ? 'on' : ''}" data-banco="${id}"><small>${esc(top)}</small><b>${esc(name)}</b><span class="num bal ${v < 0 ? 'neg' : ''}" style="--n:${fcur(v, curr).length}">${fcur(v, curr)}</span><small>${sub || '&nbsp;'}</small></button>`;
   const accTile = b => card(b.ID_Banco, (b.Moneda === 'USD' ? 'Cuenta en dólares' : 'Cuenta en córdobas') + (b.Numero ? ' · ' + b.Numero : ''), b.Nombre, L[b.ID_Banco].saldo, b.Moneda, b.Moneda === 'USD' ? `≈ ${money(L[b.ID_Banco].saldo * tcFor(S.mes))} a ${tcFor(S.mes)}` : '');
   const cardTile = t => { const s2 = cardStatus(t), n = money(s2.NIO.deuda), u = usd(s2.USD.deuda); return `<button class="bankcard ${S.banco === cardSel(t.ID_Tarjeta) ? 'on' : ''}" data-banco="${cardSel(t.ID_Tarjeta)}"><small>Tarjeta de crédito${t.Ultimos4 ? ' · ' + esc(t.Ultimos4) : ''}</small><b>${esc(t.Nombre)}</b><span class="num bal" style="--n:${n.length}">${n}</span><span class="num bal bal2" style="--n:${u.length}">${u}</span><small>${dueText(s2)}</small></button>`; };
   const groups = bankGroups(), debtN = r2(TL.reduce((a, t) => a + cardStatus(t).NIO.deuda, 0)), debtU = r2(TL.reduce((a, t) => a + cardStatus(t).USD.deuda, 0));
   return `
+  ${actions}
   ${!D.configurado ? `<div class="notice info" style="margin-top:12px"><span>Escribe una vez cuánto tienes hoy en cada cuenta y en efectivo; desde ahí los saldos se calculan solos.</span>${can('catalogos.editar') || !Backend.online ? '<button class="btn small primary" data-act="saldos">Escribir saldos actuales</button>' : ''}</div>` : ''}
   <section class="section">
-  ${adm ? '<div class="toolbar" style="margin:12px 0 0"><span class="spacer"></span><button class="btn small" data-act="bank-new">Agregar cuenta</button><button class="btn small" data-act="tar-new">Agregar tarjeta</button></div>' : ''}
-  ${groups.map(g => `<h3 class="bgh">${esc(g.name)}</h3><div class="bankgrid">${g.accs.map(accTile).join('')}${g.cards.map(cardTile).join('')}</div>`).join('')}
-  <h3 class="bgh">Efectivo</h3><div class="bankgrid">
-    ${card('ef', 'Efectivo', 'Efectivo en mano', C.saldo, 'NIO', '')}
-    ${showUsd ? card('efd', 'Efectivo', 'Efectivo en dólares', CU.saldo, 'USD', `≈ ${money(CU.saldo * tcFor(S.mes))} a ${tcFor(S.mes)}`) : ''}
-  </div>
+  ${groups.map(g => {
+    const nA = g.accs.length, nT = g.cards.length, open = bgIsOpen(g.key, false);
+    const hasN = g.accs.some(b => b.Moneda !== 'USD'), hasU = g.accs.some(b => b.Moneda === 'USD');
+    const sN = r2(g.accs.filter(b => b.Moneda !== 'USD').reduce((a, b) => a + L[b.ID_Banco].saldo, 0)), sU = r2(g.accs.filter(b => b.Moneda === 'USD').reduce((a, b) => a + L[b.ID_Banco].saldo, 0));
+    const dN = r2(g.cards.reduce((a, t) => a + cardStatus(t).NIO.deuda, 0)), dU = r2(g.cards.reduce((a, t) => a + cardStatus(t).USD.deuda, 0));
+    const sub = (nA ? nA + (nA === 1 ? ' cuenta' : ' cuentas') : '') + (nA && nT ? ' · ' : '') + (nT ? nT + (nT === 1 ? ' tarjeta' : ' tarjetas') : '');
+    const amts = (hasN ? `<span class="num ${sN < 0 ? 'neg' : ''}">${money(sN)}</span>` : '') + (hasU ? `<span class="num ${sU < 0 ? 'neg' : ''}">${usd(sU)}</span>` : '') + (nT ? (dN > 0.004 || dU > 0.004 ? `<span class="num neg dbt">Deuda ${dosMonedas(dN, dU)}</span>` : '<span class="dbt muted">Tarjetas sin deuda</span>') : '');
+    const hasSel = g.accs.some(b => String(b.ID_Banco) === S.banco) || g.cards.some(t => cardSel(t.ID_Tarjeta) === S.banco);
+    return `<section class="bgroup ${open ? 'open' : ''} ${hasSel ? 'has-sel' : ''}"><button type="button" class="bghead" data-act="bg-toggle" data-k="${esc(g.key)}" aria-expanded="${open}"><span class="bgt"><b>${esc(g.name)}</b><small>${sub}</small></span><span class="bgm">${amts}</span><i class="chev" aria-hidden="true"></i></button>${open ? `<div class="bankgrid">${g.accs.map(accTile).join('')}${g.cards.map(cardTile).join('')}</div>` : ''}</section>`;
+  }).join('')}
+  ${(() => { const open = bgIsOpen('#efectivo', true), hasSel = ef || efd; return `<section class="bgroup ${open ? 'open' : ''} ${hasSel ? 'has-sel' : ''}"><button type="button" class="bghead" data-act="bg-toggle" data-k="#efectivo" aria-expanded="${open}"><span class="bgt"><b>Efectivo</b><small>${showUsd ? 'En mano y en dólares' : 'En mano'}</small></span><span class="bgm"><span class="num ${C.saldo < 0 ? 'neg' : ''}">${money(C.saldo)}</span>${showUsd ? `<span class="num ${CU.saldo < 0 ? 'neg' : ''}">${usd(CU.saldo)}</span>` : ''}</span><i class="chev" aria-hidden="true"></i></button>${open ? `<div class="bankgrid">${card('ef', 'Efectivo', 'Efectivo en mano', C.saldo, 'NIO', '')}${showUsd ? card('efd', 'Efectivo', 'Efectivo en dólares', CU.saldo, 'USD', `≈ ${money(CU.saldo * tcFor(S.mes))} a ${tcFor(S.mes)}`) : ''}</div>` : ''}</section>`; })()}
   <div class="sumline" style="margin-top:12px"><span>Disponible para gastar (cuentas en córdobas + efectivo)</span><b class="num">${money(D.total)}</b></div>
   ${TL.length && (debtN > 0.004 || debtU > 0.004) ? `<div class="sumline" style="margin-top:6px"><span>Deuda en tarjetas de crédito</span><b class="num neg">${dosMonedas(debtN, debtU)}</b></div>` : ''}
   ${(() => { const tI = totals(S.mes).I, nI = rowsFor('Ingresos_Detalle', S.mes).length; return `<button type="button" class="sumline go" data-go="ingresos"><span>Ingresos de ${esc(mesLabel(S.mes))}<small>${nI} ${nI === 1 ? 'ingreso' : 'ingresos'} · Ver detalle ›</small></span><b class="num ${tI < 0 ? 'neg' : ''}">${money(tI)}</b></button>`; })()}
   ${(() => { const tR = totals(S.mes).R, nR = rowsFor('Retiros_Detalle', S.mes).length; return `<button type="button" class="sumline go" data-go="retiros"><span>Retiros de efectivo de ${esc(mesLabel(S.mes))}<small>${nR} ${nR === 1 ? 'retiro' : 'retiros'} · Ver detalle ›</small></span><b class="num">${money(tR)}</b></button>`; })()}
+  ${adm ? `<p class="muted" style="font-size:12.5px;margin:8px 2px 0">Para agregar o editar cuentas y tarjetas, ve a <a href="#" data-act="cat-go" data-t="Bancos">Cuentas de banco</a> o <a href="#" data-act="cat-go" data-t="Tarjetas_Credito">Tarjetas de crédito</a> en Catálogos.</p>` : ''}
   ${bancos(true).length > bs.length ? `<p class="muted" style="font-size:12.5px;margin:4px 2px 0">${bancos(true).length - bs.length} cuentas desactivadas. <a href="#" data-act="bank-inactive">Verlas</a></p>` : ''}</section>
   ${isCard ? tarjetaDetalle(cardObj) : `
   <section class="section"><h3 id="bdet">Movimientos de ${esc(cur.Nombre)} <small>${S.bankAll ? 'todos los meses' : esc(mesLabel(S.mes)) + ', ' + rangeLabel(S.mes)}</small></h3>
     <p class="muted" style="font-size:12.5px;margin:-4px 0 8px">${inPer.length} ${inPer.length === 1 ? 'movimiento' : 'movimientos'}${S.bankAll ? '' : ' en este período'}${inPer.length > 250 ? ' (se muestran los 250 más recientes)' : ''}${led.start ? ' · saldo inicial ' + fcur(led.inicial, cur.Moneda) + ' (' + fdatetime(led.start) + ')' : ''}</p>
     <label class="row" style="gap:8px;font-size:13.5px;cursor:pointer;margin:0 0 10px"><span class="toggle"><input type="checkbox" data-bind="bankAll" ${S.bankAll ? 'checked' : ''}><span></span></span>Mostrar todos los meses</label>
-    <div class="toolbar" style="margin-top:0">${ed ? '<button class="btn primary" data-act="mov-transfer">Transferir o depositar</button>' : ''}${!ef && !efd && canAdd('Retiros') ? '<button class="btn" data-act="ret-new">Retirar efectivo</button>' : ''}${efd && ed ? '<button class="btn" data-act="efd-bank">Depositar en la cuenta en dólares</button><button class="btn" data-act="efd-cash">Cambiar a córdobas</button>' : ''}<span class="spacer"></span>${can('catalogos.editar') ? `${!ef && !efd ? '<button class="btn small" data-act="bank-edit">Editar esta cuenta</button>' : ''}` : ''}</div>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">${efd ? 'Sube con los retiros hechos en dólares, los depósitos y lo que cambias o transfieres hacia aquí; baja con los gastos pagados con «Efectivo en dólares» y con lo que depositas en la cuenta en dólares o cambias a córdobas. No cuenta en el dinero disponible en córdobas.' : ef ? 'Sube con los retiros de cajero y los ingresos en efectivo; baja con los gastos pagados en efectivo.' : 'Sube con los ingresos depositados y las transferencias que recibes; baja con los retiros de cajero, las deducciones (retenciones o impuestos), los gastos con débito o pago directo y las transferencias que haces.'}</p>
     <p class="legend muted" aria-label="Significado de los colores"><span><i class="k-in"></i>Entra dinero</span><span><i class="k-ret"></i>Retiro de efectivo</span>${!ef && !efd ? '<span><i class="k-ded"></i>Deducción</span>' : ''}<span><i class="k-out"></i>Otras salidas</span></p>
     ${previosVista ? `<p class="muted" style="font-size:12.5px;margin:0 0 10px">${previosVista} ${previosVista === 1 ? 'movimiento es anterior' : 'movimientos son anteriores'} a los saldos actuales (${fdatetime(led.start)}): se muestran atenuados y no cambian el saldo.</p>` : ''}
@@ -2369,7 +2406,7 @@ const FORMS = {
     validate: o => { if (FORM.rec && !o.Activa) { const sal = ledger(FORM.rec.ID_Banco).saldo; if (Math.abs(sal) >= 0.01) return 'La cuenta todavía tiene saldo (' + fcur(sal, o.Moneda) + '). Transfiérelo o retíralo antes de desactivarla.'; }
       if (!FORM.rec && (DB.t.Bancos || []).some(b => nrm(b.Nombre) === nrm(o.Nombre))) return 'Ya existe una cuenta con ese nombre'; return ''; },
     guardDelete: rec => bankUsed(rec.ID_Banco) ? 'Esta cuenta tiene movimientos registrados. Desactívala en lugar de eliminarla.' : '',
-    after: (o, ch) => { const nb = ((ch && ch.upserts && ch.upserts.Bancos) || [])[0]; if (nb && !(FORM && FORM.rec)) S.banco = String(nb.ID_Banco); }},
+    after: (o, ch) => { const nb = ((ch && ch.upserts && ch.upserts.Bancos) || [])[0]; if (nb && !(FORM && FORM.rec)) { S.banco = String(nb.ID_Banco); bgOpenFor(S.banco); } }},
   Tarjetas_Credito: {t: 'tarjeta de crédito', g: 'a', perm: 'catalogos.editar', fields: [
     {k: 'Nombre', l: 'Nombre', ty: 'text', req: 1, hint: 'Ejemplo: GasCard VISA'},
     {k: 'Banco', l: 'Banco', ty: 'text', half: 1, list: () => [...new Set((DB.t.Bancos || []).map(b => b.Banco).concat((DB.t.Tarjetas_Credito || []).map(t => t.Banco)).filter(Boolean))]},
@@ -2386,7 +2423,7 @@ const FORMS = {
     {k: 'Activa', l: 'Activa', ty: 'bool', def: true, hint: 'Desactívala si ya no la usas: su historial se conserva'}],
     validate: o => [o.Dia_Corte, o.Dia_Pago].some(v => v !== '' && !(Number(v) >= 1 && Number(v) <= 31)) ? 'El día de corte y el de pago van del 1 al 31' : (!FORM.rec && (DB.t.Tarjetas_Credito || []).some(t => nrm(t.Nombre) === nrm(o.Nombre)) ? 'Ya existe una tarjeta con ese nombre' : ''),
     guardDelete: rec => (DB.t.Movimientos_Tarjeta || []).some(m => String(m.ID_Tarjeta) === String(rec.ID_Tarjeta)) || DB.t.Consumo_Combustible.some(f => String(f.ID_Tarjeta) === String(rec.ID_Tarjeta)) ? 'Esta tarjeta tiene movimientos. Desactívala en lugar de eliminarla.' : '',
-    after: (o, ch) => { const nt = ((ch && ch.upserts && ch.upserts.Tarjetas_Credito) || [])[0]; if (nt && !(FORM && FORM.rec)) { S.tarjeta = String(nt.ID_Tarjeta); S.banco = cardSel(nt.ID_Tarjeta); } }},
+    after: (o, ch) => { const nt = ((ch && ch.upserts && ch.upserts.Tarjetas_Credito) || [])[0]; if (nt && !(FORM && FORM.rec)) { S.tarjeta = String(nt.ID_Tarjeta); S.banco = cardSel(nt.ID_Tarjeta); bgOpenFor(S.banco); } }},
   Movimientos_Tarjeta: {t: 'movimiento de tarjeta', perm: 'tarjetas.editar', needsMes: 1, fields: [
     {k: 'ID_Tarjeta', l: 'Tarjeta', ty: 'select', num: 1, opts: () => tarjetas().map(c => [c.ID_Tarjeta, c.Nombre + (c.Ultimos4 ? ' · ' + c.Ultimos4 : '')]), def: () => Number(S.tarjeta || (tarjetas()[0] || {}).ID_Tarjeta) || ''},
     {k: 'Tipo', l: 'Tipo', ty: 'select', half: 1, opts: () => [['Compra', 'Compra'], ['Retiro de efectivo', 'Retiro de efectivo'], ['Cargo', 'Cargo (intereses o comisión)'], ['Reembolso', 'Reembolso o bonificación'], ['Pago', 'Pago de la tarjeta']], def: 'Compra'},
@@ -3018,7 +3055,7 @@ document.addEventListener('click', async e => {
     cancelModal(); return;
   }
   if (d.user) { openUserForm(d.user); return; }
-  if (d.banco && !d.go) { S.banco = d.banco; if (String(d.banco).startsWith('c:')) S.tarjeta = String(d.banco).slice(2); render(); const dt = document.getElementById('bdet'); if (dt) setTimeout(() => { try { dt.scrollIntoView({behavior: 'smooth', block: 'start'}); } catch (e) {} }, 60); return; }
+  if (d.banco && !d.go) { S.banco = d.banco; bgOpenFor(d.banco); if (String(d.banco).startsWith('c:')) S.tarjeta = String(d.banco).slice(2); render(); const dt = document.getElementById('bdet'); if (dt) setTimeout(() => { try { dt.scrollIntoView({behavior: 'smooth', block: 'start'}); } catch (e) {} }, 60); return; }
   if (d.gotoMes) { S.mes = d.gotoMes; if (d.stay) render(); else go('inicio'); toast('Trabajando en ' + mesLabel(d.gotoMes)); return; }
   if (d.sort) { const cs = S.catSort || (S.catSort = {}), cur = cs[S.tab]; cs[S.tab] = cur && cur.col === d.sort ? (cur.dir === 'asc' ? {col: d.sort, dir: 'desc'} : null) : {col: d.sort, dir: 'asc'}; render(); return; }
   if (d.tarjeta && !d.go) { S.tarjeta = d.tarjeta; render(); return; }
@@ -3028,7 +3065,7 @@ document.addEventListener('click', async e => {
   if (d.frange) { S.fuelRange = d.frange; render(); return; }
   if (d.funit) { S.fuelUnit = d.funit; lsSet('fuel_unit', d.funit); if (d.fres && S.fuelShown) showFuelResult(S.fuelShown.r, S.fuelShown.fromList); else render(); return; }
   if (d.fuel) { const r = DB.t.Consumo_Combustible.find(x => String(x.ID) === d.fuel); if (r) showFuelResult(r, true); return; }
-  if (d.go) { e.preventDefault(); if (d.banco) { S.banco = d.banco; if (String(d.banco).startsWith('c:')) S.tarjeta = String(d.banco).slice(2); } if (d.tarjeta) S.tarjeta = d.tarjeta; go(d.go); if (d.banco) setTimeout(() => { const dt = document.getElementById('bdet'); if (dt) try { dt.scrollIntoView({block: 'start'}); } catch (er) {} }, 80); return; }
+  if (d.go) { e.preventDefault(); if (d.banco) { S.banco = d.banco; bgOpenFor(d.banco); if (String(d.banco).startsWith('c:')) S.tarjeta = String(d.banco).slice(2); } if (d.tarjeta) S.tarjeta = d.tarjeta; go(d.go); if (d.banco) setTimeout(() => { const dt = document.getElementById('bdet'); if (dt) try { dt.scrollIntoView({block: 'start'}); } catch (er) {} }, 80); return; }
   if (d.new === 'Ingresos_Detalle') return openDeposito();
   if (d.new) { const F = FORMS[d.new]; if (F && F.mod && REL[d.new] && !canEdit(F.mod) && canAdd(F.mod) && F.mod !== 'Presupuesto') ensureTarget(F.mod); if (F && F.mod && !canEdit(F.mod)) { toast(can(MOD_PERM[F.mod]) ? 'El período está cerrado para ' + F.mod.toLowerCase() : 'No tienes permiso para registrar ' + F.mod.toLowerCase(), true); return; } if (F && F.perm && !can(F.perm)) { toast('No tienes permiso para esta acción', true); return; } openForm(d.new); return; }
   if (d.edit) { openForm(d.edit, d.id); return; }
@@ -3070,6 +3107,7 @@ document.addEventListener('click', async e => {
     Auth.clear(); await Store.clear(); Sync.seq = 0; clearInterval(Sync.iv); S.users = S.roles = S.permisos = null; S.tmpPwd = null; DB.load({tables: {}}); $('#view').innerHTML = ''; showLogin(); return;
   }
   if (a === 'pwd') return openPwdForm();
+  if (a === 'bg-toggle') { bgSet(t.dataset.k, !bgIsOpen(t.dataset.k, t.dataset.k === '#efectivo')); render(); return; }
   if (a === 'ret-new') { openForm('Retiros_Detalle'); const sel = $('#f_ID_Banco'); if (sel && banco(S.banco)) { sel.value = String(S.banco); formDynamics(); } return; }
   if (a === 'ask-ok') { const r = S.askRes; S.askRes = null; $('#modal').innerHTML = ''; FORM = null; if (r) r(true); return; }
   if (a === 'fab-reset') { fabReset(); toast('El botón + volvió a su lugar'); return; }
@@ -3079,8 +3117,8 @@ document.addEventListener('click', async e => {
   if (a === 'ob-drop') { Outbox.drop(t.dataset.id); render(); if (Outbox.fails.length) openFails(); else closeModal(); return; }
   if (a === 'ob-fix') { const f = Outbox.fails.find(x => x.id === t.dataset.id); if (!f) return; Outbox.drop(f.id); closeModal(); render(); openForm(f.table, f.form.id && !isTmp(f.form.id) ? f.form.id : undefined, true); fillFormValues(f.form.o); return; }
   if (a === 'ob-send') { Outbox.flush(); return; }
-  if (a === 'tar-new') return openForm('Tarjetas_Credito');
-  if (a === 'tar-edit') return openForm('Tarjetas_Credito', S.tarjeta, true);
+  
+  
   if (a === 'tar-mov') return openForm('Movimientos_Tarjeta');
   if (a === 'tar-pay') { const c = tarjeta(S.tarjeta); if (!c) return; const st = cardStatus(c), cur = !(st.NIO.pendiente > 0) && (st.USD.pendiente > 0 || (!(st.NIO.deuda > 0) && st.USD.deuda > 0)) ? 'USD' : 'NIO', cs = st[cur]; openForm('Movimientos_Tarjeta');
     const set = (id, v) => { const el = $(id); if (el) el.value = v; };
@@ -3092,8 +3130,7 @@ document.addEventListener('click', async e => {
   if (a === 'form-edit') { const tb = FORM.table, id = FORM.rec[DB.key(tb)]; openForm(tb, id, true); const first = $('#frm input:not([disabled]), #frm select:not([disabled])'); if (first && matchMedia('(pointer:fine)').matches) first.focus(); return; }
   if (a === 'veh-new') return openForm('Vehiculos');
   if (a === 'veh-edit') return openForm('Vehiculos', curVeh(), true);
-  if (a === 'bank-new') return openForm('Bancos');
-  if (a === 'bank-edit') return openForm('Bancos', S.banco, true);
+  if (a === 'cat-go') { go('catalogos'); S.tab = t.dataset.t; render(); return; }
   if (a === 'bank-inactive') { go('catalogos'); S.tab = 'Bancos'; render(); return; }
   if (a === 'usd-dep') { openForm('Ingresos_Detalle'); const sel = $('#f_ID_Banco'); if (sel) { sel.value = S.banco; formDynamics(); } return; }
     if (a === 'move-period') {

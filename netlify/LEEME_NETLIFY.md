@@ -131,9 +131,9 @@ El dinero se lleva como en la realidad, por **cuenta**: Avanz Córdobas, BAC Có
 
 ## Agregar, editar o quitar cuentas de banco
 
-En *Bancos* hay dos botones: **Agregar cuenta** y **Editar esta cuenta** (para administradores y supervisores).
+Las cuentas de banco se agregan y se editan en **Catálogos → Cuentas de banco** (botón *Agregar* y el lápiz de cada fila; para administradores y supervisores). En *Bancos* ya no hay botones de agregar ni editar: solo un aviso con enlaces a Catálogos.
 
-- **Agregar cuenta:** escribes el banco, la moneda (córdobas o dólares), el número (opcional) y el **saldo inicial** con su fecha y hora (por defecto, este momento). El nombre se sugiere solo, por ejemplo *Lafise Córdobas* o *Avanz Dólares*. La cuenta aparece de inmediato en Bancos, en el Inicio y en todos los formularios (depósitos, retiros, transferencias, gastos con débito). Las cuentas en córdobas suman al dinero disponible; las cuentas en dólares van aparte, cada una con su saldo en US$.
+- **Agregar una cuenta:** escribes el banco, la moneda (córdobas o dólares), el número (opcional) y el **saldo inicial** con su fecha y hora (por defecto, este momento). El nombre se sugiere solo, por ejemplo *Lafise Córdobas* o *Avanz Dólares*. La cuenta aparece de inmediato en Bancos, en el Inicio y en todos los formularios (depósitos, retiros, transferencias, gastos con débito). Las cuentas en córdobas suman al dinero disponible; las cuentas en dólares van aparte, cada una con su saldo en US$.
 - **Editar:** cambia el nombre, el número, el saldo inicial o el orden.
 - **Quitar:** una cuenta con movimientos **no se elimina**, se **desactiva** (interruptor *Activa*). Antes de desactivarla, su saldo debe estar en cero: transfiérelo a otra cuenta. La cuenta desactivada desaparece de las listas, sus movimientos se conservan y se puede reactivar desde el enlace *cuentas desactivadas* de Bancos (*Catálogos → Cuentas de banco*). Solo una cuenta sin ningún movimiento se puede eliminar del todo.
 
@@ -216,6 +216,10 @@ En *Períodos*, el interruptor **Abierto** de un mes abre o cierra **de una vez 
 - **Varios períodos abiertos (opcional).** En *Mi cuenta → Configuración → Permitir varios períodos abiertos a la vez* (administrador o supervisor) se puede permitir. Al volver a desactivarlo estando abiertos varios, la app pide confirmar y deja abierto el más reciente, cerrando los demás con todos sus módulos. La opción se guarda en la columna `Varios_Periodos` de la hoja Empresa (vacío = solo uno) y el servidor aplica la misma regla.
 - La misma regla está en el servidor (`Code.gs`): si llega solo el cambio de *Abierta*, se aplican también a los módulos; si llegan los módulos explícitos, se respetan tal cual.
 
+## Computadora: panel lateral fijo
+
+En la versión de computadora el **panel lateral queda fijo**: no se mueve cuando bajas por la información (si la ventana es baja, el panel se desplaza solo por dentro). Su orden es **Inicio, Bancos, Gastos, Presupuesto**, y luego Histórico, Análisis por cuenta, Combustible, Cortes de resumen, Catálogos, Períodos y Mi cuenta.
+
 ## Retiros: ahora dentro de Bancos
 
 *Retiros* ya no es una sección del menú ni de la barra inferior del celular (que ahora muestra **Inicio, Bancos, Gastos, Presupuesto, Combustible y Más** completa, sin deslizar). Los retiros se hacen desde **Bancos**:
@@ -231,11 +235,14 @@ En *Períodos*, el interruptor **Abierto** de un mes abre o cierra **de una vez 
 
 ## Bancos: cuentas, tarjetas y efectivo en una sola sección
 
-*Bancos* agrupa **por banco** (según el texto «Banco» de cada cuenta y de cada tarjeta): por ejemplo, **BAC** muestra *BAC Córdobas*, *BAC Dólares* y sus tarjetas (GasCard VISA, American Express, Mariela), **Avanz** su cuenta, y al final **Efectivo** (en mano y en dólares). Las tarjetas se distinguen con la etiqueta *Tarjeta de crédito* y muestran su deuda en córdobas y en dólares y cuánto pagar antes de qué fecha.
-- **Tocar una cuenta** muestra sus movimientos (con *Transferir o depositar*, *Editar esta cuenta* y los colores por tipo). **Tocar una tarjeta** muestra su estado de cuenta y sus movimientos (con *Registrar movimiento* y *Editar tarjeta*), tal como estaba en la antigua sección Tarjetas. La pantalla baja sola al detalle.
-- **Arriba** están *Agregar cuenta* y *Agregar tarjeta*. Debajo de los grupos: lo disponible para gastar y, si hay deudas, **la deuda total en tarjetas de crédito**.
+*Bancos* agrupa **por banco** (según el texto «Banco» de cada cuenta y de cada tarjeta) y cada banco es un **grupo que se abre y se cierra** tocando su encabezado:
+- **Mini resumen en cada banco cerrado:** cuántas cuentas y tarjetas tiene y sus montos. Por ejemplo, **BAC · 2 cuentas · 3 tarjetas · C$ 14,361.74 · US$ 454.31 · Deuda C$ 3,000.00 y US$ 100.00**. Los bancos con tarjetas sin deuda dicen «Tarjetas sin deuda».
+- **Los bancos arrancan cerrados y *Efectivo* abierto** (en mano y en dólares, con su total). Al abrir un grupo aparecen sus fichas: *Cuenta en córdobas*, *Cuenta en dólares* y *Tarjeta de crédito* (con su deuda en córdobas y en dólares y cuánto pagar antes de qué fecha). Cada dispositivo recuerda qué grupos dejaste abiertos. Si llegas a una tarjeta desde *Inicio* (tocando su deuda) o agregas una cuenta o tarjeta, su grupo se abre solo.
+- **Los botones están arriba de todo**, en un cuadro que dice *Acciones para* y el nombre de la cuenta o tarjeta elegida (aunque su grupo esté cerrado): con una **cuenta de banco**, *Transferir o depositar* y *Retirar efectivo*; con **Efectivo en mano**, *Transferir o depositar*; con **Efectivo en dólares**, además *Depositar en la cuenta en dólares* y *Cambiar a córdobas*; con una **tarjeta**, *Registrar movimiento*.
+- **Tocar una ficha** elige esa cuenta o tarjeta: sus botones cambian arriba y abajo se muestran sus movimientos (con los colores por tipo) o, en una tarjeta, su estado de cuenta, sus movimientos y el historial de Access. La pantalla baja sola al detalle.
+- **Agregar y editar cuentas y tarjetas** se hace desde **Catálogos** (*Cuentas de banco* y *Tarjetas de crédito*), no desde Bancos; debajo de los grupos hay un aviso con enlaces directos. Debajo de los grupos también: lo disponible para gastar, la **deuda total en tarjetas de crédito** (si hay deudas) y las líneas de ingresos y retiros del mes.
 - **Botón +** (celular): con una cuenta seleccionada registra un movimiento de banco; con una tarjeta seleccionada, un movimiento de tarjeta.
-- Si una tarjeta no queda en el grupo que esperas (por ejemplo, la que venía de Access con otro banco), cambia el campo **Banco** en *Editar tarjeta*.
+- Si una tarjeta no queda en el grupo que esperas (por ejemplo, la que venía de Access con otro banco), cambia el campo **Banco** de la tarjeta en *Catálogos → Tarjetas de crédito*.
 - En *Inicio*, tocar la deuda de una tarjeta abre esa tarjeta en *Bancos*.
 
 ## Deducciones a la cuenta y colores de los movimientos
@@ -304,7 +311,7 @@ El bloqueo se cambia en *Mi cuenta → Configuración → Bloquear eliminaciones
 
 Las tarjetas de crédito están dentro de la sección **Bancos** (ya no hay una sección *Tarjetas* aparte): cada banco agrupa sus cuentas (en córdobas y en dólares) y sus tarjetas de crédito, y al tocar una tarjeta se abre todo lo que antes tenía en Tarjetas: estado de cuenta, movimientos, editar la tarjeta y el historial de consumos de Access. Cada tarjeta lleva asociada un banco. Cada tarjeta tiene **dos deudas**, una en **córdobas** y otra en **dólares**, y un **límite de crédito en dólares** que comparten las dos.
 
-- **Las tarjetas:** se crearon solas a partir de las que usabas en Access (GasCard VISA, BAC American Express, LAFISE D'TODO, BAC Mariela), con su banco y su % de descuento. Con **Editar tarjeta** escribes los últimos 4 dígitos, el **límite (US$)**, el **día de corte**, el **día límite de pago**, la cuenta desde la que se paga y la **deuda actual en córdobas y en dólares** (con su fecha y hora). Las que ya no uses, desactívalas. Hojas `Tarjetas_Credito` y `Movimientos_Tarjeta`.
+- **Las tarjetas:** se crearon solas a partir de las que usabas en Access (GasCard VISA, BAC American Express, LAFISE D'TODO, BAC Mariela), con su banco y su % de descuento. Con el lápiz de *Catálogos → Tarjetas de crédito* escribes los últimos 4 dígitos, el **límite (US$)**, el **día de corte**, el **día límite de pago**, la cuenta desde la que se paga y la **deuda actual en córdobas y en dólares** (con su fecha y hora). Las que ya no uses, desactívalas. Hojas `Tarjetas_Credito` y `Movimientos_Tarjeta`.
 - **Movimientos** (*Registrar movimiento*), cada uno en **córdobas o en dólares**:
   - **Compra:** sube la deuda de esa moneda por el monto menos el descuento de la tarjeta (editable; negativo si es un recargo).
   - **Retiro de efectivo:** entra al efectivo en mano (o al efectivo en dólares) y la deuda sube por el retiro **más el cargo**.
