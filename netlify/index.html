@@ -449,6 +449,7 @@ table.t tfoot td{font-weight:700;background:var(--sunk)}
 .chip:hover{background:var(--sunk)}
 .fuelfigs .fig b .sub,.fig b .sub{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-top:1px}
 .item .amt small.g{font-weight:600;color:var(--ink2)}
+.item .amt small.pos{color:var(--good);font-weight:600}
 .section > h3 .tabs .tab{padding:3px 10px;font-size:12.5px}
 .vehbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-top:6px}
 .fuelfilter{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:12px 14px;margin-top:6px}
@@ -589,7 +590,7 @@ const COPYRIGHT_TXT = AUTOR.derechos + ' Creado por ' + AUTOR.creador + '. ' + A
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.11.03-1940';
+const APP_VERSION = '2026.11.03-2021';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -932,6 +933,13 @@ function cardStatus(c) {
   st.porPagar = (NIO.pendiente || 0) > 0 || (USD.pendiente || 0) > 0;
   if (cy && cy.due) st.dias = Math.round((cy.due - new Date(new Date().toDateString())) / 864e5);
   return st;
+}
+/** Saldo de una tarjeta: positivo = lo que debes (rojo); negativo = a tu favor (verde); cero = neutro */
+const favCls = v => v > 0.004 ? 'neg' : v < -0.004 ? 'pos' : '';
+/** «Deuda C$ x y US$ y» en rojo y «A favor C$ x» en verde, cada parte según su signo (los dos pueden aparecer) */
+function deudaHtml(n, u) {
+  const debe = [n > 0.004 ? money(n) : '', u > 0.004 ? usd(u) : ''].filter(Boolean), favor = [n < -0.004 ? money(-n) : '', u < -0.004 ? usd(-u) : ''].filter(Boolean);
+  return (debe.length ? `<span class="neg">Deuda ${debe.join(' y ')}</span>` : '') + (debe.length && favor.length ? ' · ' : '') + (favor.length ? `<span class="pos">A favor ${favor.join(' y ')}</span>` : '');
 }
 const dosMonedas = (n, u) => [n ? money(n) : '', u ? usd(u) : ''].filter(Boolean).join(' y ') || money(0);
 function dueText(st) {
@@ -1796,8 +1804,8 @@ function tarjetaDetalle(c) {
   return `
   ${!cy ? `<div class="notice" style="margin-top:12px"><span>Escribe el <b>día de corte</b> y el <b>día límite de pago</b> de ${esc(c.Nombre)} para ver su estado de cuenta.</span>${adm ? '<button class="btn small" data-act="cat-go" data-t="Tarjetas_Credito">Abrir en Catálogos</button>' : ''}</div>` : ''}
   <div class="tablewrap" style="margin-top:12px"><table class="t estado"><thead><tr><th>Estado de cuenta</th><th class="n">Córdobas</th><th class="n">Dólares</th></tr></thead><tbody>
-    <tr style="cursor:default"><td><b>Deuda total</b></td><td class="n ${N.deuda > 0 ? 'neg' : ''}"><b>${money(N.deuda)}</b></td><td class="n ${U.deuda > 0 ? 'neg' : ''}"><b>${usd(U.deuda)}</b></td></tr>
-    ${row('Saldo al corte' + (cy ? ' (' + fdate(isoD(cy.last)) + ')' : ''), 'saldoCorte')}
+    <tr style="cursor:default"><td><b>Deuda total</b></td><td class="n ${favCls(N.deuda)}"><b>${money(N.deuda)}</b></td><td class="n ${favCls(U.deuda)}"><b>${usd(U.deuda)}</b></td></tr>
+    ${row('Saldo al corte' + (cy ? ' (' + fdate(isoD(cy.last)) + ')' : ''), 'saldoCorte', s1 => s1.saldoCorte < -0.004 ? 'pos' : '')}
     ${row('<b>Por pagar</b>' + (cy && cy.due ? ' antes del ' + fdate(isoD(cy.due)) : ''), 'pendiente', hot)}
     ${row('Consumos, cargos y reembolsos desde el corte', 'consumosDesde')}
     ${row('Pagado desde el corte', 'pagosDesde')}
@@ -1808,7 +1816,7 @@ function tarjetaDetalle(c) {
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">La tarjeta lleva dos deudas: en córdobas y en dólares. Suben con las compras (menos su descuento), el combustible pagado con la tarjeta, los retiros de efectivo con su cargo y los cargos del banco (intereses o comisiones); bajan con los pagos y con los reembolsos o bonificaciones. Al recibir el estado de cuenta, agrega sus cargos y reembolsos para que la deuda coincida con la del banco. Las compras no son gasto al hacerlas: el gasto se registra al pagar la tarjeta.</p>
     ${shown.length ? `<div class="list">${shown.map(r => `<button class="item ${r.pre ? 'pre' : ''}" data-edit="${r.src.t}" data-id="${r.src.id}"><span class="dot" style="background:${r.amt < 0 ? 'var(--good)' : 'var(--sun)'}"></span>
       <span class="tx"><b>${esc(r.desc)}</b><small>${fdatetime(r.fecha)}, ${esc(r.tipo)} en ${r.cur === 'USD' ? 'dólares' : 'córdobas'}${r.alt ? ', ' + esc(r.alt) : ''}</small></span>
-      <span class="amt num ${r.amt < 0 ? 'pos' : ''}">${r.amt > 0 ? '+' : '−'}${fcur(Math.abs(r.amt), r.cur)}<small>${r.pre ? 'Anterior a la deuda inicial' : 'Deuda ' + fcur(r.bal, r.cur)}</small></span></button>`).join('')}</div>`
+      <span class="amt num ${r.amt < 0 ? 'pos' : ''}">${r.amt > 0 ? '+' : '−'}${fcur(Math.abs(r.amt), r.cur)}<small class="${!r.pre && r.bal < -0.004 ? 'pos' : ''}">${r.pre ? 'Anterior a la deuda inicial' : (r.bal < -0.004 ? 'A favor ' + fcur(-r.bal, r.cur) : 'Deuda ' + fcur(r.bal, r.cur))}</small></span></button>`).join('')}</div>`
       : `<div class="panel empty"><b>Sin movimientos ${S.tarAll || !cy ? '' : 'desde el corte'}</b>Registra compras, retiros y pagos, o paga el combustible con esta tarjeta.</div>`}
   </section>
   ${legacy}`;
@@ -1818,7 +1826,7 @@ V.bancos = () => {
   const bs = bancos(), TL = tarjetas(), adm = can('catalogos.editar');
   if (!bs.length && !TL.length) return '<div class="panel empty" style="margin-top:16px"><b>Aún no hay cuentas ni tarjetas activas</b>' + (adm ? '<div class="row" style="justify-content:center;gap:8px;margin-top:12px"><button class="btn primary" data-act="cat-go" data-t="Bancos">Agregar en Catálogos</button></div>' : 'Pide a un administrador que agregue una cuenta.') + '</div>';
   const okSel = S.banco === 'ef' || S.banco === 'efd' || bs.some(b => String(b.ID_Banco) === String(S.banco)) || TL.some(t => S.banco === cardSel(t.ID_Tarjeta));
-  if (!S.banco || !okSel) S.banco = bs[0] ? String(bs[0].ID_Banco) : cardSel(TL[0].ID_Tarjeta);
+  if (!S.banco || !okSel) S.banco = 'ef';   // por defecto: Efectivo en mano (córdobas)
   const isCard = isCardSel(), cardObj = isCard ? tarjeta(String(S.banco).slice(2)) : null; if (cardObj) S.tarjeta = String(cardObj.ID_Tarjeta);
   const D = disponible(), L = {}; bs.forEach(b => L[b.ID_Banco] = ledger(b.ID_Banco));
   const C = cashLedger(), CU = cashUsdLedger(), ef = S.banco === 'ef', efd = S.banco === 'efd', showUsd = hasUsdCash();
@@ -1831,25 +1839,25 @@ V.bancos = () => {
   const actions = btns.length ? `<div class="bactions"><div class="bwho"><small>Acciones para</small><b>${esc(cur.Nombre)}</b></div><div class="bbtns">${btns.join('')}</div></div>` : '';
   const card = (id, top, name, v, curr, sub) => `<button class="bankcard ${String(id) === S.banco ? 'on' : ''}" data-banco="${id}"><small>${esc(top)}</small><b>${esc(name)}</b><span class="num bal ${v < 0 ? 'neg' : ''}" style="--n:${fcur(v, curr).length}">${fcur(v, curr)}</span><small>${sub || '&nbsp;'}</small></button>`;
   const accTile = b => card(b.ID_Banco, (b.Moneda === 'USD' ? 'Cuenta en dólares' : 'Cuenta en córdobas') + (b.Numero ? ' · ' + b.Numero : ''), b.Nombre, L[b.ID_Banco].saldo, b.Moneda, b.Moneda === 'USD' ? `≈ ${money(L[b.ID_Banco].saldo * tcFor(S.mes))} a ${tcFor(S.mes)}` : '');
-  const cardTile = t => { const s2 = cardStatus(t), n = money(s2.NIO.deuda), u = usd(s2.USD.deuda); return `<button class="bankcard ${S.banco === cardSel(t.ID_Tarjeta) ? 'on' : ''}" data-banco="${cardSel(t.ID_Tarjeta)}"><small>Tarjeta de crédito${t.Ultimos4 ? ' · ' + esc(t.Ultimos4) : ''}</small><b>${esc(t.Nombre)}</b><span class="num bal" style="--n:${n.length}">${n}</span><span class="num bal bal2" style="--n:${u.length}">${u}</span><small>${dueText(s2)}</small></button>`; };
+  const cardTile = t => { const s2 = cardStatus(t), n = money(s2.NIO.deuda), u = usd(s2.USD.deuda); return `<button class="bankcard ${S.banco === cardSel(t.ID_Tarjeta) ? 'on' : ''}" data-banco="${cardSel(t.ID_Tarjeta)}"><small>Tarjeta de crédito${t.Ultimos4 ? ' · ' + esc(t.Ultimos4) : ''}</small><b>${esc(t.Nombre)}</b><span class="num bal ${s2.NIO.deuda < -0.004 ? 'pos' : ''}" style="--n:${n.length}">${n}</span><span class="num bal bal2 ${s2.USD.deuda < -0.004 ? 'pos' : ''}" style="--n:${u.length}">${u}</span><small>${dueText(s2)}</small></button>`; };
   const groups = bankGroups(), debtN = r2(TL.reduce((a, t) => a + cardStatus(t).NIO.deuda, 0)), debtU = r2(TL.reduce((a, t) => a + cardStatus(t).USD.deuda, 0));
   return `
   ${actions}
   ${!D.configurado ? `<div class="notice info" style="margin-top:12px"><span>Escribe una vez cuánto tienes hoy en cada cuenta y en efectivo; desde ahí los saldos se calculan solos.</span>${can('catalogos.editar') || !Backend.online ? '<button class="btn small primary" data-act="saldos">Escribir saldos actuales</button>' : ''}</div>` : ''}
   <section class="section">
+  ${(() => { const open = bgIsOpen('#efectivo', true), hasSel = ef || efd; return `<section class="bgroup ${open ? 'open' : ''} ${hasSel ? 'has-sel' : ''}"><button type="button" class="bghead" data-act="bg-toggle" data-k="#efectivo" aria-expanded="${open}"><span class="bgt"><b>Efectivo</b><small>${showUsd ? 'En mano y en dólares' : 'En mano'}</small></span><span class="bgm"><span class="num ${C.saldo < 0 ? 'neg' : ''}">${money(C.saldo)}</span>${showUsd ? `<span class="num ${CU.saldo < 0 ? 'neg' : ''}">${usd(CU.saldo)}</span>` : ''}</span><i class="chev" aria-hidden="true"></i></button>${open ? `<div class="bankgrid">${card('ef', 'Efectivo', 'Efectivo en mano', C.saldo, 'NIO', '')}${showUsd ? card('efd', 'Efectivo', 'Efectivo en dólares', CU.saldo, 'USD', `≈ ${money(CU.saldo * tcFor(S.mes))} a ${tcFor(S.mes)}`) : ''}</div>` : ''}</section>`; })()}
   ${groups.map(g => {
     const nA = g.accs.length, nT = g.cards.length, open = bgIsOpen(g.key, false);
     const hasN = g.accs.some(b => b.Moneda !== 'USD'), hasU = g.accs.some(b => b.Moneda === 'USD');
     const sN = r2(g.accs.filter(b => b.Moneda !== 'USD').reduce((a, b) => a + L[b.ID_Banco].saldo, 0)), sU = r2(g.accs.filter(b => b.Moneda === 'USD').reduce((a, b) => a + L[b.ID_Banco].saldo, 0));
     const dN = r2(g.cards.reduce((a, t) => a + cardStatus(t).NIO.deuda, 0)), dU = r2(g.cards.reduce((a, t) => a + cardStatus(t).USD.deuda, 0));
     const sub = (nA ? nA + (nA === 1 ? ' cuenta' : ' cuentas') : '') + (nA && nT ? ' · ' : '') + (nT ? nT + (nT === 1 ? ' tarjeta' : ' tarjetas') : '');
-    const amts = (hasN ? `<span class="num ${sN < 0 ? 'neg' : ''}">${money(sN)}</span>` : '') + (hasU ? `<span class="num ${sU < 0 ? 'neg' : ''}">${usd(sU)}</span>` : '') + (nT ? (dN > 0.004 || dU > 0.004 ? `<span class="num neg dbt">Deuda ${dosMonedas(dN, dU)}</span>` : '<span class="dbt muted">Tarjetas sin deuda</span>') : '');
+    const amts = (hasN ? `<span class="num ${sN < 0 ? 'neg' : ''}">${money(sN)}</span>` : '') + (hasU ? `<span class="num ${sU < 0 ? 'neg' : ''}">${usd(sU)}</span>` : '') + (nT ? (Math.abs(dN) > 0.004 || Math.abs(dU) > 0.004 ? `<span class="num dbt">${deudaHtml(dN, dU)}</span>` : '<span class="dbt muted">Tarjetas sin deuda</span>') : '');
     const hasSel = g.accs.some(b => String(b.ID_Banco) === S.banco) || g.cards.some(t => cardSel(t.ID_Tarjeta) === S.banco);
     return `<section class="bgroup ${open ? 'open' : ''} ${hasSel ? 'has-sel' : ''}"><button type="button" class="bghead" data-act="bg-toggle" data-k="${esc(g.key)}" aria-expanded="${open}"><span class="bgt"><b>${esc(g.name)}</b><small>${sub}</small></span><span class="bgm">${amts}</span><i class="chev" aria-hidden="true"></i></button>${open ? `<div class="bankgrid">${g.accs.map(accTile).join('')}${g.cards.map(cardTile).join('')}</div>` : ''}</section>`;
   }).join('')}
-  ${(() => { const open = bgIsOpen('#efectivo', true), hasSel = ef || efd; return `<section class="bgroup ${open ? 'open' : ''} ${hasSel ? 'has-sel' : ''}"><button type="button" class="bghead" data-act="bg-toggle" data-k="#efectivo" aria-expanded="${open}"><span class="bgt"><b>Efectivo</b><small>${showUsd ? 'En mano y en dólares' : 'En mano'}</small></span><span class="bgm"><span class="num ${C.saldo < 0 ? 'neg' : ''}">${money(C.saldo)}</span>${showUsd ? `<span class="num ${CU.saldo < 0 ? 'neg' : ''}">${usd(CU.saldo)}</span>` : ''}</span><i class="chev" aria-hidden="true"></i></button>${open ? `<div class="bankgrid">${card('ef', 'Efectivo', 'Efectivo en mano', C.saldo, 'NIO', '')}${showUsd ? card('efd', 'Efectivo', 'Efectivo en dólares', CU.saldo, 'USD', `≈ ${money(CU.saldo * tcFor(S.mes))} a ${tcFor(S.mes)}`) : ''}</div>` : ''}</section>`; })()}
   <div class="sumline" style="margin-top:12px"><span>Disponible para gastar (cuentas en córdobas + efectivo)</span><b class="num">${money(D.total)}</b></div>
-  ${TL.length && (debtN > 0.004 || debtU > 0.004) ? `<div class="sumline" style="margin-top:6px"><span>Deuda en tarjetas de crédito</span><b class="num neg">${dosMonedas(debtN, debtU)}</b></div>` : ''}
+  ${TL.length && (Math.abs(debtN) > 0.004 || Math.abs(debtU) > 0.004) ? `<div class="sumline" style="margin-top:6px"><span>Tarjetas de crédito</span><b class="num">${deudaHtml(debtN, debtU)}</b></div>` : ''}
   ${(() => { const tI = totals(S.mes).I, nI = rowsFor('Ingresos_Detalle', S.mes).length; return `<button type="button" class="sumline go" data-go="ingresos"><span>Ingresos de ${esc(mesLabel(S.mes))}<small>${nI} ${nI === 1 ? 'ingreso' : 'ingresos'} · Ver detalle ›</small></span><b class="num ${tI < 0 ? 'neg' : ''}">${money(tI)}</b></button>`; })()}
   ${(() => { const tR = totals(S.mes).R, nR = rowsFor('Retiros_Detalle', S.mes).length; return `<button type="button" class="sumline go" data-go="retiros"><span>Retiros de efectivo de ${esc(mesLabel(S.mes))}<small>${nR} ${nR === 1 ? 'retiro' : 'retiros'} · Ver detalle ›</small></span><b class="num">${money(tR)}</b></button>`; })()}
   ${adm ? `<p class="muted" style="font-size:12.5px;margin:8px 2px 0">Para agregar o editar cuentas y tarjetas, ve a <a href="#" data-act="cat-go" data-t="Bancos">Cuentas de banco</a> o <a href="#" data-act="cat-go" data-t="Tarjetas_Credito">Tarjetas de crédito</a> en Catálogos.</p>` : ''}
