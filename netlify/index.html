@@ -593,7 +593,7 @@ const COPYRIGHT_TXT = AUTOR.derechos + ' Creado por ' + AUTOR.creador + '. ' + A
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.11.04-0202';
+const APP_VERSION = '2026.11.04-0247';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -1871,7 +1871,7 @@ V.bancos = () => {
   const inPer = S.bankAll ? led.rows : led.rows.filter(r => periodForDate(r.fecha) === S.mes), previosVista = inPer.filter(r => r.pre).length;
   const ed = can('bancos.editar'), shown = inPer.slice().reverse().slice(0, 250);
   const btns = isCard ? (can('tarjetas.editar') ? [abtn('+ Movimiento', 'data-act="tar-mov"', true, 'Registrar movimiento de la tarjeta')] : [])
-    : [ed ? abtn('+ Movimiento', 'data-act="mov-transfer"', true, 'Transferir, depositar o deducir') : '', !ef && !efd && canAdd('Retiros') ? abtn('+ Retiro', 'data-act="ret-new"', false, 'Retirar efectivo de la cuenta') : '', efd && ed ? abtn('Depositar US$', 'data-act="efd-bank"', false, 'Depositar en la cuenta en dólares') + abtn('Cambiar a C$', 'data-act="efd-cash"', false, 'Cambiar a córdobas') : ''];
+    : [ed ? abtn('+ Movimiento', 'data-act="mov-transfer"', true, 'Transferir, depositar o deducir') : '', !ef && !efd && canAdd('Retiros') ? abtn('+ Retiro', 'data-act="ret-new"', false, 'Retirar efectivo de la cuenta') : ''];
   const actions = actionBar(btns, cur.Nombre);
   const card = (id, top, name, v, curr, sub) => `<button class="bankcard ${String(id) === S.banco ? 'on' : ''}" data-banco="${id}"><small>${esc(top)}</small><b>${esc(name)}</b><span class="num bal ${v < 0 ? 'neg' : ''}" style="--n:${fcur(v, curr).length}">${fcur(v, curr)}</span><small>${sub || '&nbsp;'}</small></button>`;
   const accTile = b => card(b.ID_Banco, (b.Moneda === 'USD' ? 'Cuenta en dólares' : 'Cuenta en córdobas') + (b.Numero ? ' · ' + b.Numero : ''), b.Nombre, L[b.ID_Banco].saldo, b.Moneda, b.Moneda === 'USD' ? `≈ ${money(L[b.ID_Banco].saldo * tcFor(S.mes))} a ${tcFor(S.mes)}` : '');
@@ -3232,12 +3232,6 @@ document.addEventListener('click', async e => {
     const d = new Date(Date.now() - (Number(t.dataset.min) || 0) * 60000); const v = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     el.value = v; if (tt) tt.value = pad(d.getHours()) + ':' + pad(d.getMinutes()); el.dispatchEvent(new Event('input', {bubbles: true})); return; }
   if (a === 'fuel-edit') { const id = t.dataset.fid; closeModal(); openForm('Consumo_Combustible', id, true); return; }
-  if (a === 'efd-bank' || a === 'efd-cash' || a === 'ef-buy') {
-    openForm('Movimientos_Banco'); const set = (id, v) => { const el = $(id); if (el) el.value = String(v); };
-    if (a === 'ef-buy') { set('#f_ID_Banco_Origen', 0); set('#f_ID_Banco_Destino', -1); }
-    else { set('#f_ID_Banco_Origen', -1); const ub = bancos().find(b => b.Moneda === 'USD'); set('#f_ID_Banco_Destino', a === 'efd-bank' && ub ? ub.ID_Banco : 0); }
-    formDynamics(); return;
-  }
   if (a === 'deposito') return openDeposito();
   if (a === 'mov-dep') return openDeposito(S.banco);
   if (a === 'mov-transfer' || a === 'mov-dep') { openForm('Movimientos_Banco'); FORM.ctxBanco = S.banco === 'ef' ? '0' : S.banco === 'efd' ? '-1' : S.banco; if (a === 'mov-dep') { $('#f_Tipo').value = 'Depósito'; $('#f_ID_Banco_Destino').value = S.banco === 'ef' ? '0' : S.banco === 'efd' ? '-1' : S.banco; } else if (S.banco) { $('#f_ID_Banco_Origen').value = S.banco === 'ef' ? '0' : S.banco === 'efd' ? '-1' : S.banco; const o = bancos().find(b => String(b.ID_Banco) !== S.banco); if (o) $('#f_ID_Banco_Destino').value = o.ID_Banco; } formDynamics(); return; }
