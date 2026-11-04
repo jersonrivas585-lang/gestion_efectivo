@@ -590,7 +590,7 @@ const COPYRIGHT_TXT = AUTOR.derechos + ' Creado por ' + AUTOR.creador + '. ' + A
    Gestión de Efectivo — app web y móvil
    Datos: Google Sheets mediante Google Apps Script
    ====================================================================== */
-const APP_VERSION = '2026.11.03-2021';
+const APP_VERSION = '2026.11.04-0101';
 const EMBED = /*__DATA__*/null;
 const CONFIG = window.APP_CONFIG || {};
 const apiUrl = () => CONFIG.API_URL || lsGet('api_url') || '';
@@ -787,7 +787,8 @@ const banco = id => (DB.t.Bancos || []).find(b => String(b.ID_Banco) === String(
 const curOf = id => (banco(id) || {}).Moneda || (isUsdCashId(id) ? 'USD' : 'NIO');
 /** ¿La cuenta de banco tiene movimientos de cualquier tipo? */
 const bankUsed = id => String(id) !== '0' && ([['Ingresos_Detalle', 'ID_Banco'], ['Retiros_Detalle', 'ID_Banco'], ['Gastos_Detalle', 'ID_Banco']].some(([t, k]) => (DB.t[t] || []).some(r => r[k] !== '' && String(r[k]) === String(id)))
-  || (DB.t.Movimientos_Banco || []).some(m => String(m.ID_Banco_Origen) === String(id) || String(m.ID_Banco_Destino) === String(id)));
+  || (DB.t.Movimientos_Banco || []).some(m => String(m.ID_Banco_Origen) === String(id) || String(m.ID_Banco_Destino) === String(id))
+  || (DB.t.Movimientos_Tarjeta || []).some(m => (m.Tipo === 'Pago' || m.Tipo === 'Retiro de efectivo') && m.ID_Banco !== '' && m.ID_Banco !== null && String(m.ID_Banco) === String(id)));
 /** Efectivo en dólares: bolsillo aparte del efectivo en córdobas (llega con retiros en dólares y se gasta con «Efectivo en dólares») */
 const EFUSD = 'EFUSD';
 /** En transferencias y depósitos: 0 = efectivo en córdobas, -1 = efectivo en dólares */
@@ -891,7 +892,7 @@ function cardLedger(id, cur = 'NIO') {
   (DB.t.Movimientos_Tarjeta || []).filter(m => String(m.ID_Tarjeta) === String(id) && movCur(m) === cur).forEach(m => {
     const src = {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, M = Number(m.Monto) || 0, cg = Number(m.Cargo) || 0, d = Number(m.Descuento) || 0;
     if (m.Tipo === 'Pago') add(m.Fecha, 'Pago desde ' + bankName(m.ID_Banco) + (m.Descripcion ? ': ' + m.Descripcion : ''), -M, src, 'Pago', Number(m.Monto_Banco) && curOf(m.ID_Banco) !== cur ? fcur(m.Monto_Banco, curOf(m.ID_Banco)) + ' a T/C ' + m.Tipo_Cambio : '');
-    else if (m.Tipo === 'Retiro de efectivo') add(m.Fecha, m.Descripcion || 'Retiro de efectivo', M + cg, src, 'Retiro de efectivo', cg ? 'incluye cargo de ' + fcur(cg, cur) : '');
+    else if (m.Tipo === 'Retiro de efectivo') { const dst = retDestId(m), rcv = retRecibe(m), dcur = retDestCur(dst); add(m.Fecha, m.Descripcion || 'Retiro de efectivo', M + cg, src, 'Retiro de efectivo', [cg ? 'incluye recargo de ' + fcur(cg, cur) : '', 'entra a ' + retDestName(dst) + (dcur !== cur ? ' (' + fcur(rcv, dcur) + ')' : '')].filter(Boolean).join(' · ')); }
     else if (m.Tipo === 'Cargo') add(m.Fecha, m.Descripcion || 'Intereses o comisión', M, src, 'Cargo');
     else if (m.Tipo === 'Reembolso') add(m.Fecha, m.Descripcion || 'Reembolso o bonificación', -M, src, 'Reembolso o bonificación');
     else add(m.Fecha, m.Descripcion || 'Compra', M - d, src, 'Compra', d ? 'descuento ' + fcur(d, cur) : '');
@@ -961,6 +962,40 @@ function partidaOptsFor(mes, cuenta) {
   return [['', 'Elegir partida…'], ['0', 'Sin partida'], ...pr.map(p => [p.ID_DetPresupuesto, p.Descripcion + ' · queda ' + money(r2((Number(p.Total) || 0) - (m.get(String(p.ID_DetPresupuesto)) || 0)))])];
 }
 /** Pago de tarjeta: lo que sale de la cuenta de banco (en su moneda) y su valor en córdobas para el gasto */
+/* ===== Retiro de efectivo con tarjeta: recargo en %, destino (efectivo o cuenta) y cambio de moneda =====
+   ID_Banco del movimiento = destino: 0 efectivo en mano, -1 efectivo en dólares, o la cuenta de banco; vacío (retiros anteriores) = efectivo en la moneda de la deuda.
+   Monto = lo que se retira de la tarjeta (moneda de la deuda); Cargo = recargo en esa moneda; Monto_Banco = lo que se recibe en la moneda del destino. */
+const retDestId = m => { const v = m.ID_Banco; return v === '' || v === null || v === undefined ? (movCur(m) === 'USD' ? '-1' : '0') : String(v); };
+const retDestCur = id => String(id) === '-1' ? 'USD' : String(id) === '0' ? 'NIO' : curOf(id);
+const retRecibe = m => Number(m.Monto_Banco) > 0 ? Number(m.Monto_Banco) : (Number(m.Monto) || 0);
+const retDestName = id => String(id) === '0' ? 'tu efectivo en mano' : String(id) === '-1' ? 'tu efectivo en dólares' : bankName(id);
+function retiroCalc(o) {
+  const M = Number(o.Monto) || 0, pct = Number(o.Pct_Cargo) || 0, cg = Number(o.Cargo) || 0, cur = o.Moneda === 'USD' ? 'USD' : 'NIO';
+  const dest = o.ID_Banco === '' || o.ID_Banco === null || o.ID_Banco === undefined ? (cur === 'USD' ? '-1' : '0') : String(o.ID_Banco), dc = retDestCur(dest), conv = dc !== cur;
+  const rec = conv ? (Number(o.Monto_Banco) || 0) : M;
+  const est = !conv || !M ? 0 : cur === 'USD' ? r2(M * tcFor(S.mes, 'venta')) : r2(M / (tcFor(S.mes, 'compra') || 1));   // lo que se estima recibir al tipo de cambio del período
+  const tc = conv && rec && M ? (cur === 'USD' ? Math.round(rec / M * 10000) / 10000 : Math.round(M / rec * 10000) / 10000) : 0;   // C$ por US$ implícito
+  return {M, pct, cg, cur, dest, dc, conv, rec, est, tc, deuda: r2(M + cg)};
+}
+/** Cálculos en vivo del formulario de retiro: recargo = monto × %, destino por defecto y lo que se recibe */
+function retiroDynamics(o) {
+  const F = FORM, isRet = o.Tipo === 'Retiro de efectivo';
+  if (F.rec && F.cargoInit === undefined) { F.cargoInit = true;
+    if (F.rec.Tipo === 'Retiro de efectivo') { const pc = Number(F.rec.Pct_Cargo) || 0; F.cargoTouched = !(pc > 0 && Math.abs(r2((Number(F.rec.Monto) || 0) * pc) - (Number(F.rec.Cargo) || 0)) < 0.011); F.recibeTouched = true; F.destTouched = true; } }
+  const ck = String(o.ID_Tarjeta);
+  if (F.cardKey !== undefined && F.cardKey !== ck && !F.rec && !F.pctTouched2) { const t = tarjeta(ck), pe = $('#f_Pct_Cargo'); if (t && pe) { pe.value = r2((Number(t.Pct_Retiro) || 0) * 100); o.Pct_Cargo = Number(t.Pct_Retiro) || 0; } }
+  F.cardKey = ck;
+  if (!isRet) { F.destKey = undefined;
+    if (o.Tipo === 'Pago') { const de = $('#f_ID_Banco'); if (de && de.value === '') { const v = String(Number((tarjeta(o.ID_Tarjeta) || {}).ID_Banco) || (bancos()[0] || {}).ID_Banco || ''); if ([...de.options].some(x => x.value === v)) { de.value = v; o.ID_Banco = Number(v); } } }   // al volver a «Pago» se propone una cuenta de banco
+    return; }
+  const cur = o.Moneda === 'USD' ? 'USD' : 'NIO', key = 'R|' + cur, de = $('#f_ID_Banco');
+  if (de && !F.destTouched && F.destKey !== key) { const want = cur === 'USD' ? '-1' : '0'; if ([...de.options].some(x => x.value === want)) { de.value = want; o.ID_Banco = Number(want); } }
+  F.destKey = key;
+  const rk = cur + '|' + String(o.ID_Banco); if (F.recKey === undefined) F.recKey = rk; else if (F.recKey !== rk) { F.recKey = rk; F.recibeTouched = false; }
+  const ce = $('#f_Cargo'); if (ce && document.activeElement !== ce && !F.cargoTouched) { const c = r2((Number(o.Monto) || 0) * (Number(o.Pct_Cargo) || 0)); ce.value = c || ''; o.Cargo = c || ''; }
+  const rc = retiroCalc(o), re = $('#f_Monto_Banco');
+  if (re) { if (rc.conv) { if (document.activeElement !== re && !F.recibeTouched) { re.value = rc.est || ''; o.Monto_Banco = rc.est || ''; } } else { re.value = ''; o.Monto_Banco = ''; } }
+}
 function pagoCalc(o) {
   const M = Number(o.Monto) || 0, pc = o.Moneda === 'USD' ? 'USD' : 'NIO', bc = curOf(o.ID_Banco), tc = Number(o.Tipo_Cambio) || 0;
   if (pc === bc) return {banco: M, c: pc === 'NIO' ? M : r2(M * (tc || tcFor(S.mes, 'venta'))), conv: false, bc, pc};
@@ -987,6 +1022,7 @@ function ledger(bid) {
     if (String(m.ID_Banco_Destino) === String(bid)) add(m.Fecha, (m.Tipo === 'Depósito' ? 'Depósito de efectivo' : 'Transferencia de ' + bankName(m.ID_Banco_Origen)) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto_Destino) || 0, src, {tipo: m.Tipo});
   });
   DB.t.Consumo_Combustible.filter(f => fuelPay(f) === 'B:' + bid && Number(f.Costo) > 0).forEach(f => add(f.Fecha, 'Combustible: ' + (Number(f.Litro) || 0).toFixed(2) + ' L', -(Number(f.Costo) || 0), {t: 'Consumo_Combustible', id: f.ID}, {tipo: 'Combustible'}));
+  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && retDestId(m) === String(bid)).forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta) + (m.Descripcion ? ': ' + m.Descripcion : ''), retRecibe(m), {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, {tipo: 'Retiro con tarjeta'}));
   (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Pago' && String(m.ID_Banco) === String(bid)).forEach(m => add(m.Fecha, 'Pago de tarjeta ' + tarName(m.ID_Tarjeta) + ' (' + (movCur(m) === 'USD' ? 'deuda en US$' : 'deuda en C$') + ')' + (m.Descripcion ? ': ' + m.Descripcion : ''), -(Number(m.Monto_Banco) || Number(m.Monto) || 0), {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, {tipo: 'Pago de tarjeta'}));
   out.sort((a, b) => a.fecha.localeCompare(b.fecha));
   let bal = Number(b.Saldo_Inicial) || 0; out.forEach(r => { if (r.pre) { r.bal = null; return; } bal = r2(bal + r.amt); r.bal = bal; });
@@ -998,7 +1034,7 @@ function cashLedger() {
   const add = (fecha, desc, amt, src, tipo) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, pre: !after(fecha, start)});
   DB.t.Ingresos_Detalle.filter(r => noBank(r) && !r.Origen && !isCarry(r)).forEach(r => add(r.Fecha_Registro, r.Descripcion, Number(r.Total) || 0, {t: 'Ingresos_Detalle', id: r.ID_DetIngresos}, 'Ingreso en efectivo'));
   DB.t.Consumo_Combustible.filter(f => fuelPay(f) === 'E' && Number(f.Costo) > 0).forEach(f => add(f.Fecha, 'Combustible: ' + (Number(f.Litro) || 0).toFixed(2) + ' L', -(Number(f.Costo) || 0), {t: 'Consumo_Combustible', id: f.ID}, 'Combustible'));
-  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && movCur(m) === 'NIO').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta) + (m.Descripcion ? ': ' + m.Descripcion : ''), Number(m.Monto) || 0, {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
+  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && retDestId(m) === '0').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta) + (m.Descripcion ? ': ' + m.Descripcion : ''), retRecibe(m), {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
   DB.t.Retiros_Detalle.filter(r => !r.Origen && r.Efectivo_Moneda !== 'USD').forEach(r => add(r.Fecha_Retiro, r.Movimiento + (banco(r.ID_Banco) ? ' (' + bankName(r.ID_Banco) + ')' : ''), Number(r.Total) || 0, {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, 'Retiro de efectivo'));
   DB.t.Gastos_Detalle.filter(r => noBank(r) && !r.Origen && !truthy(r.Efectivo_USD)).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(Number(r.Total) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, 'Gasto en efectivo'));
   (DB.t.Movimientos_Banco || []).filter(m => (m.Tipo === 'Depósito' || m.Tipo === 'Ajuste') && String(m.ID_Banco_Destino) === '0')
@@ -1014,7 +1050,7 @@ function cashUsdLedger() {
   const e = empresa(), start = dtKey(e.Fecha_Efectivo_Inicial), out = [];
   if (!start) return {rows: [], saldo: 0, inicial: 0, start: '', previos: 0};
   const add = (fecha, desc, amt, src, tipo) => out.push({fecha: dtKey(fecha), desc, amt: r2(amt), src, tipo, pre: !after(fecha, start)});
-  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && movCur(m) === 'USD').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta), Number(m.Monto) || 0, {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
+  (DB.t.Movimientos_Tarjeta || []).filter(m => m.Tipo === 'Retiro de efectivo' && retDestId(m) === '-1').forEach(m => add(m.Fecha, 'Retiro con tarjeta ' + tarName(m.ID_Tarjeta), retRecibe(m), {t: 'Movimientos_Tarjeta', id: m.ID_MovTar}, 'Retiro con tarjeta'));
   DB.t.Retiros_Detalle.filter(r => r.Efectivo_Moneda === 'USD' && !r.Origen).forEach(r => add(r.Fecha_Retiro, r.Movimiento + ' (' + bankName(r.ID_Banco) + ')', Number(r.Monto_Moneda) || 0, {t: 'Retiros_Detalle', id: r.Id_DetRetiros}, 'Retiro en dólares'));
   DB.t.Gastos_Detalle.filter(r => truthy(r.Efectivo_USD) && !r.Origen).forEach(r => add(r.Fecha, r.Descripcion_Gasto, -(Number(r.Monto_Moneda) || 0), {t: 'Gastos_Detalle', id: r.ID_Detalle_Gastos}, 'Gasto en efectivo en dólares'));
   (DB.t.Movimientos_Banco || []).forEach(m => {
@@ -2428,6 +2464,7 @@ const FORMS = {
     {k: 'Saldo_Inicial_USD', l: 'Deuda actual en dólares (US$)', ty: 'number', step: '0.01', half: 1, def: 0},
     {k: 'Fecha_Inicial', l: 'Fecha y hora de esas deudas', ty: 'datetime', req: 1, def: nowDT, hint: 'Míralas en la app del banco. Solo cuentan los movimientos desde ese momento'},
     {k: 'Orden', l: 'Orden', ty: 'number', half: 1, def: () => tarjetas(true).length + 1},
+    {k: 'Pct_Retiro', l: 'Recargo por retiro de efectivo (%)', ty: 'pct', half: 1, def: 0, hint: 'Lo que cobra el banco por cada retiro de efectivo con esta tarjeta (por ejemplo 3). Se propone en cada retiro y se puede cambiar'},
     {k: 'Activa', l: 'Activa', ty: 'bool', def: true, hint: 'Desactívala si ya no la usas: su historial se conserva'}],
     validate: o => [o.Dia_Corte, o.Dia_Pago].some(v => v !== '' && !(Number(v) >= 1 && Number(v) <= 31)) ? 'El día de corte y el de pago van del 1 al 31' : (!FORM.rec && (DB.t.Tarjetas_Credito || []).some(t => nrm(t.Nombre) === nrm(o.Nombre)) ? 'Ya existe una tarjeta con ese nombre' : ''),
     guardDelete: rec => (DB.t.Movimientos_Tarjeta || []).some(m => String(m.ID_Tarjeta) === String(rec.ID_Tarjeta)) || DB.t.Consumo_Combustible.some(f => String(f.ID_Tarjeta) === String(rec.ID_Tarjeta)) ? 'Esta tarjeta tiene movimientos. Desactívala en lugar de eliminarla.' : '',
@@ -2440,29 +2477,46 @@ const FORMS = {
     {k: 'Descripcion', l: 'Concepto', ty: 'text'},
     {k: 'Monto', l: 'Monto', ty: 'number', req: 1, step: '0.01', half: 1},
     {k: 'Pct_Desc', l: 'Descuento (%)', ty: 'pct', half: 1, def: () => Number((tarjeta(S.tarjeta) || tarjetas()[0] || {}).Descuento_Pct) || 0, show: o => o.Tipo === 'Compra', hint: 'El de la tarjeta; cámbialo si esta compra no lo tiene'},
-    {k: 'Cargo', l: 'Cargo por retiro', ty: 'number', step: '0.01', half: 1, show: o => o.Tipo === 'Retiro de efectivo', hint: 'Lo que cobra el banco por el retiro'},
+    {k: 'Pct_Cargo', l: 'Recargo del banco (%)', ty: 'pct', half: 1, def: () => Number((tarjeta(S.tarjeta) || tarjetas()[0] || {}).Pct_Retiro) || 0, show: o => o.Tipo === 'Retiro de efectivo', hint: 'El de la tarjeta; cámbialo si este retiro tuvo otro'},
+    {k: 'Cargo', l: 'Recargo', ty: 'number', step: '0.01', half: 1, show: o => o.Tipo === 'Retiro de efectivo', hint: 'Se calcula con el porcentaje; corrígelo si el banco cobró un mínimo o redondeó'},
     {k: 'ID_Banco', l: 'Pagar desde', ty: 'select', num: 1, live: o => { if (o.Tipo !== 'Pago') return ''; const pc = pagoCalc(o); return saldoLine(o.ID_Banco, pc.banco, FORM && FORM.rec && FORM.rec.Tipo === 'Pago' ? {ID_Banco: FORM.rec.ID_Banco, Total: Number(FORM.rec.Monto_Banco) || Number(FORM.rec.Monto), Monto_Moneda: Number(FORM.rec.Monto_Banco) || Number(FORM.rec.Monto)} : null); },
-      opts: () => bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), def: () => Number((tarjeta(S.tarjeta) || {}).ID_Banco) || (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Pago'},
+      opts: () => bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : '')]), def: () => Number((tarjeta(S.tarjeta) || {}).ID_Banco) || (bancos()[0] || {}).ID_Banco, show: o => o.Tipo === 'Pago' || o.Tipo === 'Retiro de efectivo',
+      fillFrom: rec => rec.Tipo === 'Retiro de efectivo' ? (movCur(rec) === 'USD' ? -1 : 0) : rec.ID_Banco,
+      dynOpts: o => { const ret = o.Tipo === 'Retiro de efectivo', bk = bancos().map(b => [b.ID_Banco, b.Nombre + (b.Moneda === 'USD' ? ' (US$)' : ' (C$)')]), l = ret ? [[0, 'Efectivo en mano (C$)'], [-1, 'Efectivo en dólares (US$)'], ...bk] : bk.map(([v, n]) => [v, n.replace(' (C$)', '')]);
+        const cur = o.ID_Banco; if (cur !== '' && cur !== null && cur !== undefined && !l.some(([v]) => String(v) === String(cur)) && banco(cur)) l.push([cur, bankName(cur)]); return l; }},
+    {k: 'Monto_Banco', l: 'Recibes', ty: 'number', step: '0.01', half: 1, show: o => o.Tipo === 'Retiro de efectivo' && retiroCalc(o).conv, hint: 'Lo que te entregaron en la moneda del destino. Se propone con el tipo de cambio del período; corrígelo con lo real'},
     {k: 'Tipo_Cambio', l: 'Tipo de cambio (C$ por US$)', ty: 'number', step: 'any', half: 1, req: 1, def: () => tcFor(S.mes, 'compra'), show: o => o.Tipo === 'Pago' && pagoCalc(o).conv},
     {k: 'Cuenta_Gastos', l: 'Cuenta del gasto', ty: 'select', combo: 1, opts: () => optsCuentas(true), def: () => defaultTarjetaCuenta(), fillEmpty: 1, show: o => o.Tipo === 'Pago', hint: 'El pago se registra como gasto del período en esta cuenta'},
     {k: 'ID_Partida', l: 'Partida del presupuesto', ty: 'select', combo: 1, num: 1, opts: () => [], def: () => guessPartida(S.tarjeta, S.mes, defaultTarjetaCuenta()), dynOpts: o => partidaOptsFor(FORM && FORM.rec && FORM.rec.Mes_Anio || S.mes, o.Cuenta_Gastos), show: o => o.Tipo === 'Pago'}],
     label: o => { const u = o.Moneda === 'USD' ? 'US$' : 'C$';
-      return {Monto: (o.Tipo === 'Pago' ? 'Monto del pago a la deuda en ' + u : (o.Tipo === 'Retiro de efectivo' ? 'Efectivo retirado' : o.Tipo === 'Cargo' ? 'Monto del cargo' : o.Tipo === 'Reembolso' ? 'Monto del reembolso o bonificación' : 'Monto de la compra') + ' (' + u + ')'), Cargo: 'Cargo por retiro (' + u + ')', Descripcion: o.Tipo === 'Compra' ? 'Comercio o concepto' : o.Tipo === 'Cargo' ? 'Concepto (p. ej. intereses corrientes)' : o.Tipo === 'Reembolso' ? 'Concepto (p. ej. reembolso rebate local)' : 'Concepto', Tipo_Cambio: 'Tipo de cambio de ' + pagoKind(o) + ' (C$ por US$)'}; },
+      return {Monto: (o.Tipo === 'Pago' ? 'Monto del pago a la deuda en ' + u : (o.Tipo === 'Retiro de efectivo' ? 'Monto que retiras de la tarjeta' : o.Tipo === 'Cargo' ? 'Monto del cargo' : o.Tipo === 'Reembolso' ? 'Monto del reembolso o bonificación' : 'Monto de la compra') + ' (' + u + ')'), Cargo: 'Recargo (' + u + ')', ID_Banco: o.Tipo === 'Retiro de efectivo' ? 'El dinero entra a' : 'Pagar desde', Monto_Banco: (() => { const rc = o.Tipo === 'Retiro de efectivo' ? retiroCalc(o) : null; return rc ? 'Recibes en ' + (rc.dc === 'USD' ? 'dólares (US$)' : 'córdobas (C$)') : 'Recibes'; })(), Descripcion: o.Tipo === 'Compra' ? 'Comercio o concepto' : o.Tipo === 'Cargo' ? 'Concepto (p. ej. intereses corrientes)' : o.Tipo === 'Reembolso' ? 'Concepto (p. ej. reembolso rebate local)' : 'Concepto', Tipo_Cambio: 'Tipo de cambio de ' + pagoKind(o) + ' (C$ por US$)'}; },
     validate: o => { if (!(Number(o.Monto) > 0)) return 'El monto debe ser mayor que cero';
       if (o.Tipo === 'Pago') { const pc = pagoCalc(o); if (pc.conv && !(Number(o.Tipo_Cambio) > 0)) return 'Escribe el tipo de cambio';
         if (saldosConfigurados()) { const a = availOf(o.ID_Banco, FORM.rec && FORM.rec.Tipo === 'Pago' ? {ID_Banco: FORM.rec.ID_Banco, Total: Number(FORM.rec.Monto_Banco) || Number(FORM.rec.Monto), Monto_Moneda: Number(FORM.rec.Monto_Banco) || Number(FORM.rec.Monto)} : null); if (pc.banco > a.v + 0.005) return `No alcanza: ${a.name} tiene ${fcur(a.v, a.cur)} y el pago necesita ${fcur(pc.banco, a.cur)}`; } }
+      if (o.Tipo === 'Retiro de efectivo') { const rc = retiroCalc(o);
+        if (rc.dest !== '0' && rc.dest !== '-1' && !banco(rc.dest)) return 'Elige a dónde entra el dinero';
+        if (rc.conv && !(rc.rec > 0)) return 'Escribe cuánto recibes en ' + (rc.dc === 'USD' ? 'dólares' : 'córdobas');
+        if (rc.cg < 0) return 'El recargo no puede ser negativo'; }
       return ''; },
+    toastExtra: o => { if (o.Tipo !== 'Retiro de efectivo') return ''; const rc = retiroCalc(o); return 'Es deuda: debes devolver ' + fcur(rc.deuda, rc.cur); },
     preview: o => { const c = tarjeta(o.ID_Tarjeta), M = Number(o.Monto) || 0; if (!c || !M) return ''; const cur = o.Moneda === 'USD' ? 'USD' : 'NIO', deu = cur === 'USD' ? 'la deuda en dólares' : 'la deuda en córdobas';
       if (o.Tipo === 'Pago') { const pc = pagoCalc(o); if (pc.conv && !Number(o.Tipo_Cambio)) return 'Escribe el tipo de cambio para calcular cuánto sale de la cuenta.';
         return `Baja ${deu} de ${esc(c.Nombre)} en <b>${fcur(M, cur)}</b>. Se descuentan <b>${fcur(pc.banco, pc.bc)}</b> de ${esc(bankName(o.ID_Banco))}${pc.conv ? ` (${pc.pc === 'USD' ? fcur(M, 'USD') + ' × T/C ' + o.Tipo_Cambio : fcur(M, 'NIO') + ' ÷ T/C ' + o.Tipo_Cambio})` : ''}. Se registra como <b>gasto</b> de ${money(pc.c)} en ${esc(cuentaNombre(o.Cuenta_Gastos))}.`; }
       if (o.Tipo === 'Cargo') return `${deu.charAt(0).toUpperCase() + deu.slice(1)} de ${esc(c.Nombre)} sube <b>${fcur(M, cur)}</b>, como lo cobró el banco en el estado de cuenta. No es gasto ahora: se cuenta al pagar la tarjeta.`;
       if (o.Tipo === 'Reembolso') return `${deu.charAt(0).toUpperCase() + deu.slice(1)} de ${esc(c.Nombre)} baja <b>${fcur(M, cur)}</b>. No mueve ninguna cuenta de banco ni el efectivo.`;
-      if (o.Tipo === 'Retiro de efectivo') { const cg = Number(o.Cargo) || 0; return `Entran <b>${fcur(M, cur)}</b> a tu efectivo${cur === 'USD' ? ' en dólares' : ' en mano'}. ${deu.charAt(0).toUpperCase() + deu.slice(1)} de ${esc(c.Nombre)} sube <b>${fcur(M + cg, cur)}</b>${cg ? ` (incluye el cargo de ${fcur(cg, cur)})` : ''}. No es gasto: se cuenta al pagar la tarjeta.`; }
+      if (o.Tipo === 'Retiro de efectivo') { const rc = retiroCalc(o), st = cardStatus(c), cg = rc.cg;
+        let t = `Retiras <b>${fcur(M, cur)}</b> de ${esc(c.Nombre)}` + (cg ? ` con un recargo de <b>${fcur(cg, cur)}</b>${rc.pct ? ' (' + r2(rc.pct * 100) + '%)' : ''}` : '') + `: ${deu} sube <b>${fcur(rc.deuda, cur)}</b>. `;
+        t += rc.conv && !rc.rec ? 'Escribe cuánto recibes para completar el cálculo. ' : `Entran <b>${fcur(rc.rec, rc.dc)}</b> a ${esc(retDestName(rc.dest))}${rc.conv ? ` (tipo de cambio ${rc.tc})` : ''}. `;
+        t += `<br><span class="neg"><b>Es deuda:</b> tendrás que devolver ${fcur(rc.deuda, cur)}, más los intereses que cobre el banco.</span> No es ingreso ni cuenta como retiro del período; el recargo se registra como gasto al pagar la tarjeta.`;
+        if (Number(c.Limite) > 0) { const nuevo = cur === 'USD' ? rc.deuda : r2(rc.deuda / (tcFor(S.mes, 'compra') || 1)), prev = FORM && FORM.rec && FORM.rec.Tipo === 'Retiro de efectivo' && String(FORM.rec.ID_Tarjeta) === String(c.ID_Tarjeta) ? ((movCur(FORM.rec) === 'USD' ? 1 : 1 / (tcFor(S.mes, 'compra') || 1)) * ((Number(FORM.rec.Monto) || 0) + (Number(FORM.rec.Cargo) || 0))) : 0;
+          if (nuevo - prev > st.disponible + 0.005) t += `<br><span class="neg">Supera lo disponible de la tarjeta (${usd(Math.max(0, st.disponible))}): el banco podría rechazarlo.</span>`; }
+        return t; }
       const d = r2(M * (Number(o.Pct_Desc) || 0)); return `${deu.charAt(0).toUpperCase() + deu.slice(1)} de ${esc(c.Nombre)} sube <b>${fcur(M - d, cur)}</b>${d ? ` (${fcur(M, cur)} − descuento ${fcur(d, cur)})` : ''}. No es gasto ahora: se cuenta al pagar la tarjeta.`; },
     before: o => { o.ID_Tarjeta = Number(o.ID_Tarjeta); o.Moneda = o.Moneda === 'USD' ? 'USD' : 'NIO'; const M = Number(o.Monto) || 0;
       if (o.Tipo === 'Compra') { o.Pct_Desc = Number(o.Pct_Desc) || 0; o.Descuento = r2(M * o.Pct_Desc); } else { o.Pct_Desc = ''; o.Descuento = ''; }
-      if (o.Tipo !== 'Retiro de efectivo') o.Cargo = '';
+      if (o.Tipo !== 'Retiro de efectivo') { o.Cargo = ''; o.Pct_Cargo = ''; }
       if (o.Tipo === 'Pago') { const pc = pagoCalc(o); o.Monto_Banco = pc.banco; o.Monto_C = pc.c; if (!pc.conv) o.Tipo_Cambio = o.Moneda === 'USD' ? tcFor(S.mes, 'venta') : ''; }
+      else if (o.Tipo === 'Retiro de efectivo') { const rc = retiroCalc(o); o.Pct_Cargo = rc.pct; o.Cargo = r2(rc.cg); o.ID_Banco = Number(rc.dest); o.Monto_Banco = rc.conv ? r2(rc.rec) : M; o.Tipo_Cambio = rc.conv ? rc.tc : ''; o.Monto_C = rc.cur === 'NIO' ? M : (rc.conv ? r2(rc.rec) : r2(M * tcFor(S.mes, 'venta'))); o.Cuenta_Gastos = ''; o.ID_Partida = ''; }
       else { o.ID_Banco = ''; o.Cuenta_Gastos = ''; o.ID_Partida = ''; o.Tipo_Cambio = ''; o.Monto_Banco = ''; o.Monto_C = ''; } },
     after: o => { if (o.ID_Tarjeta) S.tarjeta = String(o.ID_Tarjeta); }},
   Referencias_Tarjetas: {t: 'consumo con tarjeta', perm: 'tarjetas.editar', fields: [
@@ -2657,6 +2711,7 @@ function formDynamics() {
   F.fields.forEach(f => { if (!f.dynOpts) return; const el = $('#f_' + f.k); if (!el) return;
     const list = f.dynOpts(o), html = list.map(([a, b]) => `<option value="${esc(a)}">${esc(b)}</option>`).join('');
     if (el._sig !== html) { const cur = el.value; el.innerHTML = html; el._sig = html; el.value = list.some(([a]) => String(a) === String(cur)) ? cur : ''; } });
+  if (FORM.table === 'Movimientos_Tarjeta' && !FORM.view) retiroDynamics(o);
   F.fields.forEach(f => { const w = $(`#frm [data-fk="${f.k}"]`); if (w && f.show) w.hidden = !f.show(o); if (f.live) { const el = $(`#frm [data-live="${f.k}"]`); if (el) el.innerHTML = FORM.view ? '' : f.live(o); } });
   if (F.label) Object.entries(F.label(o)).forEach(([k, l]) => { const lb = $(`#frm [data-fk="${k}"] > label`); if (lb) lb.textContent = l; });
   let warn = '';
@@ -2732,7 +2787,7 @@ async function submitForm() {
     if (F.done) F.done(Object.assign({}, o, {ID: rec ? rec[k] : tmpKey}));
     Outbox.push({action: 'save', table, payload: Object.assign({table, row, mes}, F.payload ? F.payload(o, rec) : {}), tmp: tmpKey, loc, undo, tmps, hdrs, label: motivoOf(table, o, rec ? 'edit' : 'new') || (label + (rec ? ' (corrección)' : '')), t0: Date.now(), form: {id: rec ? rec[k] : undefined, o}});
     if (RESUMEN_TABLES.includes(table)) queueResumen(periodsOf(table, o, rec), motivoOf(table, o, rec ? 'edit' : 'new'));
-    if (!F.doneModal) toast(label + (rec ? ' actualizad' : ' registrad') + (F.g || 'o') + enTelefono());
+    if (!F.doneModal) { const ex = F.toastExtra ? F.toastExtra(o) : ''; toast(label + (rec ? ' actualizad' : ' registrad') + (F.g || 'o') + (ex ? '. ' + ex : '') + enTelefono()); }
     return;
   }
   const btn = $('#frm button[type=submit]'); btn.disabled = true; btn.textContent = 'Guardando…';
@@ -3299,9 +3354,13 @@ document.addEventListener('input', e => {
   if (FORM && e.target.id === 'f_Tipo_Cambio') FORM.tcTouched = true;
   if (FORM && e.target.id === 'f_Monto') FORM.montoTouched = true;
   if (FORM && e.target.id === 'f_Pct_Desc') FORM.pctTouched = true;
+  if (FORM && e.target.id === 'f_Cargo') FORM.cargoTouched = true;
+  if (FORM && e.target.id === 'f_Pct_Cargo') { FORM.cargoTouched = false; FORM.pctTouched2 = true; }
+  if (FORM && e.target.id === 'f_Monto_Banco') FORM.recibeTouched = true;
   if (FORM && e.target.closest('#frm')) formDynamics();
   if (FORM && e.target.name === 'Descripcion_Gasto' && e.inputType === 'insertReplacementText') autofillFromHistory(e.target);
 });
+document.addEventListener('change', e => { if (FORM && e.target.id === 'f_ID_Banco') FORM.destTouched = true; }, true);
 document.addEventListener('change', async e => {
   if (e.target.dataset && e.target.dataset.cfg === 'Varios_Periodos') {
     const el = e.target, on = el.checked, e0 = empresa(); el.disabled = true;
