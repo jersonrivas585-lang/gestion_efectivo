@@ -220,6 +220,16 @@ En *Períodos*, el interruptor **Abierto** de un mes abre o cierra **de una vez 
 
 En la versión de computadora el **panel lateral queda fijo**: no se mueve cuando bajas por la información (si la ventana es baja, el panel se desplaza solo por dentro). Su orden es **Inicio, Bancos, Gastos, Presupuesto**, y luego Histórico, Análisis por cuenta, Combustible, Cortes de resumen, Catálogos, Períodos y Mi cuenta.
 
+## Barra de acciones (igual en todas las secciones)
+
+Los botones de cada sección están en una **barra fija arriba**, debajo del encabezado: no se pierde al bajar por la información. Los nombres son cortos (**+** significa «registrar»; al dejar el dedo o el cursor sobre un botón se ve su nombre completo) y la letra es pequeña pero legible (13 px; 12.5 px en pantallas angostas). Si no hay ningún botón disponible (por ejemplo, un período cerrado), la barra no aparece.
+- **Inicio:** **+ Gasto**, **+ Retiro**, **+ Depósito** y **Resumen** (el resumen del período; *Ver todos los resúmenes* sigue en el recuadro de abajo).
+- **Gastos:** **+ Gasto** (no aparece con *Todos los meses*).
+- **Presupuesto:** **+ Partida**, **Importar** (desde Excel), **Copiar de Sep** (las partidas del mes anterior; muestra el mes que corresponda) y **Plantilla** (descarga la plantilla de Excel).
+- **Combustible:** **+ Llenado**, **Editar vehículo** y **+ Vehículo**, con el vehículo elegido en *Acciones para*.
+- **Bancos:** ver *Bancos: cuentas, tarjetas y efectivo en una sola sección*.
+En el celular el botón **+** flotante sigue disponible.
+
 ## Retiros: ahora dentro de Bancos
 
 *Retiros* ya no es una sección del menú ni de la barra inferior del celular (que ahora muestra **Inicio, Bancos, Gastos, Presupuesto, Combustible y Más** completa, sin deslizar). Los retiros se hacen desde **Bancos**:
@@ -239,7 +249,7 @@ En la versión de computadora el **panel lateral queda fijo**: no se mueve cuand
 - **Mini resumen en cada banco cerrado:** cuántas cuentas y tarjetas tiene y sus montos. Por ejemplo, **BAC · 2 cuentas · 3 tarjetas · C$ 14,361.74 · US$ 454.31 · Deuda C$ 3,000.00 y US$ 100.00**. Los bancos con tarjetas sin deuda dicen «Tarjetas sin deuda».
 - ***Efectivo* es el primer grupo y viene abierto** (en mano y en dólares, con su total), con **Efectivo en mano** seleccionado al entrar a Bancos; los **bancos arrancan cerrados** debajo. Al abrir un grupo aparecen sus fichas: *Cuenta en córdobas*, *Cuenta en dólares* y *Tarjeta de crédito* (con su deuda en córdobas y en dólares y cuánto pagar antes de qué fecha). Cada dispositivo recuerda qué grupos dejaste abiertos. Si llegas a una tarjeta desde *Inicio* (tocando su deuda) o agregas una cuenta o tarjeta, su grupo se abre solo.
 - **Colores del saldo de las tarjetas:** lo que **debes** va en **rojo** y lo que queda **a tu favor** (saldo negativo, por ejemplo después de un pago mayor que la deuda o de un reembolso) va en **verde**, en las fichas, en el estado de cuenta y en los movimientos («A favor C$ 6.03»). En el resumen de cada banco y en la línea de *Tarjetas de crédito*, cada parte se pinta según su signo: **Deuda C$ 2,999.89** en rojo y **A favor US$ 0.86** en verde.
-- **Los botones están arriba de todo**, en un cuadro que dice *Acciones para* y el nombre de la cuenta o tarjeta elegida (aunque su grupo esté cerrado): con una **cuenta de banco**, *Transferir o depositar* y *Retirar efectivo*; con **Efectivo en mano**, *Transferir o depositar*; con **Efectivo en dólares**, además *Depositar en la cuenta en dólares* y *Cambiar a córdobas*; con una **tarjeta**, *Registrar movimiento*.
+- **Los botones están arriba de todo y quedan fijos** (barra de acciones estándar, ver *Barra de acciones*): al bajar a los movimientos (por ejemplo, al tocar una cuenta o tarjeta) la barra se queda pegada debajo del encabezado y la pantalla baja al detalle sin que ella lo tape. Dice *Acciones para* y el nombre de la cuenta o tarjeta elegida (aunque su grupo esté cerrado): con una **cuenta de banco**, **+ Movimiento** (transferir, depositar o deducir) y **+ Retiro** (retirar efectivo); con **Efectivo en mano**, **+ Movimiento**; con **Efectivo en dólares**, además **Depositar US$** (a la cuenta en dólares) y **Cambiar a C$** (a córdobas); con una **tarjeta**, **+ Movimiento**.
 - **Tocar una ficha** elige esa cuenta o tarjeta: sus botones cambian arriba y abajo se muestran sus movimientos (con los colores por tipo) o, en una tarjeta, su estado de cuenta, sus movimientos y el historial de Access. La pantalla baja sola al detalle.
 - **Agregar y editar cuentas y tarjetas** se hace desde **Catálogos** (*Cuentas de banco* y *Tarjetas de crédito*), no desde Bancos; debajo de los grupos hay un aviso con enlaces directos. Debajo de los grupos también: lo disponible para gastar, la **deuda total en tarjetas de crédito** (si hay deudas) y las líneas de ingresos y retiros del mes.
 - **Botón +** (celular): con una cuenta seleccionada registra un movimiento de banco; con una tarjeta seleccionada, un movimiento de tarjeta.
